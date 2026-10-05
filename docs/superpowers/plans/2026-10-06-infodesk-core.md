@@ -12,6 +12,8 @@
 
 **この計画の範囲:** specの3節 (collector、store、summarizer)、4節、5節、6節、8節、9節、10節。scheduler、メニューバー常駐、画面 (spec 7節) は Plan 2 (`Tauri app`) で扱う。Plan 2 は Plan 1 の実装完了後、実際のインターフェースを見て書く。
 
+**前提フェーズ:** この計画の実行前に、画面設計フェーズ (`docs/superpowers/plans/2026-10-06-infodesk-screen-design.md`) を完了する。デザインの確認でデータ項目や機能が変わった場合は、その変更を spec とこの計画に反映してから実行を始める。
+
 ## Global Constraints
 
 - 対象OSはmacOSのみ。
