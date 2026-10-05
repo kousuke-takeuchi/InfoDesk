@@ -12246,6 +12246,4814 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "gYpur",
+      "x": 3900,
+      "y": 0,
+      "name": "A-4 フィード + チャット",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 1200,
+      "height": 800,
+      "fill": "$bg-window",
+      "children": [
+        {
+          "type": "frame",
+          "id": "rATGg",
+          "name": "Sidebar",
+          "width": 220,
+          "height": "fill_container",
+          "fill": "$bg-sidebar",
+          "stroke": "$border",
+          "strokeWidth": {
+            "right": 1
+          },
+          "layout": "vertical",
+          "gap": 2,
+          "padding": [
+            16,
+            10,
+            12,
+            10
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "dBrMC",
+              "name": "Traffic Lights",
+              "gap": 8,
+              "padding": [
+                0,
+                6,
+                14,
+                6
+              ],
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "yfAtR",
+                  "name": "dot",
+                  "fill": "#FF5F57",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "NEMqD",
+                  "name": "dot",
+                  "fill": "#FEBC2E",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "Y8Jf81",
+                  "name": "dot",
+                  "fill": "#28C840",
+                  "width": 12,
+                  "height": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "mIdAY",
+              "name": "Nav すべて",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "X1I9KV",
+                  "name": "icon-layers",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "layers",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "zUJdg",
+                  "name": "すべて",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "すべて",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "WOA4r",
+                  "name": "128",
+                  "fill": "$text-tertiary",
+                  "content": "128",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "NCjGQ",
+              "name": "Head カテゴリー",
+              "padding": [
+                14,
+                8,
+                4,
+                8
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "CHzQy",
+                  "name": "カテゴリー",
+                  "fill": "$text-tertiary",
+                  "content": "カテゴリー",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KJ14h",
+              "name": "Nav GitHub",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "RyGRo",
+                  "name": "icon-github",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "github",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "A1Hxl",
+                  "name": "GitHub",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "GitHub",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "WnqZn",
+                  "name": "25",
+                  "fill": "$text-tertiary",
+                  "content": "25",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IQ86l",
+              "name": "Nav arXiv",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "XDhaS",
+                  "name": "icon-file-text",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "file-text",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "rNGMi",
+                  "name": "arXiv",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "arXiv",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "Y8rho",
+                  "name": "42",
+                  "fill": "$text-tertiary",
+                  "content": "42",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xDxj0",
+              "name": "Nav Hugging Face",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "IBp8Z",
+                  "name": "icon-box",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "box",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "evoAA",
+                  "name": "Hugging Face",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Hugging Face",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "s58WP1",
+                  "name": "18",
+                  "fill": "$text-tertiary",
+                  "content": "18",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YYwXQ",
+              "name": "Nav Hacker News",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "FHMl4",
+                  "name": "icon-flame",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "flame",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "nMPDf",
+                  "name": "Hacker News",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Hacker News",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "rfC6x",
+                  "name": "30",
+                  "fill": "$text-tertiary",
+                  "content": "30",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ETMpz",
+              "name": "Nav 国内tech",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "gjNRT",
+                  "name": "icon-newspaper",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "newspaper",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "LJ23Y",
+                  "name": "国内tech",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "国内tech",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "Z9GjhW",
+                  "name": "21",
+                  "fill": "$text-tertiary",
+                  "content": "21",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IYLxu",
+              "name": "Nav 海外tech",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "N241di",
+                  "name": "icon-globe",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "globe",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "zDlkz",
+                  "name": "海外tech",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "海外tech",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "u05SI",
+                  "name": "16",
+                  "fill": "$text-tertiary",
+                  "content": "16",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "a46mnD",
+              "name": "Nav 医療介護",
+              "width": "fill_container",
+              "fill": "$selection",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "W2eSIp",
+                  "name": "icon-heart-pulse",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "heart-pulse",
+                  "library": "lucide",
+                  "fill": "$accent"
+                },
+                {
+                  "type": "text",
+                  "id": "rGYwG",
+                  "name": "医療介護",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "医療介護",
+                  "fontFamily": "$font",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "LIIqY",
+                  "name": "14",
+                  "fill": "$text-tertiary",
+                  "content": "14",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "b4Msn",
+              "name": "Head トピック",
+              "padding": [
+                14,
+                8,
+                4,
+                8
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "A0KRcD",
+                  "name": "トピック",
+                  "fill": "$text-tertiary",
+                  "content": "トピック",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fD4fk",
+              "name": "Nav 認知症",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "uUY7g",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "aDt9D",
+                  "name": "認知症",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "認知症",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "y63q7R",
+                  "name": "6",
+                  "fill": "$text-tertiary",
+                  "content": "6",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Rq6jB",
+              "name": "Nav 介護",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Z2S0s5",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "ChPJp",
+                  "name": "介護",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "介護",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "ell7e",
+                  "name": "9",
+                  "fill": "$text-tertiary",
+                  "content": "9",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Ko942",
+              "name": "Nav ローカルLLM",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "q2rXB",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "yZUC7",
+                  "name": "ローカルLLM",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "ローカルLLM",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "QZdBl",
+                  "name": "11",
+                  "fill": "$text-tertiary",
+                  "content": "11",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "UD62U",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": "fill_container"
+            },
+            {
+              "type": "frame",
+              "id": "wiqkb",
+              "name": "Collect Status",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "v8QwE",
+                  "name": "icon-refresh-cw",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "kCl2K",
+                  "name": "最終収集 9:00",
+                  "fill": "$text-secondary",
+                  "content": "最終収集 9:00",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xVGlx",
+              "name": "Nav 設定",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "x7yJO",
+                  "name": "icon-settings",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "settings",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "rmMrL",
+                  "name": "設定",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "設定",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "vwa1K",
+          "name": "Main",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "g3Cy3",
+              "name": "Toolbar",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 10,
+              "padding": [
+                12,
+                24
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "YfEdt",
+                  "name": "Segmented",
+                  "fill": "$bg-subtle",
+                  "cornerRadius": 7,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 2,
+                  "padding": 2,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w9nO4X",
+                      "name": "Seg ダイジェスト",
+                      "fill": "#00000000",
+                      "cornerRadius": 5,
+                      "stroke": "#00000000",
+                      "strokeWidth": 1,
+                      "padding": [
+                        4,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "l8HBIM",
+                          "name": "ダイジェスト",
+                          "fill": "$text-primary",
+                          "content": "ダイジェスト",
+                          "fontFamily": "$font",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YZPpQ",
+                      "name": "Seg フィード",
+                      "fill": "$seg-selected",
+                      "cornerRadius": 5,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        4,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "fnqxe",
+                          "name": "フィード",
+                          "fill": "$text-primary",
+                          "content": "フィード",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FRnix",
+                  "name": "Spacer",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "supK6",
+                  "name": "Dropdown 期間: 1週間",
+                  "cornerRadius": 7,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Go0CH",
+                      "name": "期間: 1週間",
+                      "fill": "$text-primary",
+                      "content": "期間: 1週間",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "i67df",
+                      "name": "icon-chevron-down",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "chevron-down",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "miJbi",
+                  "name": "Unread Toggle",
+                  "fill": "$selection",
+                  "cornerRadius": 7,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "wTIZ6",
+                      "name": "icon-circle-dot",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "circle-dot",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "SIbMQ",
+                      "name": "未読のみ",
+                      "fill": "$accent",
+                      "content": "未読のみ",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LC62H",
+                  "name": "Search",
+                  "width": 140,
+                  "fill": "$bg-subtle",
+                  "cornerRadius": 7,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "O4uc0",
+                      "name": "icon-search",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "search",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "r1aBy",
+                      "name": "検索",
+                      "fill": "$text-tertiary",
+                      "content": "検索",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bgnuf",
+                  "name": "Chat Toggle",
+                  "fill": "$selection",
+                  "cornerRadius": "$radius-md",
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "w4Winf",
+                      "name": "icon-message-square",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "message-square",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "M08xPy",
+              "name": "Feed Body",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                20,
+                32,
+                0,
+                32
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "F2pTUy",
+                  "name": "Header",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    0,
+                    12,
+                    0
+                  ],
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "e4wPM",
+                      "name": "医療介護",
+                      "fill": "$text-primary",
+                      "content": "医療介護",
+                      "fontFamily": "$font",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PUCDN",
+                      "name": "未読 14件",
+                      "fill": "$text-secondary",
+                      "content": "未読 14件",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bzwPD",
+                      "name": "Spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "yngOi",
+                      "name": "すべて既読にする",
+                      "fill": "$accent",
+                      "content": "すべて既読にする",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wUBOc",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LAQKg",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "N7nHjv",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bkPvK",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dxkPI",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "認知症の新薬、国内での適用拡大へ 厚労省が方針",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MGPsb",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pU9Io",
+                              "name": "Google News: 認知症",
+                              "fill": "$text-secondary",
+                              "content": "Google News: 認知症",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "z2ztIo",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "eXrDv",
+                              "name": "2時間前",
+                              "fill": "$text-tertiary",
+                              "content": "2時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZZWYz",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "軽度認知障害の段階から使える新薬について、厚生労働省が適用範囲の拡大を検討している。早ければ来年度から対象が広がる見通し。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "Kegyc",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QCBQz",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "u0lQxg",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "i8uxM",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Uy1XP",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L6npl",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬改定の論点整理 人材確保策が焦点に",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Y6DJY",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "CtuDA",
+                              "name": "joint-kaigo.com",
+                              "fill": "$text-secondary",
+                              "content": "joint-kaigo.com",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mlGW0",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "yVJXo",
+                              "name": "3時間前",
+                              "fill": "$text-tertiary",
+                              "content": "3時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "xQxNm",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "次期介護報酬改定に向けた審議会が開かれ、処遇改善加算の一本化と夜勤配置の見直しが主な論点として示された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "iqzcY",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$star"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yzXjJ",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "RFsSu",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "FO3s6",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "f6u5O",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "m7v2tM",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Blood test predicts dementia risk a decade early",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "x9n7H",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "JnUxU",
+                              "name": "Google News: dem",
+                              "fill": "$text-secondary",
+                              "content": "Google News: dementia",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Bz872",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "fEivO",
+                              "name": "5時間前",
+                              "fill": "$text-tertiary",
+                              "content": "5時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "I2qEh",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "血液中のタンパク質を測定することで、発症の10年前に認知症のリスクを予測できる可能性があるとする研究が発表された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "t5OWJ",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Q3qKf",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rXhq3",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "NXjL2",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "exxjP",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "TKpLr",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "見守りセンサー導入施設、夜間の転倒事故が3割減",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "q2CmIr",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "eO5gz",
+                              "name": "care-news.jp",
+                              "fill": "$text-secondary",
+                              "content": "care-news.jp",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "hKWw3",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "zkWJR",
+                              "name": "6時間前",
+                              "fill": "$text-tertiary",
+                              "content": "6時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "A6Yzpg",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "見守りセンサーを導入した特別養護老人ホームで、夜間の転倒事故が導入前より約3割減ったとの調査結果が公表された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "RciZu",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "O52ERX",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "CRuMh",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "U6acYW",
+                          "name": "Unread Dot",
+                          "fill": "#00000000",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n7E0K",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pZFUe",
+                          "name": "Title",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "frame",
+                          "id": "p4ANsv",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NnkBT",
+                              "name": "Google News: 介護",
+                              "fill": "$text-secondary",
+                              "content": "Google News: 介護",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZyIks",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "uR0yS",
+                              "name": "8時間前",
+                              "fill": "$text-tertiary",
+                              "content": "8時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "i0gQOn",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "訪問介護の事業所数が統計開始以来の最少となった。人手不足と報酬引き下げの影響で小規模事業者の撤退が続いている。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "F2tcPs",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "pYsGY",
+          "name": "Chat Panel",
+          "width": 400,
+          "height": "fill_container",
+          "fill": "$bg-sidebar",
+          "stroke": "$border",
+          "strokeWidth": {
+            "left": 1
+          },
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "RRSZw",
+              "name": "Panel Header",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 8,
+              "padding": [
+                12,
+                12,
+                10,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aJXzi",
+                  "name": "Thread Title",
+                  "width": "fill_container",
+                  "gap": 6,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Sm5k1",
+                      "name": "Title",
+                      "fill": "$text-primary",
+                      "content": "認知症の今週の動き",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "mPpAC",
+                      "name": "icon-chevron-down",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "chevron-down",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZRchl",
+                  "name": "Btn square-pen",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "thPow",
+                      "name": "icon-square-pen",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "square-pen",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wYmqD",
+                  "name": "Btn history",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "gx4KJ",
+                      "name": "icon-history",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "history",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "q2ngQH",
+                  "name": "Btn x",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "HvcGm",
+                      "name": "icon-x",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "x",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "AXQff",
+              "name": "Context Bar",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": [
+                8,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "G7tVkn",
+                  "name": "文脈",
+                  "fill": "$text-tertiary",
+                  "content": "文脈",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Q9FWIz",
+                  "name": "Ctx 医療介護",
+                  "fill": "$bg-window",
+                  "cornerRadius": 12,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 5,
+                  "padding": [
+                    3,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "nbgzJ",
+                      "name": "icon-heart-pulse",
+                      "width": 11,
+                      "height": 11,
+                      "icon": "heart-pulse",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "b7njYo",
+                      "name": "医療介護",
+                      "fill": "$text-primary",
+                      "content": "医療介護",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "emcQZ",
+                  "name": "Ctx 期間: 1週間",
+                  "fill": "$bg-window",
+                  "cornerRadius": 12,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 5,
+                  "padding": [
+                    3,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Bn32S",
+                      "name": "icon-calendar",
+                      "width": 11,
+                      "height": 11,
+                      "icon": "calendar",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wW8KB",
+                      "name": "期間: 1週間",
+                      "fill": "$text-primary",
+                      "content": "期間: 1週間",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lKOqO",
+              "name": "Messages",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                8,
+                16,
+                16,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "w0b4ww",
+                  "name": "User Row",
+                  "width": "fill_container",
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Kvchx",
+                      "name": "User Bubble",
+                      "width": 300,
+                      "fill": "$selection",
+                      "cornerRadius": 12,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n8J1f",
+                          "name": "今週の認知症に関する記事をまとめ",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "今週の認知症に関する記事をまとめて。新薬と介護現場の話題を分けて。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AZDzL",
+                  "name": "Assistant Row",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "oE0NV",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "NPAI8",
+                          "name": "icon-search",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "search",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "eTcAd",
+                          "name": "記事検索: 認知症 · 1週間 ",
+                          "fill": "$text-secondary",
+                          "content": "記事検索: 認知症 · 1週間 · 14件",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NJVNo",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "o6FfO",
+                          "name": "完了",
+                          "fill": "$text-tertiary",
+                          "content": "完了",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ASMUZ",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "TJSfI",
+                          "name": "icon-file-text",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "file-text",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "mX57o",
+                          "name": "本文取得: 認知症の新薬、国内で",
+                          "fill": "$text-secondary",
+                          "content": "本文取得: 認知症の新薬、国内での適用拡大へ",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RBmOf",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "QmzTG",
+                          "name": "完了",
+                          "fill": "$text-tertiary",
+                          "content": "完了",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T6PjI",
+                      "name": "Answer",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "D71ib0",
+                          "name": "新薬",
+                          "fill": "$text-primary",
+                          "content": "新薬",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "nYqSS",
+                          "name": "厚生労働省が軽度認知障害の段階か",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "厚生労働省が軽度認知障害の段階から使える新薬の適用拡大を検討しており、来年度からの対象拡大が見込まれています。海外では血液検査で10年前にリスクを予測する研究も報告されました。",
+                          "lineHeight": 1.6,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VannN",
+                          "name": "介護現場",
+                          "fill": "$text-primary",
+                          "content": "介護現場",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "s5Hvjl",
+                          "name": "介護報酬改定では処遇改善加算の一",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬改定では処遇改善加算の一本化と夜勤配置の見直しが論点です。見守りセンサー導入施設で夜間の転倒が3割減ったとの調査もあり、現場の省力化が進んでいます。",
+                          "lineHeight": 1.6,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AMOge",
+                          "name": "References",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 4,
+                          "padding": [
+                            4,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "guTIe",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Bnupo",
+                                  "name": "認知症の新薬、適用拡大へ",
+                                  "fill": "$accent",
+                                  "content": "認知症の新薬、適用拡大へ",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Prw7D",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "V5ICsS",
+                                  "name": "Blood test predi",
+                                  "fill": "$accent",
+                                  "content": "Blood test predicts…",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ataoF",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "aOcVo",
+                                  "name": "見守りセンサー導入施設",
+                                  "fill": "$accent",
+                                  "content": "見守りセンサー導入施設",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tapBm",
+                  "name": "User Row",
+                  "width": "fill_container",
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "oeZJ4",
+                      "name": "User Bubble",
+                      "width": 300,
+                      "fill": "$selection",
+                      "cornerRadius": 12,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "rVkvg",
+                          "name": "介護報酬の論点をもう少し詳しく。",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬の論点をもう少し詳しく。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "P3Vufn",
+                  "name": "Assistant Row 2",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "eUqct",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "gJ2Aj",
+                          "name": "icon-file-text",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "file-text",
+                          "library": "lucide",
+                          "fill": "$accent"
+                        },
+                        {
+                          "type": "text",
+                          "id": "OoYUU",
+                          "name": "本文取得: 介護報酬改定の論点整",
+                          "fill": "$text-secondary",
+                          "content": "本文取得: 介護報酬改定の論点整理 人材確保策が焦点に",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A28dI",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ttve8",
+                          "name": "実行中",
+                          "fill": "$accent",
+                          "content": "実行中",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cPQFH",
+              "name": "Composer",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                0,
+                12,
+                12,
+                12
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "u1blxE",
+                  "name": "Input Box",
+                  "width": "fill_container",
+                  "fill": "$bg-window",
+                  "cornerRadius": 10,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    12,
+                    8,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Pbnjx",
+                      "name": "記事や要約について質問…",
+                      "fill": "$text-tertiary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "記事や要約について質問…",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vaJey",
+                      "name": "Composer Row",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "iPNnV",
+                          "name": "Model Select",
+                          "fill": "$bg-subtle",
+                          "cornerRadius": "$radius-sm",
+                          "gap": 5,
+                          "padding": [
+                            3,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "L6VkJl",
+                              "name": "icon-cpu",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "cpu",
+                              "library": "lucide",
+                              "fill": "$text-secondary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Z4kBNA",
+                              "name": "Ollama · gemma4:",
+                              "fill": "$text-primary",
+                              "content": "Ollama · gemma4:26b",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "Doa3H",
+                              "name": "icon-chevron-down",
+                              "width": 11,
+                              "height": 11,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-secondary"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZKSWH",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Zfdki",
+                          "name": "Send",
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$accent",
+                          "cornerRadius": 14,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "h7uCi",
+                              "name": "icon-arrow-up",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "arrow-up",
+                              "library": "lucide",
+                              "fill": "$on-accent"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "QyXjE",
+      "x": 3900,
+      "y": 900,
+      "name": "A-4 フィード + チャット (ダーク)",
+      "theme": {
+        "mode": "dark"
+      },
+      "clip": true,
+      "width": 1200,
+      "height": 800,
+      "fill": "$bg-window",
+      "children": [
+        {
+          "type": "frame",
+          "id": "EEVVD",
+          "name": "Sidebar",
+          "width": 220,
+          "height": "fill_container",
+          "fill": "$bg-sidebar",
+          "stroke": "$border",
+          "strokeWidth": {
+            "right": 1
+          },
+          "layout": "vertical",
+          "gap": 2,
+          "padding": [
+            16,
+            10,
+            12,
+            10
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "fKuUd",
+              "name": "Traffic Lights",
+              "gap": 8,
+              "padding": [
+                0,
+                6,
+                14,
+                6
+              ],
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "SBRxr",
+                  "name": "dot",
+                  "fill": "#FF5F57",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "EOksD",
+                  "name": "dot",
+                  "fill": "#FEBC2E",
+                  "width": 12,
+                  "height": 12
+                },
+                {
+                  "type": "ellipse",
+                  "id": "C5fUhX",
+                  "name": "dot",
+                  "fill": "#28C840",
+                  "width": 12,
+                  "height": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "b7PCxx",
+              "name": "Nav すべて",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "G5sLs",
+                  "name": "icon-layers",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "layers",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "Bu20l",
+                  "name": "すべて",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "すべて",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "kXNA1",
+                  "name": "128",
+                  "fill": "$text-tertiary",
+                  "content": "128",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eYbpJ",
+              "name": "Head カテゴリー",
+              "padding": [
+                14,
+                8,
+                4,
+                8
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r8p3rb",
+                  "name": "カテゴリー",
+                  "fill": "$text-tertiary",
+                  "content": "カテゴリー",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qK3pj",
+              "name": "Nav GitHub",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "g600WE",
+                  "name": "icon-github",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "github",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "IoLZE",
+                  "name": "GitHub",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "GitHub",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "tU1H0",
+                  "name": "25",
+                  "fill": "$text-tertiary",
+                  "content": "25",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "t5GoQ",
+              "name": "Nav arXiv",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "K6MQM",
+                  "name": "icon-file-text",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "file-text",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "UkJ6t",
+                  "name": "arXiv",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "arXiv",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "V2ECPw",
+                  "name": "42",
+                  "fill": "$text-tertiary",
+                  "content": "42",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "D8GVc2",
+              "name": "Nav Hugging Face",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "wDLtg",
+                  "name": "icon-box",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "box",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "aanMH",
+                  "name": "Hugging Face",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Hugging Face",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "F09FG",
+                  "name": "18",
+                  "fill": "$text-tertiary",
+                  "content": "18",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "C4Uqu",
+              "name": "Nav Hacker News",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "V6W40",
+                  "name": "icon-flame",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "flame",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "Kfmy9",
+                  "name": "Hacker News",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Hacker News",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "zMrsk",
+                  "name": "30",
+                  "fill": "$text-tertiary",
+                  "content": "30",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qeggZ",
+              "name": "Nav 国内tech",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "pWihx",
+                  "name": "icon-newspaper",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "newspaper",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "EwZvW",
+                  "name": "国内tech",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "国内tech",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "zdjHD",
+                  "name": "21",
+                  "fill": "$text-tertiary",
+                  "content": "21",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Mz6ir",
+              "name": "Nav 海外tech",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "u3311T",
+                  "name": "icon-globe",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "globe",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "HWn1T",
+                  "name": "海外tech",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "海外tech",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "tZhkk",
+                  "name": "16",
+                  "fill": "$text-tertiary",
+                  "content": "16",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "mZJAq",
+              "name": "Nav 医療介護",
+              "width": "fill_container",
+              "fill": "$selection",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "vCaUN",
+                  "name": "icon-heart-pulse",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "heart-pulse",
+                  "library": "lucide",
+                  "fill": "$accent"
+                },
+                {
+                  "type": "text",
+                  "id": "X1STm",
+                  "name": "医療介護",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "医療介護",
+                  "fontFamily": "$font",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "q96h9",
+                  "name": "14",
+                  "fill": "$text-tertiary",
+                  "content": "14",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZefSg",
+              "name": "Head トピック",
+              "padding": [
+                14,
+                8,
+                4,
+                8
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DBfXf",
+                  "name": "トピック",
+                  "fill": "$text-tertiary",
+                  "content": "トピック",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KQUCR",
+              "name": "Nav 認知症",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Sq0FG",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "azGjc",
+                  "name": "認知症",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "認知症",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "pBqsH",
+                  "name": "6",
+                  "fill": "$text-tertiary",
+                  "content": "6",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "MtLtx",
+              "name": "Nav 介護",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "K9qnS",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "W3L0X",
+                  "name": "介護",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "介護",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "iX2Xm",
+                  "name": "9",
+                  "fill": "$text-tertiary",
+                  "content": "9",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xI9rU",
+              "name": "Nav ローカルLLM",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "qKVcF",
+                  "name": "icon-hash",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "hash",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "b0oeCm",
+                  "name": "ローカルLLM",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "ローカルLLM",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                },
+                {
+                  "type": "text",
+                  "id": "OMqtZ",
+                  "name": "11",
+                  "fill": "$text-tertiary",
+                  "content": "11",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xleKb",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": "fill_container"
+            },
+            {
+              "type": "frame",
+              "id": "I1Al3b",
+              "name": "Collect Status",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "L7R92b",
+                  "name": "icon-refresh-cw",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "e8ZEw",
+                  "name": "最終収集 9:00",
+                  "fill": "$text-secondary",
+                  "content": "最終収集 9:00",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lcp2e",
+              "name": "Nav 設定",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "cornerRadius": 6,
+              "gap": 8,
+              "padding": [
+                6,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "zUu4s",
+                  "name": "icon-settings",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "settings",
+                  "library": "lucide",
+                  "fill": "$text-secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "B4OAF",
+                  "name": "設定",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "設定",
+                  "fontFamily": "$font",
+                  "fontSize": 13
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "VlB1r",
+          "name": "Main",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "D4rMPM",
+              "name": "Toolbar",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 10,
+              "padding": [
+                12,
+                24
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "v13EGr",
+                  "name": "Segmented",
+                  "fill": "$bg-subtle",
+                  "cornerRadius": 7,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 2,
+                  "padding": 2,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VdiaR",
+                      "name": "Seg ダイジェスト",
+                      "fill": "#00000000",
+                      "cornerRadius": 5,
+                      "stroke": "#00000000",
+                      "strokeWidth": 1,
+                      "padding": [
+                        4,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Xf8AF",
+                          "name": "ダイジェスト",
+                          "fill": "$text-primary",
+                          "content": "ダイジェスト",
+                          "fontFamily": "$font",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iqObM",
+                      "name": "Seg フィード",
+                      "fill": "$seg-selected",
+                      "cornerRadius": 5,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        4,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aVRYe",
+                          "name": "フィード",
+                          "fill": "$text-primary",
+                          "content": "フィード",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Yx5GK",
+                  "name": "Spacer",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "pemF6",
+                  "name": "Dropdown 期間: 1週間",
+                  "cornerRadius": 7,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jXxrK",
+                      "name": "期間: 1週間",
+                      "fill": "$text-primary",
+                      "content": "期間: 1週間",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "B58MF",
+                      "name": "icon-chevron-down",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "chevron-down",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Fwvqz",
+                  "name": "Unread Toggle",
+                  "fill": "$selection",
+                  "cornerRadius": 7,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "ige08",
+                      "name": "icon-circle-dot",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "circle-dot",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OIuSV",
+                      "name": "未読のみ",
+                      "fill": "$accent",
+                      "content": "未読のみ",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "f47xQ",
+                  "name": "Search",
+                  "width": 140,
+                  "fill": "$bg-subtle",
+                  "cornerRadius": 7,
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Nr3L6",
+                      "name": "icon-search",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "search",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "y6YHt",
+                      "name": "検索",
+                      "fill": "$text-tertiary",
+                      "content": "検索",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ExgvV",
+                  "name": "Chat Toggle",
+                  "fill": "$selection",
+                  "cornerRadius": "$radius-md",
+                  "gap": 6,
+                  "padding": [
+                    5,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "fcNAT",
+                      "name": "icon-message-square",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "message-square",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eTlHK",
+              "name": "Feed Body",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                20,
+                32,
+                0,
+                32
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "W75b8",
+                  "name": "Header",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    0,
+                    12,
+                    0
+                  ],
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gfEo3",
+                      "name": "医療介護",
+                      "fill": "$text-primary",
+                      "content": "医療介護",
+                      "fontFamily": "$font",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "oao97",
+                      "name": "未読 14件",
+                      "fill": "$text-secondary",
+                      "content": "未読 14件",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TaUOd",
+                      "name": "Spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "V9v1z",
+                      "name": "すべて既読にする",
+                      "fill": "$accent",
+                      "content": "すべて既読にする",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ebgiR",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "np1RE",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "BqjWJ",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ibSnb",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZMdSd",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "認知症の新薬、国内での適用拡大へ 厚労省が方針",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AjhzJ",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "RU2cp",
+                              "name": "Google News: 認知症",
+                              "fill": "$text-secondary",
+                              "content": "Google News: 認知症",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "X6E8Cx",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "PQcVq",
+                              "name": "2時間前",
+                              "fill": "$text-tertiary",
+                              "content": "2時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "F3bM3W",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "軽度認知障害の段階から使える新薬について、厚生労働省が適用範囲の拡大を検討している。早ければ来年度から対象が広がる見通し。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "eoMZi",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LuqXp",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Ka9uL",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "Rmgvk",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pfAgi",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "gtYrd",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬改定の論点整理 人材確保策が焦点に",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Gjuio",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gnWHd",
+                              "name": "joint-kaigo.com",
+                              "fill": "$text-secondary",
+                              "content": "joint-kaigo.com",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "C2qTi",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "q3y6mE",
+                              "name": "3時間前",
+                              "fill": "$text-tertiary",
+                              "content": "3時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "g0x80",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "次期介護報酬改定に向けた審議会が開かれ、処遇改善加算の一本化と夜勤配置の見直しが主な論点として示された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "QjR9L",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$star"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "S34UQ",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qm3uM",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "xuPzy",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gmB79",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KATU7",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Blood test predicts dementia risk a decade early",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xTgBv",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bTzgd",
+                              "name": "Google News: dem",
+                              "fill": "$text-secondary",
+                              "content": "Google News: dementia",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "he58K",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Ku7Hj",
+                              "name": "5時間前",
+                              "fill": "$text-tertiary",
+                              "content": "5時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "QOIdW",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "血液中のタンパク質を測定することで、発症の10年前に認知症のリスクを予測できる可能性があるとする研究が発表された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "rkmE5",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XIVZ1",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "S9hgad",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "xAiC7",
+                          "name": "Unread Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g8jKN",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zyuXM",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "見守りセンサー導入施設、夜間の転倒事故が3割減",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "we5dx",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "w0iXz2",
+                              "name": "care-news.jp",
+                              "fill": "$text-secondary",
+                              "content": "care-news.jp",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gkhTX",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "HHz5Z",
+                              "name": "6時間前",
+                              "fill": "$text-tertiary",
+                              "content": "6時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "E2w9j0",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "見守りセンサーを導入した特別養護老人ホームで、夜間の転倒事故が導入前より約3割減ったとの調査結果が公表された。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "nCc95",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vTpsR",
+                  "name": "Item Row",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "UWTKq",
+                      "name": "Unread Slot",
+                      "width": 8,
+                      "padding": [
+                        7,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "twBjj",
+                          "name": "Unread Dot",
+                          "fill": "#00000000",
+                          "width": 8,
+                          "height": 8
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sx2et",
+                      "name": "Content",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FvTYF",
+                          "name": "Title",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font",
+                          "fontSize": 14
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wj1WC",
+                          "name": "Meta",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "X58Nu",
+                              "name": "Google News: 介護",
+                              "fill": "$text-secondary",
+                              "content": "Google News: 介護",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "z6X2Kv",
+                              "name": "·",
+                              "fill": "$text-tertiary",
+                              "content": "·",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "iKTxI",
+                              "name": "8時間前",
+                              "fill": "$text-tertiary",
+                              "content": "8時間前",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "dgA1X",
+                          "name": "AI Summary",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "訪問介護の事業所数が統計開始以来の最少となった。人手不足と報酬引き下げの影響で小規模事業者の撤退が続いている。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "xL6kc",
+                      "name": "icon-star",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "wZpNC",
+          "name": "Chat Panel",
+          "width": 400,
+          "height": "fill_container",
+          "fill": "$bg-sidebar",
+          "stroke": "$border",
+          "strokeWidth": {
+            "left": 1
+          },
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "qV38C",
+              "name": "Panel Header",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 8,
+              "padding": [
+                12,
+                12,
+                10,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "UXjI5",
+                  "name": "Thread Title",
+                  "width": "fill_container",
+                  "gap": 6,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "XtCJN",
+                      "name": "Title",
+                      "fill": "$text-primary",
+                      "content": "認知症の今週の動き",
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "URa0r",
+                      "name": "icon-chevron-down",
+                      "width": 12,
+                      "height": 12,
+                      "icon": "chevron-down",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oYPiR",
+                  "name": "Btn square-pen",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "AJqyu",
+                      "name": "icon-square-pen",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "square-pen",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "EzzaO",
+                  "name": "Btn history",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "psCfV",
+                      "name": "icon-history",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "history",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zKsRY",
+                  "name": "Btn x",
+                  "cornerRadius": "$radius-sm",
+                  "padding": 4,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "V2re6",
+                      "name": "icon-x",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "x",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Qc2dT",
+              "name": "Context Bar",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": [
+                8,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "y7oZs",
+                  "name": "文脈",
+                  "fill": "$text-tertiary",
+                  "content": "文脈",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "NH4Mt",
+                  "name": "Ctx 医療介護",
+                  "fill": "$bg-window",
+                  "cornerRadius": 12,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 5,
+                  "padding": [
+                    3,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "q6QTqo",
+                      "name": "icon-heart-pulse",
+                      "width": 11,
+                      "height": 11,
+                      "icon": "heart-pulse",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c2vgKT",
+                      "name": "医療介護",
+                      "fill": "$text-primary",
+                      "content": "医療介護",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "edcF5",
+                  "name": "Ctx 期間: 1週間",
+                  "fill": "$bg-window",
+                  "cornerRadius": 12,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 5,
+                  "padding": [
+                    3,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "pbs87",
+                      "name": "icon-calendar",
+                      "width": 11,
+                      "height": 11,
+                      "icon": "calendar",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "zucMm",
+                      "name": "期間: 1週間",
+                      "fill": "$text-primary",
+                      "content": "期間: 1週間",
+                      "fontFamily": "$font",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ffz04",
+              "name": "Messages",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                8,
+                16,
+                16,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ObKsL",
+                  "name": "User Row",
+                  "width": "fill_container",
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "p7qitJ",
+                      "name": "User Bubble",
+                      "width": 300,
+                      "fill": "$selection",
+                      "cornerRadius": 12,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H5U2eM",
+                          "name": "今週の認知症に関する記事をまとめ",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "今週の認知症に関する記事をまとめて。新薬と介護現場の話題を分けて。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "UUEFw",
+                  "name": "Assistant Row",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hRpSL",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "H0HvhY",
+                          "name": "icon-search",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "search",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "oVYup",
+                          "name": "記事検索: 認知症 · 1週間 ",
+                          "fill": "$text-secondary",
+                          "content": "記事検索: 認知症 · 1週間 · 14件",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "oeFcA",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "e9kIuM",
+                          "name": "完了",
+                          "fill": "$text-tertiary",
+                          "content": "完了",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iDd1p",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "lLbm3",
+                          "name": "icon-file-text",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "file-text",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k83iHB",
+                          "name": "本文取得: 認知症の新薬、国内で",
+                          "fill": "$text-secondary",
+                          "content": "本文取得: 認知症の新薬、国内での適用拡大へ",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ryD30",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "cyvFm",
+                          "name": "完了",
+                          "fill": "$text-tertiary",
+                          "content": "完了",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JeJGA",
+                      "name": "Answer",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CbyBC",
+                          "name": "新薬",
+                          "fill": "$text-primary",
+                          "content": "新薬",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EKDMc",
+                          "name": "厚生労働省が軽度認知障害の段階か",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "厚生労働省が軽度認知障害の段階から使える新薬の適用拡大を検討しており、来年度からの対象拡大が見込まれています。海外では血液検査で10年前にリスクを予測する研究も報告されました。",
+                          "lineHeight": 1.6,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "QCjuY",
+                          "name": "介護現場",
+                          "fill": "$text-primary",
+                          "content": "介護現場",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MnWcr",
+                          "name": "介護報酬改定では処遇改善加算の一",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬改定では処遇改善加算の一本化と夜勤配置の見直しが論点です。見守りセンサー導入施設で夜間の転倒が3割減ったとの調査もあり、現場の省力化が進んでいます。",
+                          "lineHeight": 1.6,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "m9cn1O",
+                          "name": "References",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 4,
+                          "padding": [
+                            4,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "qWgj7",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "zAH61",
+                                  "name": "認知症の新薬、適用拡大へ",
+                                  "fill": "$accent",
+                                  "content": "認知症の新薬、適用拡大へ",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n5NL6",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "H4Y2Yh",
+                                  "name": "Blood test predi",
+                                  "fill": "$accent",
+                                  "content": "Blood test predicts…",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "EQsFT",
+                              "name": "Ref",
+                              "fill": "$bg-window",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                3,
+                                8
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "S14k8",
+                                  "name": "見守りセンサー導入施設",
+                                  "fill": "$accent",
+                                  "content": "見守りセンサー導入施設",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "onSZJ",
+                  "name": "User Row",
+                  "width": "fill_container",
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "b4TrWT",
+                      "name": "User Bubble",
+                      "width": 300,
+                      "fill": "$selection",
+                      "cornerRadius": 12,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VMi2u",
+                          "name": "介護報酬の論点をもう少し詳しく。",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "介護報酬の論点をもう少し詳しく。",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "gg5ph",
+                  "name": "Assistant Row 2",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Pyn2X",
+                      "name": "Tool Step",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Z8b42",
+                          "name": "icon-file-text",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "file-text",
+                          "library": "lucide",
+                          "fill": "$accent"
+                        },
+                        {
+                          "type": "text",
+                          "id": "LQhpB",
+                          "name": "本文取得: 介護報酬改定の論点整",
+                          "fill": "$text-secondary",
+                          "content": "本文取得: 介護報酬改定の論点整理 人材確保策が焦点に",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SgAjb",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "pcS8R",
+                          "name": "実行中",
+                          "fill": "$accent",
+                          "content": "実行中",
+                          "fontFamily": "$font",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aT7OK",
+              "name": "Composer",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                0,
+                12,
+                12,
+                12
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "a3Ok7b",
+                  "name": "Input Box",
+                  "width": "fill_container",
+                  "fill": "$bg-window",
+                  "cornerRadius": 10,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    12,
+                    8,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "d3OW6x",
+                      "name": "記事や要約について質問…",
+                      "fill": "$text-tertiary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "記事や要約について質問…",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$font",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "POVnA",
+                      "name": "Composer Row",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "y2826",
+                          "name": "Model Select",
+                          "fill": "$bg-subtle",
+                          "cornerRadius": "$radius-sm",
+                          "gap": 5,
+                          "padding": [
+                            3,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "S7YKoT",
+                              "name": "icon-cpu",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "cpu",
+                              "library": "lucide",
+                              "fill": "$text-secondary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "DvgoX",
+                              "name": "Ollama · gemma4:",
+                              "fill": "$text-primary",
+                              "content": "Ollama · gemma4:26b",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "wVKPT",
+                              "name": "icon-chevron-down",
+                              "width": 11,
+                              "height": 11,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-secondary"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "B7X7R",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ken1b",
+                          "name": "Send",
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$accent",
+                          "cornerRadius": 14,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "QmC9N",
+                              "name": "icon-arrow-up",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "arrow-up",
+                              "library": "lucide",
+                              "fill": "$on-accent"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "themes": {
