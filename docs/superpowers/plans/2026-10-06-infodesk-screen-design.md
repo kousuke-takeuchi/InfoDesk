@@ -88,3 +88,15 @@ git commit -m "docs: add screen design and update spec"
 - 設定: メインウィンドウ内に表示し、ソース、トピック、LLM、スケジュールをタブで切り替える。
 - ワイヤーフレームは `design.pen` の A-1 (ダイジェスト)、A-2 (フィード)、A-3 (設定: ソース)。書き出しは `design/exports/wire-*.png`。
 - specにない要素: フィードの「すべて既読にする」。採否は利用者の確認待ち。
+- 構成を承認 (2026-10-06)。「すべて既読にする」を採用する (core に一括既読の関数を追加する。Step 6 で spec と Plan 1 に反映)。設定はメインウィンドウ内。ダイジェスト本文は1カラム。
+
+### Step 3 (2026-10-06、確認待ち)
+
+- デザイントークンを `design.pen` の変数に定義した。色はライトとダークの2値を持つ。
+  - 背景: `bg-window`、`bg-sidebar`、`bg-subtle`。線: `border`。
+  - 文字: `text-primary`、`text-secondary`、`text-tertiary`。
+  - 強調: `accent`、`selection`、`on-accent`。状態: `success`、`danger`、`star`。
+  - 部品: `seg-selected`、`toggle-off`。寸法: `radius-sm` 5、`radius-md` 7、`space-row` 12。
+- 書体: pen 上は Noto Sans JP。実装ではmacOSのシステムフォント (日本語はヒラギノ角ゴ) を使う。
+- 本文13px、補足11〜12px、画面見出し22px、節見出し15px。ダイジェストの要約は幅720pxに制限する。
+- 主要3画面のライトとダークを作成した。書き出しは `design/exports/{1-digest,2-feed,3-settings-sources}-{light,dark}.png`。
