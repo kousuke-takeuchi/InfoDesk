@@ -192,7 +192,7 @@ async fn digest(
     let llm = provider_from_settings(store, LlmRole::Digest)?;
     let start = period_start(period, date);
     for scope in &scopes {
-        let status = summarizer::run_digest(
+        let outcome = summarizer::run_digest(
             store,
             llm.as_ref(),
             period,
@@ -204,10 +204,15 @@ async fn digest(
         )
         .await?;
         let saved = store.get_digest(period, start, scope)?;
+        let status = outcome.as_ref().map(|o| o.status);
         match (status, saved) {
             (Some(DigestStatus::Pending), _) | (Some(DigestStatus::Failed), _) => {
+                let reason = outcome
+                    .and_then(|o| o.error)
+                    .map(|e| format!(" ({e})"))
+                    .unwrap_or_default();
                 println!(
-                    "## {} ({start}): 生成に失敗。次回に再試行する\n",
+                    "## {} ({start}): 生成に失敗。次回に再試行する{reason}\n",
                     scope.key()
                 )
             }

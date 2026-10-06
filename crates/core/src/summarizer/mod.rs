@@ -140,6 +140,15 @@ pub fn plan_digest(
     }))
 }
 
+/// `finish_digest` の結果。
+#[derive(Debug, Clone, PartialEq)]
+pub struct DigestOutcome {
+    /// 保存後の状態。強制再生成が失敗した場合は、生成済みの本文が残るので `Done`。
+    pub status: DigestStatus,
+    /// 今回の生成が失敗した理由 (LLMのエラー、または空の出力)。成功なら None。
+    pub error: Option<String>,
+}
+
 /// LLMの結果を保存する。失敗と空の出力は、保留 (3回目で失敗) として記録する。
 pub fn finish_digest(
     store: &Store,
@@ -147,7 +156,7 @@ pub fn finish_digest(
     provider: &str,
     output: Result<String>,
     now: &DateTime<Utc>,
-) -> Result<DigestStatus> {
+) -> Result<DigestOutcome> {
     match output.and_then(|raw| clean_output(&raw)) {
         Ok(body) => {
             store.save_digest_done(
@@ -161,9 +170,20 @@ pub fn finish_digest(
                 },
                 now,
             )?;
-            Ok(DigestStatus::Done)
+            Ok(DigestOutcome {
+                status: DigestStatus::Done,
+                error: None,
+            })
         }
-        Err(_) => store.mark_digest_attempt_failed(job.period, job.period_start, &job.scope, now),
+        Err(e) => Ok(DigestOutcome {
+            status: store.mark_digest_attempt_failed(
+                job.period,
+                job.period_start,
+                &job.scope,
+                now,
+            )?,
+            error: Some(e.to_string()),
+        }),
     }
 }
 
@@ -178,7 +198,7 @@ pub async fn run_digest(
     tz: FixedOffset,
     force: bool,
     now: &DateTime<Utc>,
-) -> Result<Option<DigestStatus>> {
+) -> Result<Option<DigestOutcome>> {
     let Some(job) = plan_digest(store, period, date, scope, tz, force)? else {
         return Ok(None);
     };
@@ -464,7 +484,13 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(
+            st,
+            Some(DigestOutcome {
+                status: DigestStatus::Done,
+                error: None
+            })
+        );
 
         let (system, prompt) = llm.calls().remove(0);
         assert_eq!(system, prompts::DIGEST_SYSTEM);
@@ -564,7 +590,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.map(|o| o.status), Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("期間: 今週"));
         assert!(prompt.contains("月曜のまとめ") && prompt.contains("火曜のまとめ"));
@@ -589,7 +615,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.map(|o| o.status), Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("期間: 今月"));
         assert!(prompt.contains("週次まとめ"));
@@ -691,7 +717,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.map(|o| o.status), Some(DigestStatus::Done));
         assert_eq!(
             store
                 .get_digest(Period::Day, day, &scope)
@@ -713,8 +739,10 @@ mod tests {
             &at(NOW),
         )
         .await
+        .unwrap()
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.status, DigestStatus::Done);
+        assert!(st.error.unwrap().contains("down"));
         assert_eq!(
             store
                 .get_digest(Period::Day, day, &scope)
@@ -742,8 +770,11 @@ mod tests {
             &at(NOW),
         )
         .await
+        .unwrap()
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Pending));
+        assert_eq!(st.status, DigestStatus::Pending);
+        let err = st.error.expect("failure reason must be reported");
+        assert!(err.contains("down"), "{err}");
         let st = run_digest(
             &store,
             &MockProvider::ok("  \n "),
@@ -755,8 +786,10 @@ mod tests {
             &at(NOW),
         )
         .await
+        .unwrap()
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Pending));
+        assert_eq!(st.status, DigestStatus::Pending);
+        assert!(st.error.is_some());
         let saved = store.get_digest(Period::Day, day, &scope).unwrap().unwrap();
         assert_eq!(saved.body, "");
         assert_eq!(saved.attempts, 2);
@@ -772,7 +805,9 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Failed));
+        let st = st.unwrap();
+        assert_eq!(st.status, DigestStatus::Failed);
+        assert!(st.error.unwrap().contains("down"));
 
         // 保留または失敗の後でも、成功すれば生成済みになる。
         let st = run_digest(
@@ -787,7 +822,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.map(|o| o.status), Some(DigestStatus::Done));
     }
 
     #[tokio::test]
@@ -819,7 +854,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(st, Some(DigestStatus::Done));
+        assert_eq!(st.map(|o| o.status), Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("対象: 介護"));
         assert!(prompt.contains("介護報酬の改定"));
