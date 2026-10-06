@@ -32,6 +32,7 @@ pub fn run() {
                 }
             });
             app.manage(AppState::new(store, notify));
+            app.state::<AppState>().load_persisted();
             tray::install(app)?;
             if std::env::args().any(|a| a == "--hidden")
                 && let Some(window) = app.get_webview_window("main")

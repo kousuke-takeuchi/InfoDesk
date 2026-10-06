@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use infodesk_core::collector::{apply_outcomes, fetch_all};
 use infodesk_core::llm::LlmRole;
 use infodesk_core::model::{Category, DigestScope, Period};
@@ -198,7 +198,7 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
     });
     state.notify(EVENT_ITEMS);
 
-    let today = Local::now().date_naive();
+    let today = now.with_timezone(&state.tz).date_naive();
     let (since, _) = utc_range(Period::Day, period_start(Period::Day, today), state.tz);
     let totals = run_item_summaries(state, since).await?;
     if let Some(e) = &totals.error {
@@ -213,6 +213,7 @@ mod tests {
     use super::*;
     use crate::state::test_state;
     use async_trait::async_trait;
+    use chrono::Local;
     use infodesk_core::llm::LlmProvider;
     use infodesk_core::model::{ItemFilter, SourceKind};
     use std::sync::Arc;

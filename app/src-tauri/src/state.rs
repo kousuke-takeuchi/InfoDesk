@@ -58,6 +58,19 @@ impl AppState {
         Ok(f(&store)?)
     }
 
+    /// 前回起動時までに保存した状態を読み込む。起動直後に1回呼ぶ。通知はしない。
+    pub fn load_persisted(&self) {
+        let last = self
+            .with_store(|s| s.get_setting("schedule.last_collect_at"))
+            .ok()
+            .flatten()
+            .and_then(|v| DateTime::parse_from_rfc3339(&v).ok())
+            .map(|d| d.with_timezone(&Utc));
+        if last.is_some() {
+            self.status.lock().expect("status lock").last_collect_at = last;
+        }
+    }
+
     pub fn status(&self) -> AppStatus {
         self.status.lock().expect("status lock").clone()
     }
@@ -115,6 +128,28 @@ mod tests {
         state.update_status(|s| s.collecting = true);
         assert!(state.status().collecting);
         assert_eq!(events.lock().unwrap().as_slice(), [EVENT_STATUS]);
+    }
+
+    #[test]
+    fn load_persisted_restores_last_collect_at() {
+        let (state, _) = test_state();
+        state.load_persisted();
+        assert_eq!(state.status().last_collect_at, None);
+        state
+            .with_store(|s| s.set_setting("schedule.last_collect_at", "2026-10-06T09:30:00+09:00"))
+            .unwrap();
+        state.load_persisted();
+        assert_eq!(
+            state.status().last_collect_at,
+            Some("2026-10-06T00:30:00Z".parse().unwrap())
+        );
+        // 壊れた値は無視する。
+        state
+            .with_store(|s| s.set_setting("schedule.last_collect_at", "garbage"))
+            .unwrap();
+        state.update_status(|s| s.last_collect_at = None);
+        state.load_persisted();
+        assert_eq!(state.status().last_collect_at, None);
     }
 
     #[test]

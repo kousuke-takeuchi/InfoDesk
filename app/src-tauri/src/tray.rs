@@ -1,5 +1,6 @@
-use chrono::{FixedOffset, Local};
-use infodesk_core::model::{Category, DigestScope, ItemFilter, Period};
+use chrono::{FixedOffset, NaiveDate, Utc};
+use infodesk_core::Store;
+use infodesk_core::model::{Category, DigestScope, DigestStatus, ItemFilter, Period};
 use infodesk_core::period::period_start;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -39,19 +40,24 @@ pub fn status_lines(
     (first, format!("未読 {unread}件 · {digest}"))
 }
 
+/// `today` の日次要約が1カテゴリーでも生成済み (`done`) か。保留中や失敗は数えない。
+fn daily_done_on(store: &Store, today: NaiveDate) -> infodesk_core::Result<bool> {
+    let today = period_start(Period::Day, today);
+    for c in Category::ALL {
+        if store
+            .get_digest(Period::Day, today, &DigestScope::Category(c))?
+            .is_some_and(|d| d.status == DigestStatus::Done)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn daily_done_today(state: &AppState) -> bool {
-    let today = period_start(Period::Day, Local::now().date_naive());
+    let today = Utc::now().with_timezone(&state.tz).date_naive();
     state
-        .with_store(|s| {
-            for c in Category::ALL {
-                if s.get_digest(Period::Day, today, &DigestScope::Category(c))?
-                    .is_some()
-                {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
-        })
+        .with_store(|s| daily_done_on(s, today))
         .unwrap_or(false)
 }
 
@@ -142,6 +148,40 @@ mod tests {
 
     fn jst() -> FixedOffset {
         FixedOffset::east_opt(9 * 3600).unwrap()
+    }
+
+    #[test]
+    fn daily_done_requires_a_done_digest_for_today() {
+        use infodesk_core::Store;
+        use infodesk_core::store::NewDigest;
+        let store = Store::open_in_memory().unwrap();
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 6).unwrap();
+        let now = "2026-10-06T00:00:00Z".parse().unwrap();
+        let scope = DigestScope::Category(Category::Medcare);
+        assert!(!daily_done_on(&store, today).unwrap());
+        store
+            .mark_digest_attempt_failed(Period::Day, today, &scope, "down", &now)
+            .unwrap();
+        assert!(
+            !daily_done_on(&store, today).unwrap(),
+            "pending is not done"
+        );
+        store
+            .save_digest_done(
+                &NewDigest {
+                    period: Period::Day,
+                    period_start: today,
+                    scope,
+                    body: "ok".into(),
+                    item_ids: vec![],
+                    provider: "mock".into(),
+                },
+                &now,
+            )
+            .unwrap();
+        assert!(daily_done_on(&store, today).unwrap());
+        let tomorrow = today.succ_opt().unwrap();
+        assert!(!daily_done_on(&store, tomorrow).unwrap());
     }
 
     #[test]
