@@ -1,4 +1,5 @@
 pub mod feed;
+pub mod github;
 pub mod text;
 
 use std::time::Duration;
