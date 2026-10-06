@@ -34,6 +34,40 @@ pub fn set_setting_value(state: &AppState, key: &str, value: &str) -> AppResult<
     state.with_store(|store| store.set_setting(key, value))
 }
 
+/// `app.stay_resident` 設定。不正な値は true。
+pub fn stay_resident(state: &AppState) -> bool {
+    state
+        .with_store(|s| s.get_setting_or("app.stay_resident", "true"))
+        .map(|v| v != "false")
+        .unwrap_or(true)
+}
+
+#[tauri::command]
+pub fn set_launch_at_login(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> AppResult<()> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let result = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    result.map_err(|e| e.to_string())?;
+    set_setting_value(
+        &state,
+        "app.launch_at_login",
+        if enabled { "true" } else { "false" },
+    )
+}
+
+#[tauri::command]
+pub fn show_main_window(app: tauri::AppHandle) {
+    crate::tray::show_main_window(&app);
+}
+
 fn probe(ok: bool, message: impl Into<String>, started: Instant) -> ProbeResult {
     ProbeResult {
         ok,
@@ -107,6 +141,16 @@ mod tests {
         set_setting_value(&state, "ollama.model", "m2").unwrap();
         assert_eq!(settings_map(&state).unwrap()["ollama.model"], "m2");
         assert!(set_setting_value(&state, "unknown.key", "x").is_err());
+    }
+
+    #[test]
+    fn stay_resident_defaults_true_and_reads_setting() {
+        let (state, _) = test_state();
+        assert!(stay_resident(&state));
+        set_setting_value(&state, "app.stay_resident", "false").unwrap();
+        assert!(!stay_resident(&state));
+        set_setting_value(&state, "app.stay_resident", "garbage").unwrap();
+        assert!(stay_resident(&state), "不正な値は既定の true");
     }
 
     #[tokio::test]

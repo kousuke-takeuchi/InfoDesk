@@ -3,18 +3,23 @@ mod error;
 mod jobs;
 mod scheduler;
 mod state;
+mod tray;
 
 use std::sync::Arc;
 
 use infodesk_core::Store;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WindowEvent};
 
-use crate::state::AppState;
+use crate::state::{AppState, EVENT_ITEMS, EVENT_STATUS};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .setup(|app| {
             let db_path = app.path().app_data_dir()?.join("infodesk.db");
             let store = Store::open(&db_path)?;
@@ -22,11 +27,29 @@ pub fn run() {
             let handle = app.handle().clone();
             let notify: state::Notifier = Arc::new(move |name: &str| {
                 let _ = handle.emit(name, ());
+                if name == EVENT_STATUS || name == EVENT_ITEMS {
+                    tray::refresh(&handle);
+                }
             });
             app.manage(AppState::new(store, notify));
+            tray::install(app)?;
+            if std::env::args().any(|a| a == "--hidden")
+                && let Some(window) = app.get_webview_window("main")
+            {
+                let _ = window.hide();
+            }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(scheduler::run_loop(handle));
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let state = window.app_handle().state::<AppState>();
+                if commands::settings::stay_resident(&state) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::status::get_status,
@@ -34,6 +57,8 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::test_ollama,
             commands::settings::test_claude,
+            commands::settings::set_launch_at_login,
+            commands::settings::show_main_window,
             commands::items::list_items,
             commands::items::get_item,
             commands::items::set_read,

@@ -1,6 +1,3 @@
-// 後続タスク (収集、要約、ダイジェスト) が使うまで未使用の項目がある。
-#![allow(dead_code)]
-
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, FixedOffset, Local, Utc};
