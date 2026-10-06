@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use super::schema::SCHEMA;
 use crate::error::Result;
 
-/// 現在のスキーマ版。`migrations` の最後の版と一致させる。
+/// 現在のスキーマ版。`MIGRATIONS` の最後の版と一致させる。
 pub const SCHEMA_VERSION: i32 = 2;
 
 /// (適用後の版, SQL)。版の順に並べる。版1は Plan 1 のスキーマ全体。

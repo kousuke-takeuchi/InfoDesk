@@ -169,6 +169,18 @@ impl Store {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
+
+    /// 再試行の対象 (`pending` と `failed`)。手動の再試行で使う。
+    pub fn retryable_digests(&self) -> Result<Vec<Digest>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {DIGEST_COLS} FROM digests WHERE status IN ('pending', 'failed') \
+             ORDER BY period_start, scope"
+        ))?;
+        let rows = stmt
+            .query_map([], row_to_digest)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
 }
 
 #[cfg(test)]
@@ -297,6 +309,41 @@ mod tests {
                 .unwrap()
                 .last_error,
             None
+        );
+    }
+
+    #[test]
+    fn retryable_digests_include_pending_and_failed_but_not_done() {
+        let store = Store::open_in_memory().unwrap();
+        let now = at("2026-10-06T00:00:00Z");
+        let day = d("2026-10-06");
+        let pending = DigestScope::Topic(1);
+        let failed = DigestScope::Topic(2);
+        let done = DigestScope::Topic(3);
+        store
+            .mark_digest_attempt_failed(Period::Day, day, &pending, "boom", &now)
+            .unwrap();
+        for _ in 0..3 {
+            store
+                .mark_digest_attempt_failed(Period::Day, day, &failed, "boom", &now)
+                .unwrap();
+        }
+        store
+            .save_digest_done(&nd(Period::Day, "2026-10-06", done, "ok", &[]), &now)
+            .unwrap();
+        assert_eq!(store.pending_digests().unwrap().len(), 1);
+        let got: Vec<(DigestScope, DigestStatus)> = store
+            .retryable_digests()
+            .unwrap()
+            .into_iter()
+            .map(|g| (g.scope, g.status))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (pending, DigestStatus::Pending),
+                (failed, DigestStatus::Failed)
+            ]
         );
     }
 
