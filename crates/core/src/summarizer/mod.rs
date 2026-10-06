@@ -187,6 +187,15 @@ pub async fn run_digest(
     Ok(Some(finish_digest(store, &job, &llm.name(), output, now)?))
 }
 
+/// `summarize_top_items` の結果。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemSummaryReport {
+    pub ok: usize,
+    pub failed: usize,
+    /// 最初に失敗したLLM呼び出しのエラー。失敗がなければ None。
+    pub error: Option<String>,
+}
+
 /// カテゴリーの上位 `limit` 件のうち、要約がない記事に要約を付ける。
 /// 1件失敗したら残りを中止する (LLMが落ちている場合に全件で待たないため)。
 /// 失敗した記事は要約なしのまま残り、次回の実行で再び対象になる。
@@ -196,9 +205,10 @@ pub async fn summarize_top_items(
     category: Category,
     since: &DateTime<Utc>,
     limit: u32,
-) -> Result<(usize, usize)> {
+) -> Result<ItemSummaryReport> {
     let items = store.top_unsummarized(category, since, limit)?;
     let mut ok = 0;
+    let mut error = None;
     for item in &items {
         let result = llm
             .complete(prompts::ITEM_SYSTEM, &prompts::item_prompt(item))
@@ -209,10 +219,17 @@ pub async fn summarize_top_items(
                 store.set_ai_summary(item.id, &summary)?;
                 ok += 1;
             }
-            Err(_) => break,
+            Err(e) => {
+                error = Some(e.to_string());
+                break;
+            }
         }
     }
-    Ok((ok, items.len() - ok))
+    Ok(ItemSummaryReport {
+        ok,
+        failed: items.len() - ok,
+        error,
+    })
 }
 
 #[cfg(test)]
@@ -255,11 +272,11 @@ mod tests {
     async fn item_summaries_are_saved_for_top_items() {
         let (store, _) = seeded();
         let llm = MockProvider::ok(" 一文要約。 ");
-        let (ok, failed) =
+        let report =
             summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 1)
                 .await
                 .unwrap();
-        assert_eq!((ok, failed), (1, 0));
+        assert_eq!(report, ItemSummaryReport { ok: 1, failed: 0, error: None });
         let calls = llm.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, prompts::ITEM_SYSTEM);
@@ -274,11 +291,13 @@ mod tests {
     async fn item_summary_failure_stops_early_and_leaves_items_for_retry() {
         let (store, _) = seeded();
         let llm = MockProvider::failing("connection refused");
-        let (ok, failed) =
+        let report =
             summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 10)
                 .await
                 .unwrap();
-        assert_eq!((ok, failed), (0, 2));
+        assert_eq!((report.ok, report.failed), (0, 2));
+        let err = report.error.expect("LLM error must be surfaced");
+        assert!(err.contains("connection refused"), "error was: {err}");
         assert_eq!(llm.calls().len(), 1);
         assert_eq!(
             store.top_unsummarized(Category::Github, &at("2026-10-05T15:00:00Z"), 10).unwrap().len(),
@@ -287,11 +306,17 @@ mod tests {
 
         // Review Focus 5: 空の出力は保存しない。
         let llm = MockProvider::ok("   ");
-        let (ok, failed) =
+        let report =
             summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 10)
                 .await
                 .unwrap();
-        assert_eq!((ok, failed), (0, 2));
+        assert_eq!((report.ok, report.failed), (0, 2));
+        assert!(report.error.is_some());
+        let items = store
+            .query_items(&ItemFilter { category: Some(Category::Github), ..Default::default() })
+            .unwrap();
+        assert!(!items.is_empty());
+        assert!(items.iter().all(|i| i.ai_summary.is_none()));
     }
 
     #[tokio::test]

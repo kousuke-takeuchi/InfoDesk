@@ -48,10 +48,10 @@ pub async fn fetch(http: &reqwest::Client, base: &str, limit: usize) -> Result<V
             Ok(r) if r.status().is_success() => r,
             _ => continue,
         };
-        if let Ok(bytes) = resp.bytes().await {
-            if let Some(item) = parse_item(&bytes) {
-                out.push(item);
-            }
+        if let Ok(bytes) = resp.bytes().await
+            && let Some(item) = parse_item(&bytes)
+        {
+            out.push(item);
         }
     }
     Ok(out)
