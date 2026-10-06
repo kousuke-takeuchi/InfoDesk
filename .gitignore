@@ -1,3 +1,5 @@
 target/
 .DS_Store
 .superpowers/
+app/node_modules/
+app/dist/
