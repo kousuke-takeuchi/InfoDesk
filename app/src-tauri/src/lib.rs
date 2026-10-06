@@ -1,6 +1,7 @@
 mod commands;
 mod error;
 mod jobs;
+mod scheduler;
 mod state;
 
 use std::sync::Arc;
@@ -23,6 +24,8 @@ pub fn run() {
                 let _ = handle.emit(name, ());
             });
             app.manage(AppState::new(store, notify));
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(scheduler::run_loop(handle));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
