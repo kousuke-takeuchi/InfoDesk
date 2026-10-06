@@ -4814,3 +4814,11 @@ Plan 1 の完了後、次を Plan 2 (`Tauri app`) として別の計画に書く
 - メニューバー常駐、ログイン時起動。
 - 画面: ダイジェスト、フィード、設定 (RSSの追加は `feed::validate` と `add_source` を使う)。
 - macOSのGUIアプリはシェルの `PATH` を引き継がない。`claude.bin` と Ollama への到達性を設定画面の接続テストで確認する。
+
+最終レビューで決まった、Plan 2 の最初に行うこと (Plan 1 の実装後に判明した点):
+
+- `PRAGMA user_version` によるスキーマ版管理を、最初のスキーマ変更 (`digests.last_error` 列の追加) より前に入れる。`CREATE TABLE IF NOT EXISTS` だけでは列の追加に対応できない。
+- `Store::init` で `PRAGMA journal_mode=WAL`。CLIとサイドカーがDBを共有するため。
+- スケジューラー: 現在の期間の要約は `force = true` で再生成する (`plan_digest` は生成済みを返さない)。月次を作る前に、月に重なる週次を更新する。記事要約の `since` は「今日」より広く取る (前回失敗分を拾う)。
+- Tauriコマンドは `Send` なFutureが必要なため、`plan_item_summaries` / `finish_item_summary` と `plan_digest` / `finish_digest` を使う (`summarize_top_items` と `run_digest` はCLI用)。
+- 未対応の軽微な指摘 (GitHubのスター数が日/週/月で混ざる、HN/HFの全件失敗が空の成功になる、フリーワード検索が1フレーズ扱い、seedが非トランザクション) は Plan 2 で扱う。
