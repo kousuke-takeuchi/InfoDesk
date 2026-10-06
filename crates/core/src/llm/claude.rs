@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
@@ -8,13 +9,24 @@ use tokio::process::Command;
 use super::{LlmProvider, clean_output};
 use crate::error::{Error, Result};
 
+/// `claude -p` 1回の待ち時間の上限。応答しないプロセスで要約処理全体が止まるのを防ぐ。
+pub const CLAUDE_TIMEOUT: Duration = Duration::from_secs(600);
+
 pub struct ClaudeProvider {
     bin: PathBuf,
+    timeout: Duration,
 }
 
 impl ClaudeProvider {
     pub fn new(bin: impl Into<PathBuf>) -> Self {
-        Self { bin: bin.into() }
+        Self::with_timeout(bin, CLAUDE_TIMEOUT)
+    }
+
+    pub fn with_timeout(bin: impl Into<PathBuf>, timeout: Duration) -> Self {
+        Self {
+            bin: bin.into(),
+            timeout,
+        }
     }
 }
 
@@ -45,12 +57,19 @@ impl LlmProvider for ClaudeProvider {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-            stdin.shutdown().await?;
-        }
-        let out = child.wait_with_output().await?;
+        // 時間切れでこの future を捨てると child も捨てられ、kill_on_drop で終了する。
+        let run = async {
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(prompt.as_bytes()).await?;
+                stdin.shutdown().await?;
+            }
+            child.wait_with_output().await
+        };
+        let out = tokio::time::timeout(self.timeout, run)
+            .await
+            .map_err(|_| Error::Llm("claude: timed out".to_string()))??;
         let value: serde_json::Value = serde_json::from_slice(&out.stdout).map_err(|e| {
             Error::Llm(format!(
                 "claude: unparsable output ({e}): {}",
@@ -118,6 +137,22 @@ mod tests {
         );
         let stdin = std::fs::read_to_string(dir.path().join("stdin.txt")).unwrap();
         assert_eq!(stdin, "本文プロンプト");
+    }
+
+    #[tokio::test]
+    async fn hung_process_times_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("claude");
+        std::fs::write(&bin, "#!/bin/sh\ncat > /dev/null\nexec sleep 5\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let p = ClaudeProvider::with_timeout(bin, Duration::from_secs(1));
+        let started = std::time::Instant::now();
+        let err = p.complete("s", "p").await.unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(4));
+        assert!(
+            matches!(&err, Error::Llm(m) if m == "claude: timed out"),
+            "{err}"
+        );
     }
 
     #[tokio::test]
