@@ -104,11 +104,12 @@ pub fn collect_now(app: AppHandle) -> AppResult<()> {
     Ok(())
 }
 
+/// 手動の再試行。保留中に加え、上限まで失敗した要約も対象にする。
 #[tauri::command]
 pub fn retry_pending_digests(app: AppHandle) -> AppResult<()> {
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
-        if let Err(e) = jobs::retry_pending(&state).await {
+        if let Err(e) = jobs::retry_all(&state).await {
             state.update_status(|s| s.last_error = Some(e.message));
         }
     });

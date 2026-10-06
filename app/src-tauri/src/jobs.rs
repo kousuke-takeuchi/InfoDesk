@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
+use infodesk_core::Store;
 use infodesk_core::collector::{apply_outcomes, fetch_all};
 use infodesk_core::llm::LlmRole;
-use infodesk_core::model::{Category, DigestScope, Period};
+use infodesk_core::model::{Category, Digest, DigestScope, DigestStatus, Period};
 use infodesk_core::period::{period_start, utc_range};
 use infodesk_core::summarizer::{
     DigestOutcome, finish_digest, finish_item_summary, plan_digest, plan_item_summaries,
@@ -122,12 +123,24 @@ pub async fn run_digests(
     result.map(|()| results)
 }
 
-/// 保留中の要約を再試行する。成功した件数を返す。
+/// 保留中 (`pending`) の要約を再試行する。成功した件数を返す。スケジューラーが使う。
 pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
-    let pending = state.with_store(|s| s.pending_digests())?;
+    retry_from(state, Store::pending_digests).await
+}
+
+/// 保留中と失敗 (`failed`) の要約を再試行する。成功した件数を返す。手動の再試行で使う。
+pub async fn retry_all(state: &AppState) -> AppResult<usize> {
+    retry_from(state, Store::retryable_digests).await
+}
+
+async fn retry_from(
+    state: &AppState,
+    list: fn(&Store) -> infodesk_core::Result<Vec<Digest>>,
+) -> AppResult<usize> {
+    let pending = state.with_store(list)?;
     let had_pending = !pending.is_empty();
     let mut recovered = 0;
-    for d in pending {
+    for d in &pending {
         let results = run_digests(
             state,
             d.period,
@@ -142,9 +155,19 @@ pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
             recovered += 1;
         }
     }
-    // 一部だけ復旧した場合は、残りのエラーを `last_error` に残す。もともと何も
+    // 再試行した行がすべて生成済みになったときだけ `last_error` を消す。一部だけ
+    // 復旧した場合や、保留から失敗に変わった場合は、エラーを残す。もともと何も
     // 保留していなければ、他のジョブのエラーを消さないよう `last_error` に触れない。
-    if had_pending && state.with_store(|s| s.pending_digests())?.is_empty() {
+    let all_done = state.with_store(|s| {
+        for d in &pending {
+            let now = s.get_digest(d.period, d.period_start, &d.scope)?;
+            if now.is_none_or(|n| n.status != DigestStatus::Done) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    })?;
+    if had_pending && all_done {
         state.update_status(|s| s.last_error = None);
     }
     Ok(recovered)
@@ -535,6 +558,40 @@ mod tests {
                 .unwrap()
                 .contains("still down")
         );
+    }
+
+    #[tokio::test]
+    async fn retry_all_includes_failed_rows_but_retry_pending_does_not() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Err("down"));
+        run_collect(&state).await.unwrap();
+        // 3回目の失敗で failed になる。
+        retry_pending(&state).await.unwrap();
+        retry_pending(&state).await.unwrap();
+        assert!(
+            state
+                .with_store(|s| s.pending_digests())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            state.with_store(|s| s.retryable_digests()).unwrap().len(),
+            1
+        );
+
+        use_mock(&mut state, Ok("復旧"));
+        assert_eq!(retry_pending(&state).await.unwrap(), 0);
+        assert!(state.status().last_error.is_some());
+        assert_eq!(retry_all(&state).await.unwrap(), 1);
+        assert!(
+            state
+                .with_store(|s| s.retryable_digests())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(state.status().last_error, None);
     }
 
     #[tokio::test]

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, Utc, Weekday};
@@ -25,7 +26,7 @@ pub struct LastRuns {
     pub monthly_for: Option<NaiveDate>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Job {
     Collect,
     /// 対象日 (前日)。
@@ -131,6 +132,25 @@ pub fn due_jobs(now: DateTime<FixedOffset>, cfg: &ScheduleConfig, last: &LastRun
     jobs
 }
 
+/// 同じジョブや再試行を繰り返さない間隔。
+pub const RECENT_ATTEMPT: Duration = Duration::minutes(15);
+
+/// 最後の試行から `RECENT_ATTEMPT` 未満のジョブを除く。失敗し続けるジョブを
+/// 毎分繰り返さないため。
+pub fn filter_recent(
+    due: Vec<Job>,
+    attempts: &HashMap<Job, DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Vec<Job> {
+    due.into_iter()
+        .filter(|job| {
+            attempts
+                .get(job)
+                .is_none_or(|at| now - *at >= RECENT_ATTEMPT)
+        })
+        .collect()
+}
+
 fn previous_month(first_of_month: NaiveDate) -> NaiveDate {
     period_start(Period::Month, first_of_month - Duration::days(1))
 }
@@ -182,8 +202,19 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
     let Some((period, start, force)) = plan.next() else {
         return;
     };
-    if let Err(e) = jobs::run_digests(state, period, start, &scopes, force).await {
-        state.update_status(|s| s.last_error = Some(e.message));
+    let outcomes = match jobs::run_digests(state, period, start, &scopes, force).await {
+        Ok(outcomes) => outcomes,
+        Err(e) => {
+            state.update_status(|s| s.last_error = Some(e.message));
+            return;
+        }
+    };
+    // 週次と月次は作り直し (force) なので、保留の再試行では補えない。1件でも生成に
+    // 失敗したら記録せず、次の評価で再実行する。日次の失敗は保留の再試行で補う。
+    let generation_failed = outcomes
+        .iter()
+        .any(|(_, o)| o.as_ref().is_some_and(|o| o.error.is_some()));
+    if matches!(job, Job::Weekly(_) | Job::Monthly(_)) && generation_failed {
         return;
     }
     let (key, value) = match job {
@@ -199,9 +230,14 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
 }
 
 /// 起動直後と60秒ごとに `due_jobs` を評価する。
+///
+/// 同じジョブは `RECENT_ATTEMPT` 以内に再実行しない。保留の再試行は、ジョブを
+/// 実行しなかった評価でだけ、`RECENT_ATTEMPT` に1回まで行う。
 pub async fn run_loop(app: AppHandle) {
     let mut ticker = tokio::time::interval(StdDuration::from_secs(60));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut attempts: HashMap<Job, DateTime<Utc>> = HashMap::new();
+    let mut last_retry_at: Option<DateTime<Utc>> = None;
     loop {
         ticker.tick().await;
         let state = app.state::<AppState>();
@@ -211,12 +247,16 @@ pub async fn run_loop(app: AppHandle) {
         let last = read_last_runs(&state);
         let now = chrono::Local::now().with_timezone(&state.tz);
         state.update_status(|s| s.next_collect_at = Some(next_collect_at(now, &cfg, &last)));
-        let due = due_jobs(now, &cfg, &last);
+        let now_utc = now.with_timezone(&Utc);
+        attempts.retain(|_, at| now_utc - *at < RECENT_ATTEMPT);
+        let due = filter_recent(due_jobs(now, &cfg, &last), &attempts, now_utc);
         let today = now.date_naive();
         for job in &due {
+            attempts.insert(job.clone(), now_utc);
             run_job(&state, job, today).await;
         }
-        if !due.is_empty() {
+        if due.is_empty() && last_retry_at.is_none_or(|at| now_utc - at >= RECENT_ATTEMPT) {
+            last_retry_at = Some(now_utc);
             let _ = jobs::retry_pending(&state).await;
         }
     }
@@ -408,6 +448,156 @@ mod tests {
         assert_eq!(
             job_plan(&Job::Monthly(d("2026-09-01")), today),
             vec![(Period::Month, d("2026-09-01"), true)]
+        );
+    }
+
+    #[test]
+    fn filter_recent_skips_jobs_attempted_within_15_minutes() {
+        let now: DateTime<Utc> = "2026-10-06T00:00:00Z".parse().unwrap();
+        let mut attempts = HashMap::new();
+        attempts.insert(Job::Collect, now - Duration::minutes(14));
+        attempts.insert(Job::Daily(d("2026-10-05")), now - Duration::minutes(15));
+        attempts.insert(Job::Weekly(d("2026-09-21")), now);
+        let due = vec![
+            Job::Collect,
+            Job::Daily(d("2026-10-05")),
+            Job::Weekly(d("2026-09-28")),
+            Job::Monthly(d("2026-09-01")),
+        ];
+        assert_eq!(
+            filter_recent(due, &attempts, now),
+            vec![
+                Job::Daily(d("2026-10-05")),
+                Job::Weekly(d("2026-09-28")),
+                Job::Monthly(d("2026-09-01")),
+            ]
+        );
+        assert!(filter_recent(Vec::new(), &attempts, now).is_empty());
+    }
+
+    struct FixedLlm(Result<&'static str, &'static str>);
+
+    #[async_trait::async_trait]
+    impl infodesk_core::llm::LlmProvider for FixedLlm {
+        fn name(&self) -> String {
+            "fixed".into()
+        }
+        async fn complete(&self, _s: &str, _p: &str) -> infodesk_core::Result<String> {
+            self.0
+                .map(String::from)
+                .map_err(|e| infodesk_core::Error::Llm(e.into()))
+        }
+    }
+
+    /// 前週 (9/28〜) に日次要約が1件ある状態を作り、LLMの応答を固定する。
+    fn state_with_daily_in_previous_week(
+        reply: Result<&'static str, &'static str>,
+    ) -> crate::state::AppState {
+        use infodesk_core::model::{Category, DigestScope};
+        use infodesk_core::store::NewDigest;
+        let (mut state, _) = crate::state::test_state();
+        state
+            .with_store(|s| {
+                s.save_digest_done(
+                    &NewDigest {
+                        period: Period::Day,
+                        period_start: d("2026-09-30"),
+                        scope: DigestScope::Category(Category::Medcare),
+                        body: "日次".into(),
+                        item_ids: vec![],
+                        provider: "mock".into(),
+                    },
+                    &"2026-09-30T00:00:00Z".parse().unwrap(),
+                )
+            })
+            .unwrap();
+        state.llm = std::sync::Arc::new(move |_, _| {
+            Ok(Box::new(FixedLlm(reply)) as Box<dyn infodesk_core::llm::LlmProvider>)
+        });
+        state
+    }
+
+    #[tokio::test]
+    async fn failed_weekly_run_is_not_recorded() {
+        let state = state_with_daily_in_previous_week(Err("down"));
+        run_job(&state, &Job::Weekly(d("2026-09-28")), d("2026-10-06")).await;
+        assert_eq!(
+            state
+                .with_store(|s| s.get_setting("schedule.last_weekly_for"))
+                .unwrap(),
+            None
+        );
+        assert!(state.status().last_error.is_some());
+
+        let state = state_with_daily_in_previous_week(Ok("週次"));
+        run_job(&state, &Job::Weekly(d("2026-09-28")), d("2026-10-06")).await;
+        assert_eq!(
+            state
+                .with_store(|s| s.get_setting("schedule.last_weekly_for"))
+                .unwrap()
+                .as_deref(),
+            Some("2026-09-28")
+        );
+    }
+
+    #[test]
+    fn monthly_waits_for_its_time_on_the_first_and_rolls_over_the_year() {
+        // 10/1 の 8:00 より前は前月 (9月) を出さない。前々月 (8月) は済み。
+        let early = jst("2026-10-01T07:59:00+09:00");
+        let last = LastRuns {
+            collect_at: Some(early.with_timezone(&Utc)),
+            daily_for: Some(d("2026-09-30")),
+            weekly_for: Some(d("2026-09-21")),
+            monthly_for: Some(d("2026-08-01")),
+        };
+        assert!(due_jobs(early, &cfg(), &last).is_empty());
+        let at_time = jst("2026-10-01T08:00:00+09:00");
+        let last = LastRuns {
+            collect_at: Some(at_time.with_timezone(&Utc)),
+            ..last
+        };
+        assert_eq!(
+            due_jobs(at_time, &cfg(), &last),
+            vec![Job::Monthly(d("2026-09-01"))]
+        );
+
+        // 1月は前年12月が対象。
+        let jan = jst("2027-01-05T09:00:00+09:00");
+        let last = LastRuns {
+            collect_at: Some(jan.with_timezone(&Utc)),
+            daily_for: Some(d("2027-01-04")),
+            weekly_for: Some(d("2026-12-28")),
+            monthly_for: Some(d("2026-11-01")),
+        };
+        assert_eq!(
+            due_jobs(jan, &cfg(), &last),
+            vec![Job::Monthly(d("2026-12-01"))]
+        );
+    }
+
+    #[test]
+    fn weekly_on_sunday_waits_for_weekly_time() {
+        let sun_cfg = ScheduleConfig::from_settings(|k| match k {
+            "schedule.weekly_day" => Some("sun".into()),
+            _ => None,
+        });
+        // 2026-10-11 は日曜。今週 (10/5〜) の実行日。7:30 より前は前週分 (9/28〜) を出さない。
+        let before = jst("2026-10-11T07:29:00+09:00");
+        let last = LastRuns {
+            collect_at: Some(before.with_timezone(&Utc)),
+            daily_for: Some(d("2026-10-10")),
+            weekly_for: Some(d("2026-09-21")),
+            monthly_for: Some(d("2026-09-01")),
+        };
+        assert!(due_jobs(before, &sun_cfg, &last).is_empty());
+        let after = jst("2026-10-11T07:30:00+09:00");
+        let last = LastRuns {
+            collect_at: Some(after.with_timezone(&Utc)),
+            ..last
+        };
+        assert_eq!(
+            due_jobs(after, &sun_cfg, &last),
+            vec![Job::Weekly(d("2026-09-28"))]
         );
     }
 
