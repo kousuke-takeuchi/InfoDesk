@@ -1,5 +1,7 @@
 mod schema;
 mod settings;
+mod sources;
+mod topics;
 
 use std::path::Path;
 
