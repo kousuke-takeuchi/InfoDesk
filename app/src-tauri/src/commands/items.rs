@@ -41,9 +41,13 @@ pub fn mark_all_read_impl(state: &AppState, filter: ItemFilter) -> AppResult<usi
     Ok(n)
 }
 
-/// 記事を既読にし、開くURLを返す。
+/// 記事を既読にし、開くURLを返す。http/https 以外のスキームは拒否する。
 pub fn open_item_url(state: &AppState, id: i64) -> AppResult<String> {
     let item = get_item_impl(state, id)?.ok_or_else(|| format!("item {id} not found"))?;
+    let scheme = item.url.split_once(':').map_or("", |(s, _)| s);
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return Err(format!("unsupported URL scheme {scheme:?} for item {id}").into());
+    }
     set_read_impl(state, id, true)?;
     Ok(item.url)
 }
@@ -217,5 +221,32 @@ mod tests {
         assert_eq!(url, "https://e.com/0");
         assert!(get_item_impl(&state, ids[0]).unwrap().unwrap().read);
         assert!(open_item_url(&state, 9999).is_err());
+    }
+
+    #[test]
+    fn open_item_rejects_non_http_scheme() {
+        let (state, _) = test_state();
+        let id = state
+            .with_store(|s| {
+                let src = s
+                    .list_sources()?
+                    .into_iter()
+                    .find(|x| x.category == Category::Medcare)
+                    .unwrap();
+                let item = NewItem {
+                    url: "file:///etc/hosts".to_string(),
+                    title: "local".to_string(),
+                    excerpt: String::new(),
+                    author: None,
+                    published_at: None,
+                    score: None,
+                };
+                s.upsert_items(&src, &[item], &chrono::Utc::now())?;
+                Ok(s.query_items(&ItemFilter::default())?[0].id)
+            })
+            .unwrap();
+        let err = open_item_url(&state, id).unwrap_err();
+        assert!(format!("{err:?}").contains("file"), "{err:?}");
+        assert!(!get_item_impl(&state, id).unwrap().unwrap().read);
     }
 }
