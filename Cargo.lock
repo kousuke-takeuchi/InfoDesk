@@ -2111,6 +2111,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-opener",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]

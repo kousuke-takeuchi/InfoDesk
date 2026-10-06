@@ -30,6 +30,22 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::test_ollama,
             commands::settings::test_claude,
+            commands::items::list_items,
+            commands::items::get_item,
+            commands::items::set_read,
+            commands::items::set_starred,
+            commands::items::mark_all_read,
+            commands::items::open_item,
+            commands::items::sidebar_counts,
+            commands::sources::list_sources,
+            commands::sources::add_rss_source,
+            commands::sources::update_source,
+            commands::sources::set_source_enabled,
+            commands::sources::delete_source,
+            commands::topics::list_topics,
+            commands::topics::add_topic,
+            commands::topics::update_topic,
+            commands::topics::delete_topic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
