@@ -1,5 +1,6 @@
 pub mod collector;
 pub mod error;
+pub mod llm;
 pub mod model;
 pub mod period;
 pub mod seed;
