@@ -2,7 +2,7 @@ pub mod prompts;
 
 use std::collections::BTreeSet;
 
-use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
+use chrono::{DateTime, Days, FixedOffset, NaiveDate, Utc};
 
 use crate::collector::text::truncate_chars;
 use crate::error::{Error, Result};
@@ -101,14 +101,15 @@ pub fn plan_digest(
                 (category.label_ja().to_string(), lines, ids)
             }
             // 週次は日次要約から、月次は週次要約から作る。
+            // 月次には、月の初日より前に始まり月にまたがる週も入れる (6日前までに始まった週)。
             Period::Week | Period::Month => {
-                let child = if period == Period::Week {
-                    Period::Day
+                let (child, from) = if period == Period::Week {
+                    (Period::Day, start)
                 } else {
-                    Period::Week
+                    (Period::Week, start - Days::new(6))
                 };
                 let children =
-                    store.digests_in_range(child, scope, start, period_end(period, start))?;
+                    store.digests_in_range(child, scope, from, period_end(period, start))?;
                 let lines = children
                     .iter()
                     .map(|c| format!("## {}\n{}", c.period_start, c.body))
@@ -514,6 +515,41 @@ mod tests {
             .unwrap();
         assert_eq!(month.body, "月次まとめ");
         assert_eq!(month.item_ids.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn month_includes_weeks_overlapping_the_month() {
+        let store = Store::open_in_memory().unwrap();
+        let scope = DigestScope::Category(Category::Github);
+        for (start, body, ids) in [
+            ("2026-09-21", "9月21日の週", vec![1]),
+            ("2026-09-28", "9月28日の週", vec![2]),
+            ("2026-10-26", "10月26日の週", vec![3]),
+            ("2026-11-02", "11月2日の週", vec![4]),
+        ] {
+            store
+                .save_digest_done(
+                    &NewDigest {
+                        period: Period::Week,
+                        period_start: d(start),
+                        scope: scope.clone(),
+                        body: body.to_string(),
+                        item_ids: ids,
+                        provider: "mock".to_string(),
+                    },
+                    &at(NOW),
+                )
+                .unwrap();
+        }
+        let job = plan_digest(&store, Period::Month, d("2026-10-15"), &scope, jst(), false)
+            .unwrap()
+            .unwrap();
+        // 9/28 の週は 10/1-10/4 を含むので10月に入れる。9/21 の週と 11/2 の週は入れない。
+        assert!(job.prompt.contains("9月28日の週"));
+        assert!(job.prompt.contains("10月26日の週"));
+        assert!(!job.prompt.contains("9月21日の週"));
+        assert!(!job.prompt.contains("11月2日の週"));
+        assert_eq!(job.item_ids, vec![2, 3]);
     }
 
     #[tokio::test]
