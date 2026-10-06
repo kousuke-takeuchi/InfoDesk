@@ -1,5 +1,7 @@
 pub mod feed;
 pub mod github;
+pub mod hackernews;
+pub mod huggingface;
 pub mod text;
 
 use std::time::Duration;
