@@ -1,4 +1,6 @@
-use super::text::{strip_html, truncate_chars};
+use feed_rs::model::{Link, Text};
+
+use super::text::{collapse_ws, strip_html, truncate_chars};
 use crate::error::{Error, Result};
 use crate::model::NewItem;
 
@@ -10,39 +12,62 @@ pub struct FeedInfo {
     pub item_count: usize,
 }
 
+/// HTMLとして配信された文字列 (text/html, XHTML) だけタグを除く。
+/// プレーンテキストはパーサーが実体参照を戻した後の文字列なので、`Box<dyn Trait>` の
+/// ような山括弧を残すため空白の整理だけにする。
+fn clean_text(t: &Text) -> String {
+    let ct = &t.content_type;
+    let is_html = (ct.ty() == "text" && ct.subty() == "html")
+        || (ct.ty() == "application" && ct.subty().as_str().starts_with("xhtml"));
+    if is_html {
+        strip_html(&t.content)
+    } else {
+        collapse_ws(&t.content)
+    }
+}
+
+/// 記事のURL。rel が alternate または省略されたリンクを優先し、なければ最初のリンク。
+fn entry_link(links: &[Link]) -> Option<&Link> {
+    links
+        .iter()
+        .find(|l| l.rel.as_deref().is_none_or(|r| r == "alternate"))
+        .or_else(|| links.first())
+}
+
 /// RSS / Atom を解析する。リンクまたはタイトルのないエントリーは捨てる。
 pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
     let feed = feed_rs::parser::parse(bytes).map_err(|e| Error::InvalidFeed(e.to_string()))?;
     let feed_title = feed
         .title
         .as_ref()
-        .map(|t| strip_html(&t.content))
+        .map(clean_text)
         .filter(|t| !t.is_empty());
     let mut items = Vec::new();
     for e in &feed.entries {
-        let url = match e.links.first() {
+        let url = match entry_link(&e.links) {
             Some(link) => link.href.trim().to_string(),
             None if e.id.starts_with("http") => e.id.clone(),
             None => continue,
         };
-        let title = e
-            .title
-            .as_ref()
-            .map(|t| strip_html(&t.content))
-            .unwrap_or_default();
+        let title = e.title.as_ref().map(clean_text).unwrap_or_default();
         if url.is_empty() || title.is_empty() {
             continue;
         }
-        let raw_excerpt = e
+        let excerpt = e
             .summary
             .as_ref()
-            .map(|t| t.content.clone())
-            .or_else(|| e.content.as_ref().and_then(|c| c.body.clone()))
+            .map(clean_text)
+            .or_else(|| {
+                e.content
+                    .as_ref()
+                    .and_then(|c| c.body.as_deref())
+                    .map(strip_html)
+            })
             .unwrap_or_default();
         items.push(NewItem {
             url,
             title,
-            excerpt: truncate_chars(&strip_html(&raw_excerpt), EXCERPT_MAX_CHARS),
+            excerpt: truncate_chars(&excerpt, EXCERPT_MAX_CHARS),
             author: e.authors.first().and_then(|p| p.name.clone()),
             published_at: e.published.or(e.updated),
             score: None,
@@ -131,6 +156,43 @@ mod tests {
             items[0].published_at.unwrap().to_rfc3339(),
             "2026-10-05T01:00:00+00:00"
         );
+    }
+
+    #[test]
+    fn plain_text_title_keeps_angle_brackets() {
+        let xml = r#"<rss version="2.0"><channel><title>T</title>
+<item><title>Rust の Box&lt;dyn Trait&gt; と Vec&lt;u8&gt;</title><link>https://e.com/x</link>
+  <description>&lt;p&gt;Vec&lt;/p&gt; の  &lt;b&gt;話&lt;/b&gt;</description></item>
+</channel></rss>"#;
+        let (_, items) = parse_feed(xml.as_bytes()).unwrap();
+        assert_eq!(items[0].title, "Rust の Box<dyn Trait> と Vec<u8>");
+        assert_eq!(items[0].excerpt, "Vec の 話");
+    }
+
+    #[test]
+    fn atom_prefers_alternate_link() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>A</title>
+<entry><id>tag:e.com,2026:1</id><title type="html">Post &lt;b&gt;bold&lt;/b&gt;</title>
+  <link href="https://e.com/1/comments" rel="replies"/>
+  <link href="https://e.com/1" rel="alternate"/></entry>
+<entry><id>tag:e.com,2026:2</id><title>No rel</title>
+  <link href="https://e.com/2/edit" rel="edit"/>
+  <link href="https://e.com/2"/></entry>
+<entry><id>tag:e.com,2026:3</id><title>Only replies</title>
+  <link href="https://e.com/3/comments" rel="replies"/></entry>
+</feed>"#;
+        let (_, items) = parse_feed(xml.as_bytes()).unwrap();
+        let urls: Vec<&str> = items.iter().map(|i| i.url.as_str()).collect();
+        assert_eq!(
+            urls,
+            vec![
+                "https://e.com/1",
+                "https://e.com/2",
+                "https://e.com/3/comments"
+            ]
+        );
+        assert_eq!(items[0].title, "Post bold");
     }
 
     #[test]
