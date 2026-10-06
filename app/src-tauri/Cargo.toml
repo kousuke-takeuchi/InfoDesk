@@ -1,9 +1,9 @@
 [package]
 name = "infodesk-app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-edition = "2021"
+description = "InfoDesk desktop app"
+authors = []
+edition = "2024"
 rust-version = "1.89"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,15 +27,6 @@ infodesk-core = { version = "0.1.0", path = "../../crates/core" }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "time"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 reqwest = { version = "0.13.5", features = ["json"] }
-
-
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = 3
-panic = "abort"
-strip = true
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"
