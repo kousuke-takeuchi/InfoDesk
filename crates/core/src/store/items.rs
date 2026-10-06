@@ -131,9 +131,9 @@ impl Store {
         Ok(created)
     }
 
-    pub fn query_items(&self, f: &ItemFilter) -> Result<Vec<Item>> {
+    /// 絞り込みを WHERE 句と引数に変換する。`limit`/`offset`/`order` は扱わない。
+    fn build_where(&self, f: &ItemFilter, args: &mut Vec<Value>) -> Result<String> {
         let mut wh: Vec<String> = Vec::new();
-        let mut args: Vec<Value> = Vec::new();
         if let Some(c) = f.category {
             wh.push("items.category = ?".into());
             args.push(Value::Text(c.as_str().into()));
@@ -160,16 +160,30 @@ impl Store {
             let topic = self
                 .get_topic(topic_id)?
                 .ok_or_else(|| Error::Invalid(format!("topic {topic_id} not found")))?;
-            wh.push(keyword_clause(&topic.keywords, &mut args));
+            wh.push(keyword_clause(&topic.keywords, args));
         }
         if let Some(text) = f.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-            wh.push(keyword_clause(&[text.to_string()], &mut args));
+            wh.push(keyword_clause(&[text.to_string()], args));
         }
-        let where_sql = if wh.is_empty() {
+        Ok(if wh.is_empty() {
             String::new()
         } else {
             format!("WHERE {}", wh.join(" AND "))
-        };
+        })
+    }
+
+    pub fn count_items(&self, f: &ItemFilter) -> Result<i64> {
+        let mut args: Vec<Value> = Vec::new();
+        let where_sql = self.build_where(f, &mut args)?;
+        let sql = format!("SELECT COUNT(*) FROM items {where_sql}");
+        Ok(self
+            .conn
+            .query_row(&sql, params_from_iter(args), |r| r.get(0))?)
+    }
+
+    pub fn query_items(&self, f: &ItemFilter) -> Result<Vec<Item>> {
+        let mut args: Vec<Value> = Vec::new();
+        let where_sql = self.build_where(f, &mut args)?;
         let order = match f.order {
             ItemOrder::Recent => {
                 "COALESCE(items.published_at, items.fetched_at) DESC, items.id DESC"
@@ -280,6 +294,38 @@ mod tests {
 
     fn kws(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn count_items_ignores_limit_and_respects_filter() {
+        let (store, src) = store_with_source(Category::TechJp);
+        let t = at("2026-10-05T00:00:00Z");
+        let items: Vec<NewItem> = (0..7)
+            .map(|i| new_item(&format!("https://e.com/{i}"), &format!("t{i}"), "", None))
+            .collect();
+        store.upsert_items(&src, &items, &t).unwrap();
+        store
+            .set_read(
+                store.query_items(&ItemFilter::default()).unwrap()[0].id,
+                true,
+            )
+            .unwrap();
+        let f = ItemFilter {
+            category: Some(Category::TechJp),
+            limit: 2,
+            ..Default::default()
+        };
+        assert_eq!(store.count_items(&f).unwrap(), 7);
+        let f = ItemFilter {
+            unread_only: true,
+            ..Default::default()
+        };
+        assert_eq!(store.count_items(&f).unwrap(), 6);
+        let f = ItemFilter {
+            category: Some(Category::Arxiv),
+            ..Default::default()
+        };
+        assert_eq!(store.count_items(&f).unwrap(), 0);
     }
 
     #[test]

@@ -15,8 +15,7 @@ pub struct NewDigest {
     pub provider: String,
 }
 
-const DIGEST_COLS: &str =
-    "id, period, period_start, scope, body, item_ids, provider, status, attempts, created_at";
+const DIGEST_COLS: &str = "id, period, period_start, scope, body, item_ids, provider, status, attempts, created_at, last_error";
 
 const MAX_ATTEMPTS: i64 = 3;
 
@@ -41,6 +40,7 @@ fn row_to_digest(r: &Row) -> rusqlite::Result<Digest> {
         status: col_parse(r, 7, DigestStatus::parse)?,
         attempts: r.get(8)?,
         created_at: col_ts(r, 9)?,
+        last_error: r.get(10)?,
     })
 }
 
@@ -51,7 +51,7 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'done', ?7) \
              ON CONFLICT(period, period_start, scope) DO UPDATE SET \
                body = excluded.body, item_ids = excluded.item_ids, provider = excluded.provider, \
-               status = 'done', created_at = excluded.created_at",
+               last_error = NULL, status = 'done', created_at = excluded.created_at",
             params![
                 d.period.as_str(),
                 date_str(d.period_start),
@@ -76,13 +76,15 @@ impl Store {
         period: Period,
         start: NaiveDate,
         scope: &DigestScope,
+        error: &str,
         now: &DateTime<Utc>,
     ) -> Result<DigestStatus> {
         self.conn.execute(
-            "INSERT INTO digests(period, period_start, scope, status, attempts, created_at) \
-             VALUES (?1, ?2, ?3, 'pending', 1, ?4) \
+            "INSERT INTO digests(period, period_start, scope, status, attempts, created_at, last_error) \
+             VALUES (?1, ?2, ?3, 'pending', 1, ?4, ?6) \
              ON CONFLICT(period, period_start, scope) DO UPDATE SET \
                attempts = attempts + 1, \
+               last_error = excluded.last_error, \
                status = CASE WHEN attempts + 1 >= ?5 THEN 'failed' ELSE 'pending' END \
              WHERE digests.status != 'done'",
             params![
@@ -90,7 +92,8 @@ impl Store {
                 date_str(start),
                 scope.key(),
                 ts(now),
-                MAX_ATTEMPTS
+                MAX_ATTEMPTS,
+                error
             ],
         )?;
         let status = self.conn.query_row(
@@ -237,20 +240,20 @@ mod tests {
         let day = d("2026-10-06");
         assert_eq!(
             store
-                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .mark_digest_attempt_failed(Period::Day, day, &scope, "boom", &now)
                 .unwrap(),
             DigestStatus::Pending
         );
         assert_eq!(store.pending_digests().unwrap().len(), 1);
         assert_eq!(
             store
-                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .mark_digest_attempt_failed(Period::Day, day, &scope, "boom", &now)
                 .unwrap(),
             DigestStatus::Pending
         );
         assert_eq!(
             store
-                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .mark_digest_attempt_failed(Period::Day, day, &scope, "boom", &now)
                 .unwrap(),
             DigestStatus::Failed
         );
@@ -262,6 +265,15 @@ mod tests {
                 .unwrap()
                 .attempts,
             3
+        );
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .last_error
+                .as_deref(),
+            Some("boom")
         );
 
         store
@@ -278,6 +290,14 @@ mod tests {
                 .status,
             DigestStatus::Done
         );
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .last_error,
+            None
+        );
     }
 
     #[test]
@@ -292,7 +312,7 @@ mod tests {
             )
             .unwrap();
         let st = store
-            .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &scope, &now)
+            .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &scope, "boom", &now)
             .unwrap();
         assert_eq!(st, DigestStatus::Done);
         let got = store
@@ -319,7 +339,7 @@ mod tests {
                 .unwrap();
         }
         store
-            .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &gh, &now)
+            .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &gh, "boom", &now)
             .unwrap();
         let got = store
             .digests_in_range(Period::Day, &gh, d("2026-10-05"), d("2026-10-12"))

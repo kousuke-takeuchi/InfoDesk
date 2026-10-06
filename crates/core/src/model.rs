@@ -237,6 +237,7 @@ pub struct Digest {
     pub provider: String,
     pub status: DigestStatus,
     pub attempts: i64,
+    pub last_error: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

@@ -1,5 +1,6 @@
 mod digests;
 mod items;
+mod migrate;
 mod schema;
 mod settings;
 mod sources;
@@ -23,7 +24,10 @@ impl Store {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        Self::init(Connection::open(path)?)
+        let conn = Connection::open(path)?;
+        // CLI、アプリ、将来のサイドカーが同じファイルを使うため。
+        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")?;
+        Self::init(conn)
     }
 
     pub fn open_in_memory() -> Result<Self> {
@@ -31,8 +35,13 @@ impl Store {
     }
 
     fn init(conn: Connection) -> Result<Self> {
-        conn.execute_batch(schema::SCHEMA)?;
+        migrate::migrate(&conn)?;
         Ok(Self { conn })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn conn_execute_for_test(&self, sql: &str) {
+        self.conn.execute(sql, []).unwrap();
     }
 }
 
@@ -96,6 +105,17 @@ mod tests {
         Store::open(&path).unwrap().set_setting("k", "v").unwrap();
         let again = Store::open(&path).unwrap();
         assert_eq!(again.get_setting("k").unwrap().as_deref(), Some("v"));
+    }
+
+    #[test]
+    fn file_database_uses_wal() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("w.db")).unwrap();
+        let mode: String = store
+            .conn
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
     }
 
     #[test]

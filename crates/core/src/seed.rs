@@ -127,26 +127,37 @@ pub const DEFAULT_SOURCES: &[(SourceKind, &str, Category, &str)] = &[
 pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("llm.items_provider", "ollama"),
     ("llm.digest_provider", "ollama"),
+    ("llm.chat_provider", "ollama"),
     ("ollama.base_url", "http://localhost:11434"),
     ("ollama.model", "gemma4:26b"),
+    ("ollama.web_search_api_key", ""),
     ("claude.bin", "claude"),
+    ("node.bin", "node"),
     ("summary.top_n", "20"),
+    ("schedule.collect_interval_hours", "3"),
+    ("schedule.daily_time", "07:00"),
+    ("schedule.weekly_day", "mon"),
+    ("schedule.weekly_time", "07:30"),
+    ("schedule.monthly_time", "08:00"),
+    ("app.launch_at_login", "false"),
+    ("app.stay_resident", "true"),
 ];
 
 const SEEDED_KEY: &str = "seeded";
 
-/// 初回だけ初期ソースと既定設定を入れる。戻り値は追加したソースの件数。
+/// 不足している既定設定を補い、初回だけ初期ソースも入れる。
+/// 戻り値は追加したソースの件数 (初回以外は 0)。
 pub fn seed_defaults(store: &Store) -> Result<usize> {
+    for (key, value) in DEFAULT_SETTINGS {
+        if store.get_setting(key)?.is_none() {
+            store.set_setting(key, value)?;
+        }
+    }
     if store.get_setting(SEEDED_KEY)?.is_some() {
         return Ok(0);
     }
     for (kind, name, category, config) in DEFAULT_SOURCES {
         store.add_source(*kind, name, *category, config)?;
-    }
-    for (key, value) in DEFAULT_SETTINGS {
-        if store.get_setting(key)?.is_none() {
-            store.set_setting(key, value)?;
-        }
     }
     store.set_setting(SEEDED_KEY, "1")?;
     Ok(DEFAULT_SOURCES.len())
@@ -178,6 +189,14 @@ mod tests {
             store.get_setting("ollama.model").unwrap().as_deref(),
             Some("gemma4:26b")
         );
+        assert_eq!(
+            store.get_setting("schedule.daily_time").unwrap().as_deref(),
+            Some("07:00")
+        );
+        assert_eq!(
+            store.get_setting("app.stay_resident").unwrap().as_deref(),
+            Some("true")
+        );
 
         assert_eq!(seed_defaults(&store).unwrap(), 0);
         assert_eq!(store.list_sources().unwrap().len(), DEFAULT_SOURCES.len());
@@ -198,6 +217,23 @@ mod tests {
         assert_eq!(
             store.get_setting("ollama.model").unwrap().as_deref(),
             Some("other")
+        );
+    }
+
+    #[test]
+    fn reseeding_fills_missing_settings_without_touching_existing_ones() {
+        let store = Store::open_in_memory().unwrap();
+        seed_defaults(&store).unwrap();
+        store.set_setting("ollama.model", "other").unwrap();
+        store.conn_execute_for_test("DELETE FROM settings WHERE key = 'schedule.daily_time'");
+        assert_eq!(seed_defaults(&store).unwrap(), 0);
+        assert_eq!(
+            store.get_setting("ollama.model").unwrap().as_deref(),
+            Some("other")
+        );
+        assert_eq!(
+            store.get_setting("schedule.daily_time").unwrap().as_deref(),
+            Some("07:00")
         );
     }
 }

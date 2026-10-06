@@ -175,15 +175,19 @@ pub fn finish_digest(
                 error: None,
             })
         }
-        Err(e) => Ok(DigestOutcome {
-            status: store.mark_digest_attempt_failed(
-                job.period,
-                job.period_start,
-                &job.scope,
-                now,
-            )?,
-            error: Some(e.to_string()),
-        }),
+        Err(e) => {
+            let message = e.to_string();
+            Ok(DigestOutcome {
+                status: store.mark_digest_attempt_failed(
+                    job.period,
+                    job.period_start,
+                    &job.scope,
+                    &message,
+                    now,
+                )?,
+                error: Some(message),
+            })
+        }
     }
 }
 
@@ -793,6 +797,15 @@ mod tests {
         let saved = store.get_digest(Period::Day, day, &scope).unwrap().unwrap();
         assert_eq!(saved.body, "");
         assert_eq!(saved.attempts, 2);
+        assert!(
+            saved
+                .last_error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("empty response"),
+            "{:?}",
+            saved.last_error
+        );
         let st = run_digest(
             &store,
             &MockProvider::failing("down"),
