@@ -1,4 +1,5 @@
 mod schema;
+mod items;
 mod settings;
 mod sources;
 mod topics;
