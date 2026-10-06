@@ -8,6 +8,7 @@
 
 - `crates/core`: 収集、保存 (SQLite)、要約のライブラリ
 - `crates/cli`: コマンド `infodesk`
+- `app/`: Tauri アプリ (`app/src-tauri` がRust側、`app/src` が画面)
 
 ## 使い方
 
@@ -22,6 +23,14 @@ cargo run -p infodesk -- topic add 認知症 認知症 dementia Alzheimer
 ```
 
 DBの既定の場所は `~/Library/Application Support/InfoDesk/infodesk.db`。`--db <path>` で変更できる。
+
+## アプリ
+
+```bash
+cd app && npm install && npm run tauri dev
+```
+
+アプリのDBは `~/Library/Application Support/jp.infodesk.app/infodesk.db`。CLIで同じDBを見るには `--db` で指定する。
 
 ## 設定
 
