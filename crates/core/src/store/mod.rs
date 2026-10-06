@@ -1,8 +1,11 @@
 mod schema;
+mod digests;
 mod items;
 mod settings;
 mod sources;
 mod topics;
+
+pub use digests::NewDigest;
 
 use std::path::Path;
 
