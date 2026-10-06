@@ -2101,6 +2101,7 @@ dependencies = [
 name = "infodesk-app"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "infodesk-core",
  "reqwest",

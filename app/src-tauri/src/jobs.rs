@@ -1,0 +1,375 @@
+use chrono::{DateTime, Local, Utc};
+use infodesk_core::collector::{apply_outcomes, fetch_all};
+use infodesk_core::llm::LlmRole;
+use infodesk_core::model::{Category, DigestScope, Period};
+use infodesk_core::period::{period_start, utc_range};
+use infodesk_core::summarizer::{
+    DigestOutcome, finish_digest, finish_item_summary, plan_digest, plan_item_summaries,
+};
+use serde::Serialize;
+
+use crate::error::AppResult;
+use crate::state::{AppState, EVENT_DIGESTS, EVENT_ITEMS};
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct CollectSummary {
+    pub new_items: usize,
+    pub failed_sources: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ItemSummaryTotals {
+    pub ok: usize,
+    pub failed: usize,
+    pub error: Option<String>,
+}
+
+pub fn all_category_scopes() -> Vec<DigestScope> {
+    Category::ALL
+        .into_iter()
+        .map(DigestScope::Category)
+        .collect()
+}
+
+fn now_utc() -> DateTime<Utc> {
+    Utc::now()
+}
+
+/// ロックを短く2回取り、間で `await` する。
+/// 1. 計画 (ロック内) 2. LLM (ロック外) 3. 保存 (ロック内)
+pub async fn run_item_summaries(
+    state: &AppState,
+    since: DateTime<Utc>,
+) -> AppResult<ItemSummaryTotals> {
+    let limit: u32 = state
+        .with_store(|s| s.get_setting_or("summary.top_n", "20"))?
+        .parse()
+        .unwrap_or(20);
+    let llm = state.llm_provider(LlmRole::Items)?;
+    let mut totals = ItemSummaryTotals {
+        ok: 0,
+        failed: 0,
+        error: None,
+    };
+    state.update_status(|s| s.summarizing = true);
+    'categories: for category in Category::ALL {
+        let jobs = state.with_store(|s| plan_item_summaries(s, category, &since, limit))?;
+        for job in jobs {
+            let output = llm.complete(&job.system, &job.prompt).await;
+            match state.with_store(|s| finish_item_summary(s, job.item_id, output))? {
+                Ok(()) => totals.ok += 1,
+                Err(message) => {
+                    totals.failed += 1;
+                    totals.error.get_or_insert(message);
+                    break 'categories;
+                }
+            }
+        }
+    }
+    state.update_status(|s| s.summarizing = false);
+    if totals.ok > 0 {
+        state.notify(EVENT_ITEMS);
+    }
+    Ok(totals)
+}
+
+/// 期間要約を順に生成する。各 scope の結果 (`None` は生成不要) を返す。
+pub async fn run_digests(
+    state: &AppState,
+    period: Period,
+    date: chrono::NaiveDate,
+    scopes: &[DigestScope],
+    force: bool,
+) -> AppResult<Vec<(DigestScope, Option<DigestOutcome>)>> {
+    let llm = state.llm_provider(LlmRole::Digest)?;
+    let tz = state.tz;
+    state.update_status(|s| s.digesting = true);
+    let mut results = Vec::new();
+    let mut first_error: Option<String> = None;
+    for scope in scopes {
+        let job = state.with_store(|s| plan_digest(s, period, date, scope, tz, force))?;
+        let outcome = match job {
+            None => None,
+            Some(job) => {
+                let output = llm.complete(&job.system, &job.prompt).await;
+                let outcome = state
+                    .with_store(|s| finish_digest(s, &job, &llm.name(), output, &now_utc()))?;
+                if let Some(e) = &outcome.error {
+                    first_error.get_or_insert(e.clone());
+                }
+                Some(outcome)
+            }
+        };
+        results.push((scope.clone(), outcome));
+    }
+    state.update_status(|s| {
+        s.digesting = false;
+        if first_error.is_some() {
+            s.last_error = first_error.clone();
+        }
+    });
+    state.notify(EVENT_DIGESTS);
+    Ok(results)
+}
+
+/// 保留中の要約を再試行する。成功した件数を返す。
+pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
+    let pending = state.with_store(|s| s.pending_digests())?;
+    let mut recovered = 0;
+    for d in pending {
+        let results = run_digests(
+            state,
+            d.period,
+            d.period_start,
+            std::slice::from_ref(&d.scope),
+            false,
+        )
+        .await?;
+        if let Some((_, Some(outcome))) = results.first()
+            && outcome.error.is_none()
+        {
+            recovered += 1;
+        }
+    }
+    if recovered > 0 {
+        state.update_status(|s| s.last_error = None);
+    }
+    Ok(recovered)
+}
+
+/// 収集、記事要約、当日の日次要約。収集中なら拒否する。
+pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
+    {
+        let mut status = state.status.lock().expect("status lock");
+        if status.collecting {
+            return Err("collect already running".to_string().into());
+        }
+        status.collecting = true;
+    }
+    state.notify(crate::state::EVENT_STATUS);
+
+    let result = collect_inner(state).await;
+    state.update_status(|s| {
+        s.collecting = false;
+        if let Err(e) = &result {
+            s.last_error = Some(e.message.clone());
+        }
+    });
+    result
+}
+
+async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
+    let sources = state.with_store(|s| s.list_sources())?;
+    let outcomes = fetch_all(&state.http, &sources).await;
+    let now = now_utc();
+    let reports = state.with_store(|s| apply_outcomes(s, &outcomes, &now))?;
+    let summary = CollectSummary {
+        new_items: reports.iter().map(|r| r.new_items).sum(),
+        failed_sources: reports
+            .iter()
+            .filter(|r| r.error.is_some())
+            .map(|r| r.name.clone())
+            .collect(),
+    };
+    state.with_store(|s| s.set_setting("schedule.last_collect_at", &now.to_rfc3339()))?;
+    state.update_status(|s| {
+        s.last_collect_at = Some(now);
+        s.last_error = None;
+    });
+    state.notify(EVENT_ITEMS);
+
+    let today = Local::now().date_naive();
+    let (since, _) = utc_range(Period::Day, period_start(Period::Day, today), state.tz);
+    let totals = run_item_summaries(state, since).await?;
+    if let Some(e) = &totals.error {
+        state.update_status(|s| s.last_error = Some(e.clone()));
+    }
+    run_digests(state, Period::Day, today, &all_category_scopes(), true).await?;
+    Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::test_state;
+    use async_trait::async_trait;
+    use infodesk_core::llm::LlmProvider;
+    use infodesk_core::model::{ItemFilter, SourceKind};
+    use std::sync::Arc;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    struct Mock1(Result<String, String>);
+
+    #[async_trait]
+    impl LlmProvider for Mock1 {
+        fn name(&self) -> String {
+            "mock".into()
+        }
+        async fn complete(&self, _s: &str, _p: &str) -> infodesk_core::Result<String> {
+            self.0.clone().map_err(infodesk_core::Error::Llm)
+        }
+    }
+
+    fn use_mock(state: &mut AppState, reply: Result<&str, &str>) {
+        let reply = reply.map(String::from).map_err(String::from);
+        state.llm =
+            Arc::new(move |_, _| Ok(Box::new(Mock1(reply.clone())) as Box<dyn LlmProvider>));
+    }
+
+    /// 全ソースを無効にし、wiremock のRSS 1件だけ有効にする。
+    async fn one_rss_source(state: &AppState, server: &MockServer, status: u16) -> i64 {
+        Mock::given(method("GET")).and(path("/feed"))
+            .respond_with(ResponseTemplate::new(status).set_body_string(
+                r#"<rss version="2.0"><channel><title>T</title><item><title>認知症の記事</title><link>https://e.com/1</link><description>本文</description></item></channel></rss>"#,
+            ))
+            .mount(server).await;
+        state
+            .with_store(|s| {
+                for src in s.list_sources()? {
+                    s.set_source_enabled(src.id, false)?;
+                }
+                s.add_source(
+                    SourceKind::Rss,
+                    "Mock",
+                    Category::Medcare,
+                    &format!("{}/feed", server.uri()),
+                )
+            })
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn collect_fetches_summarizes_and_builds_today_digest() {
+        let server = MockServer::start().await;
+        let (mut state, events) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Ok("日本語の要約。"));
+
+        let summary = run_collect(&state).await.unwrap();
+        assert_eq!(summary.new_items, 1);
+        assert!(summary.failed_sources.is_empty());
+
+        let items = state
+            .with_store(|s| s.query_items(&ItemFilter::default()))
+            .unwrap();
+        assert_eq!(items[0].ai_summary.as_deref(), Some("日本語の要約。"));
+        let today = Local::now().date_naive();
+        let digest = state
+            .with_store(|s| {
+                s.get_digest(
+                    Period::Day,
+                    today,
+                    &DigestScope::Category(Category::Medcare),
+                )
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(digest.body, "日本語の要約。");
+        let st = state.status();
+        assert!(!st.collecting && !st.summarizing && !st.digesting);
+        assert!(st.last_collect_at.is_some());
+        assert_eq!(st.last_error, None);
+        let ev = events.lock().unwrap();
+        assert!(ev.contains(&EVENT_ITEMS.to_string()));
+        assert!(ev.contains(&EVENT_DIGESTS.to_string()));
+    }
+
+    #[tokio::test]
+    async fn collect_with_llm_down_leaves_pending_and_records_error() {
+        // Review Focus 2
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Err("connection refused"));
+
+        let summary = run_collect(&state).await.unwrap();
+        assert_eq!(summary.new_items, 1);
+        let items = state
+            .with_store(|s| s.query_items(&ItemFilter::default()))
+            .unwrap();
+        assert_eq!(items[0].ai_summary, None);
+        let pending = state.with_store(|s| s.pending_digests()).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert!(
+            pending[0]
+                .last_error
+                .as_deref()
+                .unwrap()
+                .contains("connection refused")
+        );
+        assert!(
+            state
+                .status()
+                .last_error
+                .unwrap()
+                .contains("connection refused")
+        );
+    }
+
+    #[tokio::test]
+    async fn collect_records_failed_sources_without_stopping() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 500).await;
+        use_mock(&mut state, Ok("x"));
+        let summary = run_collect(&state).await.unwrap();
+        assert_eq!(summary.new_items, 0);
+        assert_eq!(summary.failed_sources, vec!["Mock".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn second_collect_while_running_is_rejected() {
+        // Review Focus 1
+        let (state, _) = test_state();
+        state.update_status(|s| s.collecting = true);
+        let err = run_collect(&state).await.unwrap_err();
+        assert!(err.message.contains("already running"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn retry_pending_regenerates_when_llm_is_back() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Err("down"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 1);
+
+        use_mock(&mut state, Ok("復旧"));
+        assert_eq!(retry_pending(&state).await.unwrap(), 1);
+        assert!(
+            state
+                .with_store(|s| s.pending_digests())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn run_digests_returns_outcome_per_scope() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Ok("要約"));
+        run_collect(&state).await.unwrap();
+        let today = Local::now().date_naive();
+        let results = run_digests(&state, Period::Day, today, &all_category_scopes(), false)
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 7);
+        // medcare は収集時に生成済みなので None (再生成しない)。他は記事なしで None。
+        assert!(results.iter().all(|(_, o)| o.is_none()));
+        let results = run_digests(
+            &state,
+            Period::Day,
+            today,
+            &[DigestScope::Category(Category::Medcare)],
+            true,
+        )
+        .await
+        .unwrap();
+        assert_eq!(results[0].1.as_ref().unwrap().error, None);
+    }
+}

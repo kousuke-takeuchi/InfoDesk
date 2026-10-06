@@ -1,3 +1,4 @@
+pub mod digests;
 pub mod items;
 pub mod settings;
 pub mod sources;
