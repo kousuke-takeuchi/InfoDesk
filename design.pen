@@ -177,7 +177,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -224,7 +225,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -271,7 +273,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -318,7 +321,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -365,7 +369,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -412,7 +417,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -459,7 +465,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -529,7 +536,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -576,7 +584,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -623,7 +632,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -711,7 +721,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -797,7 +808,8 @@
                           "fill": "$text-primary",
                           "content": "フィード",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -866,7 +878,8 @@
                           "fill": "$text-primary",
                           "content": "週",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -890,7 +903,8 @@
                           "fill": "$text-primary",
                           "content": "月",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -1646,7 +1660,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1716,7 +1731,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1763,7 +1779,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1810,7 +1827,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1857,7 +1875,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1904,7 +1923,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -1951,7 +1971,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -2069,7 +2090,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -2116,7 +2138,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -2163,7 +2186,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -2251,7 +2275,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -2312,7 +2337,8 @@
                           "fill": "$text-primary",
                           "content": "ダイジェスト",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -3149,7 +3175,8 @@
                           "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
                           "lineHeight": 1.4,
                           "fontFamily": "$font",
-                          "fontSize": 14
+                          "fontSize": 14,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
@@ -3576,7 +3603,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3646,7 +3674,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3693,7 +3722,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3740,7 +3770,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3787,7 +3818,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3834,7 +3866,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3881,7 +3914,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3928,7 +3962,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -3998,7 +4033,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -4045,7 +4081,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -4092,7 +4129,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -4277,7 +4315,8 @@
                           "fill": "$text-primary",
                           "content": "トピック",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -4301,7 +4340,8 @@
                           "fill": "$text-primary",
                           "content": "LLM",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -4325,7 +4365,8 @@
                           "fill": "$text-primary",
                           "content": "スケジュール",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -6300,7 +6341,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6347,7 +6389,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6394,7 +6437,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6441,7 +6485,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6488,7 +6533,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6535,7 +6581,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6582,7 +6629,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6652,7 +6700,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6699,7 +6748,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6746,7 +6796,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -6834,7 +6885,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -6920,7 +6972,8 @@
                           "fill": "$text-primary",
                           "content": "フィード",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -6989,7 +7042,8 @@
                           "fill": "$text-primary",
                           "content": "週",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -7013,7 +7067,8 @@
                           "fill": "$text-primary",
                           "content": "月",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -7769,7 +7824,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -7839,7 +7895,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -7886,7 +7943,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -7933,7 +7991,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -7980,7 +8039,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8027,7 +8087,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8074,7 +8135,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8192,7 +8254,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8239,7 +8302,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8286,7 +8350,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -8374,7 +8439,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -8435,7 +8501,8 @@
                           "fill": "$text-primary",
                           "content": "ダイジェスト",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -9272,7 +9339,8 @@
                           "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
                           "lineHeight": 1.4,
                           "fontFamily": "$font",
-                          "fontSize": 14
+                          "fontSize": 14,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
@@ -9699,7 +9767,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -9769,7 +9838,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -9816,7 +9886,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -9863,7 +9934,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -9910,7 +9982,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -9957,7 +10030,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10004,7 +10078,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10051,7 +10126,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10121,7 +10197,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10168,7 +10245,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10215,7 +10293,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -10400,7 +10479,8 @@
                           "fill": "$text-primary",
                           "content": "トピック",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -10424,7 +10504,8 @@
                           "fill": "$text-primary",
                           "content": "LLM",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -10448,7 +10529,8 @@
                           "fill": "$text-primary",
                           "content": "スケジュール",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -12352,7 +12434,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12422,7 +12505,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12469,7 +12553,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12516,7 +12601,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12563,7 +12649,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12610,7 +12697,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12657,7 +12745,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12775,7 +12864,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12822,7 +12912,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12869,7 +12960,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -12957,7 +13049,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -13018,7 +13111,8 @@
                           "fill": "$text-primary",
                           "content": "ダイジェスト",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -13808,7 +13902,8 @@
                           "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
                           "lineHeight": 1.4,
                           "fontFamily": "$font",
-                          "fontSize": 14
+                          "fontSize": 14,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
@@ -14756,7 +14851,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -14826,7 +14922,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -14873,7 +14970,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -14920,7 +15018,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -14967,7 +15066,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15014,7 +15114,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15061,7 +15162,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15179,7 +15281,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15226,7 +15329,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15273,7 +15377,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -15361,7 +15466,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -15422,7 +15528,8 @@
                           "fill": "$text-primary",
                           "content": "ダイジェスト",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -16212,7 +16319,8 @@
                           "content": "訪問介護の事業所数が過去最少に 小規模事業者の撤退続く",
                           "lineHeight": 1.4,
                           "fontFamily": "$font",
-                          "fontSize": 14
+                          "fontSize": 14,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
@@ -17160,7 +17268,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17230,7 +17339,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17277,7 +17387,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17324,7 +17435,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17371,7 +17483,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17418,7 +17531,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17465,7 +17579,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17512,7 +17627,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17582,7 +17698,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17629,7 +17746,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17676,7 +17794,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -17836,7 +17955,8 @@
                           "fill": "$text-primary",
                           "content": "ソース",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -17885,7 +18005,8 @@
                           "fill": "$text-primary",
                           "content": "LLM",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -17909,7 +18030,8 @@
                           "fill": "$text-primary",
                           "content": "スケジュール",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -19018,7 +19140,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19088,7 +19211,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19135,7 +19259,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19182,7 +19307,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19229,7 +19355,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19276,7 +19403,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19323,7 +19451,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19370,7 +19499,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19440,7 +19570,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19487,7 +19618,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19534,7 +19666,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -19694,7 +19827,8 @@
                           "fill": "$text-primary",
                           "content": "ソース",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -19718,7 +19852,8 @@
                           "fill": "$text-primary",
                           "content": "トピック",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -19767,7 +19902,8 @@
                           "fill": "$text-primary",
                           "content": "スケジュール",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -20824,7 +20960,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -20894,7 +21031,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -20941,7 +21079,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -20988,7 +21127,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21035,7 +21175,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21082,7 +21223,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21129,7 +21271,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21176,7 +21319,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21246,7 +21390,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21293,7 +21438,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21340,7 +21486,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -21500,7 +21647,8 @@
                           "fill": "$text-primary",
                           "content": "ソース",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -21524,7 +21672,8 @@
                           "fill": "$text-primary",
                           "content": "トピック",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -21548,7 +21697,8 @@
                           "fill": "$text-primary",
                           "content": "LLM",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -22568,7 +22718,8 @@
                   "width": "fill_container",
                   "content": "すべて",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22638,7 +22789,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22685,7 +22837,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22732,7 +22885,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22779,7 +22933,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22826,7 +22981,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22873,7 +23029,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22920,7 +23077,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -22990,7 +23148,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -23037,7 +23196,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -23084,7 +23244,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -23269,7 +23430,8 @@
                           "fill": "$text-primary",
                           "content": "トピック",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -23293,7 +23455,8 @@
                           "fill": "$text-primary",
                           "content": "LLM",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -23317,7 +23480,8 @@
                           "fill": "$text-primary",
                           "content": "スケジュール",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -26566,7 +26730,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26613,7 +26778,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26660,7 +26826,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26707,7 +26874,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26754,7 +26922,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26801,7 +26970,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26848,7 +27018,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26918,7 +27089,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -26965,7 +27137,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -27012,7 +27185,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -27100,7 +27274,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -27186,7 +27361,8 @@
                           "fill": "$text-primary",
                           "content": "フィード",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -27255,7 +27431,8 @@
                           "fill": "$text-primary",
                           "content": "週",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -27279,7 +27456,8 @@
                           "fill": "$text-primary",
                           "content": "月",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -28011,7 +28189,8 @@
                   "width": "fill_container",
                   "content": "GitHub",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28057,7 +28236,8 @@
                   "width": "fill_container",
                   "content": "arXiv",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28103,7 +28283,8 @@
                   "width": "fill_container",
                   "content": "Hugging Face",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28149,7 +28330,8 @@
                   "width": "fill_container",
                   "content": "Hacker News",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28195,7 +28377,8 @@
                   "width": "fill_container",
                   "content": "国内tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28241,7 +28424,8 @@
                   "width": "fill_container",
                   "content": "海外tech",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28287,7 +28471,8 @@
                   "width": "fill_container",
                   "content": "医療介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28356,7 +28541,8 @@
                   "width": "fill_container",
                   "content": "認知症",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28402,7 +28588,8 @@
                   "width": "fill_container",
                   "content": "介護",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28448,7 +28635,8 @@
                   "width": "fill_container",
                   "content": "ローカルLLM",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -28535,7 +28723,8 @@
                   "width": "fill_container",
                   "content": "設定",
                   "fontFamily": "$font",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             }
@@ -28596,7 +28785,8 @@
                           "fill": "$text-primary",
                           "content": "ダイジェスト",
                           "fontFamily": "$font",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
