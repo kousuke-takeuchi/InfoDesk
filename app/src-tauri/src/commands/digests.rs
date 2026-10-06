@@ -89,9 +89,15 @@ pub fn regenerate_digest(
 
 #[tauri::command]
 pub fn collect_now(app: AppHandle) -> AppResult<()> {
+    // 収集中なら何もしない (重複起動はエラーではない)。
+    if jobs::is_collecting(&app.state::<AppState>()) {
+        return Ok(());
+    }
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
-        if let Err(e) = jobs::run_collect(&state).await {
+        if let Err(e) = jobs::run_collect(&state).await
+            && e.message != jobs::COLLECT_ALREADY_RUNNING
+        {
             state.update_status(|s| s.last_error = Some(e.message));
         }
     });

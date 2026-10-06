@@ -52,25 +52,30 @@ pub async fn run_item_summaries(
         error: None,
     };
     state.update_status(|s| s.summarizing = true);
-    'categories: for category in Category::ALL {
-        let jobs = state.with_store(|s| plan_item_summaries(s, category, &since, limit))?;
-        for job in jobs {
-            let output = llm.complete(&job.system, &job.prompt).await;
-            match state.with_store(|s| finish_item_summary(s, job.item_id, output))? {
-                Ok(()) => totals.ok += 1,
-                Err(message) => {
-                    totals.failed += 1;
-                    totals.error.get_or_insert(message);
-                    break 'categories;
+    // エラーでも必ずフラグを戻すため、本体を内側のブロックで実行する。
+    let result: AppResult<()> = async {
+        'categories: for category in Category::ALL {
+            let jobs = state.with_store(|s| plan_item_summaries(s, category, &since, limit))?;
+            for job in jobs {
+                let output = llm.complete(&job.system, &job.prompt).await;
+                match state.with_store(|s| finish_item_summary(s, job.item_id, output))? {
+                    Ok(()) => totals.ok += 1,
+                    Err(message) => {
+                        totals.failed += 1;
+                        totals.error.get_or_insert(message);
+                        break 'categories;
+                    }
                 }
             }
         }
+        Ok(())
     }
+    .await;
     state.update_status(|s| s.summarizing = false);
     if totals.ok > 0 {
         state.notify(EVENT_ITEMS);
     }
-    Ok(totals)
+    result.map(|()| totals)
 }
 
 /// 期間要約を順に生成する。各 scope の結果 (`None` は生成不要) を返す。
@@ -86,22 +91,27 @@ pub async fn run_digests(
     state.update_status(|s| s.digesting = true);
     let mut results = Vec::new();
     let mut first_error: Option<String> = None;
-    for scope in scopes {
-        let job = state.with_store(|s| plan_digest(s, period, date, scope, tz, force))?;
-        let outcome = match job {
-            None => None,
-            Some(job) => {
-                let output = llm.complete(&job.system, &job.prompt).await;
-                let outcome = state
-                    .with_store(|s| finish_digest(s, &job, &llm.name(), output, &now_utc()))?;
-                if let Some(e) = &outcome.error {
-                    first_error.get_or_insert(e.clone());
+    // エラーでも必ずフラグを戻すため、本体を内側のブロックで実行する。
+    let result: AppResult<()> = async {
+        for scope in scopes {
+            let job = state.with_store(|s| plan_digest(s, period, date, scope, tz, force))?;
+            let outcome = match job {
+                None => None,
+                Some(job) => {
+                    let output = llm.complete(&job.system, &job.prompt).await;
+                    let outcome = state
+                        .with_store(|s| finish_digest(s, &job, &llm.name(), output, &now_utc()))?;
+                    if let Some(e) = &outcome.error {
+                        first_error.get_or_insert(e.clone());
+                    }
+                    Some(outcome)
                 }
-                Some(outcome)
-            }
-        };
-        results.push((scope.clone(), outcome));
+            };
+            results.push((scope.clone(), outcome));
+        }
+        Ok(())
     }
+    .await;
     state.update_status(|s| {
         s.digesting = false;
         if first_error.is_some() {
@@ -109,7 +119,7 @@ pub async fn run_digests(
         }
     });
     state.notify(EVENT_DIGESTS);
-    Ok(results)
+    result.map(|()| results)
 }
 
 /// 保留中の要約を再試行する。成功した件数を返す。
@@ -131,18 +141,26 @@ pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
             recovered += 1;
         }
     }
-    if recovered > 0 {
+    // 一部だけ復旧した場合は、残りのエラーを `last_error` に残す。
+    if state.with_store(|s| s.pending_digests())?.is_empty() {
         state.update_status(|s| s.last_error = None);
     }
     Ok(recovered)
 }
 
-/// 収集、記事要約、当日の日次要約。収集中なら拒否する。
+/// 収集中に再度 `run_collect` を呼んだときのエラーメッセージ。
+pub const COLLECT_ALREADY_RUNNING: &str = "collect already running";
+
+pub fn is_collecting(state: &AppState) -> bool {
+    state.status().collecting
+}
+
+/// 収集、記事要約、当日の日次要約。収集中なら拒否する (`last_error` は変えない)。
 pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
     {
         let mut status = state.status.lock().expect("status lock");
         if status.collecting {
-            return Err("collect already running".to_string().into());
+            return Err(COLLECT_ALREADY_RUNNING.to_string().into());
         }
         status.collecting = true;
     }
@@ -196,6 +214,7 @@ mod tests {
     use infodesk_core::llm::LlmProvider;
     use infodesk_core::model::{ItemFilter, SourceKind};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -345,6 +364,161 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(state.status().last_error, None);
+    }
+
+    /// 最初の `ok_first` 回だけ成功し、以降は失敗する。呼び出し回数は全インスタンスで共有する。
+    struct SeqMock {
+        calls: Arc<AtomicUsize>,
+        ok_first: usize,
+    }
+
+    #[async_trait]
+    impl LlmProvider for SeqMock {
+        fn name(&self) -> String {
+            "seq".into()
+        }
+        async fn complete(&self, _s: &str, _p: &str) -> infodesk_core::Result<String> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) < self.ok_first {
+                Ok("復旧".into())
+            } else {
+                Err(infodesk_core::Error::Llm("still down".into()))
+            }
+        }
+    }
+
+    fn use_seq_mock(state: &mut AppState, ok_first: usize) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        state.llm = Arc::new(move |_, _| {
+            Ok(Box::new(SeqMock {
+                calls: calls.clone(),
+                ok_first,
+            }) as Box<dyn LlmProvider>)
+        });
+    }
+
+    /// 全ソースを無効にし、カテゴリーの異なる wiremock のRSS 2件を有効にする。
+    async fn two_rss_sources(state: &AppState, server: &MockServer) {
+        for (p, link) in [("/feed1", "https://e.com/a"), ("/feed2", "https://e.com/b")] {
+            Mock::given(method("GET"))
+                .and(path(p))
+                .respond_with(ResponseTemplate::new(200).set_body_string(format!(
+                    r#"<rss version="2.0"><channel><title>T</title><item><title>記事</title><link>{link}</link><description>本文</description></item></channel></rss>"#
+                )))
+                .mount(server)
+                .await;
+        }
+        state
+            .with_store(|s| {
+                for src in s.list_sources()? {
+                    s.set_source_enabled(src.id, false)?;
+                }
+                s.add_source(
+                    SourceKind::Rss,
+                    "Mock1",
+                    Category::Medcare,
+                    &format!("{}/feed1", server.uri()),
+                )?;
+                s.add_source(
+                    SourceKind::Rss,
+                    "Mock2",
+                    Category::TechJp,
+                    &format!("{}/feed2", server.uri()),
+                )
+            })
+            .unwrap();
+    }
+
+    async fn two_pending(state: &mut AppState) -> MockServer {
+        let server = MockServer::start().await;
+        two_rss_sources(state, &server).await;
+        use_mock(state, Err("down"));
+        run_collect(state).await.unwrap();
+        assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 2);
+        assert!(state.status().last_error.is_some());
+        server
+    }
+
+    #[tokio::test]
+    async fn retry_pending_full_recovery_clears_last_error() {
+        let (mut state, _) = test_state();
+        let _server = two_pending(&mut state).await;
+        use_mock(&mut state, Ok("復旧"));
+        assert_eq!(retry_pending(&state).await.unwrap(), 2);
+        assert!(
+            state
+                .with_store(|s| s.pending_digests())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn retry_pending_still_failing_keeps_last_error() {
+        let (mut state, _) = test_state();
+        let _server = two_pending(&mut state).await;
+        use_mock(&mut state, Err("still down"));
+        assert_eq!(retry_pending(&state).await.unwrap(), 0);
+        assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 2);
+        assert!(state.status().last_error.is_some());
+    }
+
+    #[tokio::test]
+    async fn retry_pending_partial_recovery_keeps_last_error() {
+        let (mut state, _) = test_state();
+        let _server = two_pending(&mut state).await;
+        use_seq_mock(&mut state, 1);
+        assert_eq!(retry_pending(&state).await.unwrap(), 1);
+        assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 1);
+        assert!(
+            state
+                .status()
+                .last_error
+                .as_deref()
+                .unwrap()
+                .contains("still down")
+        );
+    }
+
+    #[tokio::test]
+    async fn run_digests_error_resets_digesting_flag() {
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("x"));
+        let today = Local::now().date_naive();
+        let result = run_digests(
+            &state,
+            Period::Day,
+            today,
+            &[DigestScope::Topic(9999)],
+            true,
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(!state.status().digesting);
+    }
+
+    #[tokio::test]
+    async fn item_summaries_with_bad_top_n_resets_summarizing_flag() {
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("x"));
+        state
+            .with_store(|s| s.set_setting("summary.top_n", "abc"))
+            .unwrap();
+        let totals = run_item_summaries(&state, now_utc()).await.unwrap();
+        assert_eq!(totals.failed, 0);
+        assert!(!state.status().summarizing);
+    }
+
+    #[tokio::test]
+    async fn rejected_collect_leaves_last_error_untouched() {
+        let (state, _) = test_state();
+        assert!(!is_collecting(&state));
+        state.update_status(|s| s.collecting = true);
+        assert!(is_collecting(&state));
+        let err = run_collect(&state).await.unwrap_err();
+        assert_eq!(err.message, COLLECT_ALREADY_RUNNING);
+        assert_eq!(state.status().last_error, None);
+        assert!(is_collecting(&state));
     }
 
     #[tokio::test]
