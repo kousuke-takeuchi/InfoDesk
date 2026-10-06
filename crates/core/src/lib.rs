@@ -2,6 +2,7 @@ pub mod collector;
 pub mod error;
 pub mod model;
 pub mod period;
+pub mod seed;
 pub mod store;
 
 pub use error::{Error, Result};

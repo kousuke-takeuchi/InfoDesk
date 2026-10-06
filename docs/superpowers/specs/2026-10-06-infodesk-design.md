@@ -50,8 +50,8 @@ Rust バックエンド
 ### collector
 
 - 責務: 1つのソースから記事を取得し、共通の `Item` 型に正規化して返す。
-- インターフェース: trait `Source`。`fetch()` が `Vec<Item>` を返す。
-- 実装: `GithubTrending`、`Arxiv`、`HuggingFace`、`HackerNews`、`Rss`。
+- インターフェース: 関数 `fetch_source(http, source)` が `Vec<NewItem>` を返す。ソースの種類 (`SourceKind`) で取得器に振り分ける。
+- 実装: `github`、`hackernews`、`huggingface`、`feed` (RSS、Atom、arXiv) の各モジュール。
 - 依存: HTTPクライアントのみ。storeには依存しない。保存は呼び出し側が行う。
 - `Rss` は汎用実装で、フィードURLとカテゴリーを引数に取る。国内tech、海外tech、医療介護のニュースと、利用者が追加したフィードはすべてこの実装を使う。
 
@@ -86,9 +86,9 @@ Rust バックエンド
 | Hacker News | 上位記事 | 公式API |
 | 国内tech | はてなブックマークIT、Publickey、ITmedia、Zenn | RSS |
 | 海外tech | TechCrunch、The Verge、Ars Technica、MIT Technology Review | RSS |
-| 医療介護 | CBnews、ケアマネタイムス、PubMed検索 (dementia など) | RSS |
+| 医療介護 | joint-kaigo.com、care-news.jp、Google News検索 (認知症、介護、dementia) | RSS |
 
-この表のソースは候補である。RSSのURLと各APIの仕様は、実装計画の段階で実物にアクセスして確認する。取得できないソースは一覧から外し、その旨を記録する。
+この表のソースは2026-10-06に取得と解析を確認した。CBnews、ケアマネタイムス、PubMedは固定のRSS URLがないため初期ソースから外し、Google News検索のRSSで代替した。
 
 ### RSSフィードの追加
 
