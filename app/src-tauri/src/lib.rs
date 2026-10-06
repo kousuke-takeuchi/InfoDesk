@@ -34,10 +34,11 @@ pub fn run() {
             app.manage(AppState::new(store, notify));
             app.state::<AppState>().load_persisted();
             tray::install(app)?;
-            if std::env::args().any(|a| a == "--hidden")
+            // ウィンドウは非表示で作られる。ログイン時の自動起動 (`--hidden`) 以外は表示する。
+            if !std::env::args().any(|a| a == "--hidden")
                 && let Some(window) = app.get_webview_window("main")
             {
-                let _ = window.hide();
+                let _ = window.show();
             }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(scheduler::run_loop(handle));
@@ -81,6 +82,13 @@ pub fn run() {
             commands::digests::collect_now,
             commands::digests::retry_pending_digests,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Dock のアイコンを押したら、隠したウィンドウを表示する。
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_main_window(_app);
+            }
+        });
 }
