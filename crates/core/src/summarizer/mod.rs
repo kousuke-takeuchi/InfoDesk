@@ -195,6 +195,49 @@ pub struct ItemSummaryReport {
     pub error: Option<String>,
 }
 
+/// 記事1件の要約ジョブ。LLM呼び出しの前後で `Store` を持ち越さずに済むよう、
+/// 計画 (`plan_item_summaries`) と保存 (`finish_item_summary`) を分けている。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemSummaryJob {
+    pub item_id: i64,
+    pub system: String,
+    pub prompt: String,
+}
+
+/// カテゴリーの上位 `limit` 件のうち、要約がない記事のジョブを作る。LLMは呼ばない。
+pub fn plan_item_summaries(
+    store: &Store,
+    category: Category,
+    since: &DateTime<Utc>,
+    limit: u32,
+) -> Result<Vec<ItemSummaryJob>> {
+    Ok(store
+        .top_unsummarized(category, since, limit)?
+        .iter()
+        .map(|item| ItemSummaryJob {
+            item_id: item.id,
+            system: prompts::ITEM_SYSTEM.to_string(),
+            prompt: prompts::item_prompt(item),
+        })
+        .collect())
+}
+
+/// LLMの結果を保存する。`Ok(Ok(()))` は保存済み、`Ok(Err(msg))` はLLMの失敗
+/// (空の出力を含む) で、何も保存しない。外側の `Err` はDBのエラー。
+pub fn finish_item_summary(
+    store: &Store,
+    item_id: i64,
+    output: Result<String>,
+) -> Result<std::result::Result<(), String>> {
+    match output.and_then(|raw| clean_output(&raw)) {
+        Ok(summary) => {
+            store.set_ai_summary(item_id, &summary)?;
+            Ok(Ok(()))
+        }
+        Err(e) => Ok(Err(e.to_string())),
+    }
+}
+
 /// カテゴリーの上位 `limit` 件のうち、要約がない記事に要約を付ける。
 /// 1件失敗したら残りを中止する (LLMが落ちている場合に全件で待たないため)。
 /// 失敗した記事は要約なしのまま残り、次回の実行で再び対象になる。
@@ -205,28 +248,22 @@ pub async fn summarize_top_items(
     since: &DateTime<Utc>,
     limit: u32,
 ) -> Result<ItemSummaryReport> {
-    let items = store.top_unsummarized(category, since, limit)?;
+    let jobs = plan_item_summaries(store, category, since, limit)?;
     let mut ok = 0;
     let mut error = None;
-    for item in &items {
-        let result = llm
-            .complete(prompts::ITEM_SYSTEM, &prompts::item_prompt(item))
-            .await
-            .and_then(|raw| clean_output(&raw));
-        match result {
-            Ok(summary) => {
-                store.set_ai_summary(item.id, &summary)?;
-                ok += 1;
-            }
+    for job in &jobs {
+        let output = llm.complete(&job.system, &job.prompt).await;
+        match finish_item_summary(store, job.item_id, output)? {
+            Ok(()) => ok += 1,
             Err(e) => {
-                error = Some(e.to_string());
+                error = Some(e);
                 break;
             }
         }
     }
     Ok(ItemSummaryReport {
         ok,
-        failed: items.len() - ok,
+        failed: jobs.len() - ok,
         error,
     })
 }
@@ -303,6 +340,54 @@ mod tests {
             })
             .unwrap();
         assert_eq!(items[0].ai_summary.as_deref(), Some("一文要約。"));
+    }
+
+    #[test]
+    fn plan_item_summaries_builds_jobs_for_top_unsummarized_items() {
+        let (store, _) = seeded();
+        let since = at("2026-10-05T15:00:00Z");
+        let jobs = plan_item_summaries(&store, Category::Github, &since, 10).unwrap();
+        assert_eq!(jobs.len(), 2);
+        let high = store.top_unsummarized(Category::Github, &since, 1).unwrap()[0].clone();
+        assert_eq!(jobs[0].item_id, high.id);
+        assert_eq!(jobs[0].system, prompts::ITEM_SYSTEM);
+        assert_eq!(jobs[0].prompt, prompts::item_prompt(&high));
+        assert!(jobs[1].prompt.contains("低スコア記事"));
+
+        store.set_ai_summary(high.id, "済").unwrap();
+        let jobs = plan_item_summaries(&store, Category::Github, &since, 10).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert!(
+            plan_item_summaries(&store, Category::Arxiv, &since, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn finish_item_summary_saves_success_and_reports_failure() {
+        let (store, _) = seeded();
+        let since = at("2026-10-05T15:00:00Z");
+        let jobs = plan_item_summaries(&store, Category::Github, &since, 10).unwrap();
+        let summary_of = |id: i64| store.get_item(id).unwrap().unwrap().ai_summary;
+
+        let r = finish_item_summary(&store, jobs[0].item_id, Ok(" 一文要約。 ".into())).unwrap();
+        assert_eq!(r, Ok(()));
+        assert_eq!(summary_of(jobs[0].item_id).as_deref(), Some("一文要約。"));
+
+        let r = finish_item_summary(
+            &store,
+            jobs[1].item_id,
+            Err(Error::Llm("connection refused".into())),
+        )
+        .unwrap();
+        let msg = r.unwrap_err();
+        assert!(msg.contains("connection refused"), "{msg}");
+        assert_eq!(summary_of(jobs[1].item_id), None);
+
+        let r = finish_item_summary(&store, jobs[1].item_id, Ok("  ".into())).unwrap();
+        assert!(r.is_err());
+        assert_eq!(summary_of(jobs[1].item_id), None);
     }
 
     #[tokio::test]
