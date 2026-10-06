@@ -2830,3 +2830,12 @@ git commit -m "feat(app): configure capabilities, verify tray and scheduler on m
 - イベント: `status-changed` (再取得: `get_status`)、`items-changed` (再取得: `list_items`、`sidebar_counts`)、`digests-changed` (再取得: `get_digests`)、`open-settings` (設定画面を開く)。ペイロードは空。
 - `Digest.last_error` と `DigestStatus` でダイジェストの状態 (生成中は `AppStatus.digesting`、保留と失敗は `status`、理由は `last_error`) を表示する。
 - デザインは `design.pen` と `design/exports/` (A-1〜A-12)。
+
+最終レビューで決まった、Plan 2b が前提にする事実と最初に行うこと:
+
+- `invoke` の引数は camelCase (`topicId`)。`ItemFilter` は全フィールドを送る (`#[serde(default)]` を core に付けるのが先)。`SidebarCounts.topics` のキーは文字列 (`{"3": 5}`)。`DigestScope` は `{"category":"github"}` または `{"topic":3}`。
+- `set_setting` は `claude.bin` / `node.bin` を検証し (コマンド名、または存在するファイルの絶対パス)、`app.launch_at_login` を拒否する (`set_launch_at_login` を使う)。
+- CSP は `default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:`。外部画像や外部フォントは読めない。
+- 未提供のコマンド: 件数取得 (`count_items`)、`last_error` のクリア、`CollectSummary` の取得。必要になった時点で追加する。
+- 残課題 (2b または 3 で扱う): 記事要約は最初の失敗で当日分を全て止める。日次要約は新着0件でも収集ごとに作り直す。全ソース失敗時の再試行は約15分。強制再生成の失敗は15分ごとに全カテゴリーを再実行する。DBが開けない時のダイアログとログがない。ロックが poison すると再起動まで全コマンドが失敗する。トレイ1行目に記事数がない。capabilities に JS 側の autostart/opener 権限が残っている。
+- 利用者による手動確認が未了: トレイの表示と「今すぐ収集」の二重押し、ウィンドウを閉じて常駐、再表示、Dock クリックでの再表示 (`target/debug/bundle/macos/InfoDesk.app`)。
