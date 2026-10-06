@@ -150,6 +150,12 @@ pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
     Ok(recovered)
 }
 
+/// 有効なソースがすべて取得に失敗したときの `last_error`。
+pub const ALL_SOURCES_FAILED: &str = "全ソースの取得に失敗しました";
+
+/// 全ソースが失敗したとき、次の収集までの待ち時間。
+const RETRY_AFTER_ALL_FAILED: chrono::Duration = chrono::Duration::minutes(10);
+
 /// 収集中に再度 `run_collect` を呼んだときのエラーメッセージ。
 pub const COLLECT_ALREADY_RUNNING: &str = "collect already running";
 
@@ -191,6 +197,20 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
             .map(|r| r.name.clone())
             .collect(),
     };
+    if !reports.is_empty() && reports.iter().all(|r| r.error.is_some()) {
+        // 有効なソースがすべて失敗した。ソースごとのエラーは行に残っている。
+        // 最終収集時刻を前にずらし、スケジューラーが約10分後に再試行するようにする。
+        // 新しい記事がないので、要約は作らない。
+        let interval = crate::scheduler::ScheduleConfig::from_settings(|k| {
+            state.with_store(|s| s.get_setting(k)).ok().flatten()
+        })
+        .collect_interval;
+        let retry_base = now - interval + RETRY_AFTER_ALL_FAILED;
+        state
+            .with_store(|s| s.set_setting("schedule.last_collect_at", &retry_base.to_rfc3339()))?;
+        state.update_status(|s| s.last_error = Some(ALL_SOURCES_FAILED.to_string()));
+        return Ok(summary);
+    }
     state.with_store(|s| s.set_setting("schedule.last_collect_at", &now.to_rfc3339()))?;
     state.update_status(|s| {
         s.last_collect_at = Some(now);
@@ -338,6 +358,40 @@ mod tests {
         let summary = run_collect(&state).await.unwrap();
         assert_eq!(summary.new_items, 0);
         assert_eq!(summary.failed_sources, vec!["Mock".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn collect_with_every_source_failing_records_error_and_retries_soon() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 500).await;
+        use_mock(&mut state, Ok("x"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(
+            state.status().last_error.as_deref(),
+            Some(ALL_SOURCES_FAILED)
+        );
+        // ソースごとのエラーは行に残る。
+        let src = state
+            .with_store(|s| s.list_sources())
+            .unwrap()
+            .into_iter()
+            .find(|s| s.name == "Mock")
+            .unwrap();
+        assert!(src.last_error.is_some());
+        // 次の収集が約10分後になるよう、最終収集時刻を前にずらして記録する。
+        let stored = state
+            .with_store(|s| s.get_setting("schedule.last_collect_at"))
+            .unwrap()
+            .unwrap();
+        let stored = DateTime::parse_from_rfc3339(&stored)
+            .unwrap()
+            .with_timezone(&Utc);
+        let expected = now_utc() - chrono::Duration::hours(3) + chrono::Duration::minutes(10);
+        assert!(
+            (stored - expected).num_seconds().abs() < 60,
+            "stored {stored}, expected about {expected}"
+        );
     }
 
     #[tokio::test]
