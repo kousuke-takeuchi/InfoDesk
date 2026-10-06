@@ -119,3 +119,10 @@ git commit -m "docs: add screen design and update spec"
   - A-10 ダイジェストの状態: 生成中、保留 (再試行)、失敗 (3回、再試行)、記事なし。生成済みのカテゴリーは影響を受けない。`10-digest-states.png`
   - A-11 初回起動: 記事なしの空状態と「今すぐ収集」。`11-first-launch.png`
   - A-12 チャットパネルの状態: 空 (質問例)、LLMエラー (再試行、Claudeで送る、設定)、サイドカー停止 (Nodeのパス設定)。`12-chat-states.png`
+
+### Step 5、Step 6 (2026-10-06)
+
+- 整合性: spec 7節の全機能がフレーム A-1〜A-12 のいずれかにある。表示項目は spec 8節のデータモデルから導出できる (未読件数は `read`、最終収集は `sources.last_fetched_at`、次回の収集はスケジュール設定)。追加のデータ項目はない。
+- spec 7節をデザインに合わせて書き直した。spec 8節の `settings` に主なキーを列挙した。
+- Plan 1 への反映: Task 3 に `Store::mark_all_read(&ItemFilter)` とテストを追加した。他の変更はない。
+- フェーズ完了。次は Plan 1 (`2026-10-06-infodesk-core.md`) の実行。

@@ -1061,6 +1061,7 @@ git commit -m "feat(core): add source and topic storage"
   - `Store::query_items(&self, filter: &ItemFilter) -> Result<Vec<Item>>`
   - `Store::get_item(&self, id: i64) -> Result<Option<Item>>`
   - `Store::set_read(&self, id: i64, read: bool) -> Result<()>`, `Store::set_starred(&self, id: i64, starred: bool) -> Result<()>`, `Store::set_ai_summary(&self, id: i64, summary: &str) -> Result<()>`
+  - `Store::mark_all_read(&self, filter: &ItemFilter) -> Result<usize>` (絞り込みに一致する記事を既読にする。`limit` と `offset` は無視する。戻り値は更新件数。画面の「すべて既読にする」用)
   - `Store::top_unsummarized(&self, category: Category, since: &DateTime<Utc>, limit: u32) -> Result<Vec<Item>>` (`since` 以降に取得した記事を指標順に `limit` 件取り、そのうち要約がないもの)
   - テスト用 (cfg(test)): `testutil::at(&str) -> DateTime<Utc>`, `testutil::new_item(url, title, excerpt, score: Option<i64>) -> NewItem`, `testutil::store_with_source(category: Category) -> (Store, Source)`
 
@@ -1350,6 +1351,30 @@ mod tests {
     }
 
     #[test]
+    fn mark_all_read_respects_filter_and_ignores_limit() {
+        let (store, src) = store_with_source(Category::TechJp);
+        let t = at("2026-10-05T00:00:00Z");
+        let items: Vec<NewItem> = (0..5)
+            .map(|i| new_item(&format!("https://e.com/{i}"), &format!("t{i}"), "", None))
+            .collect();
+        store.upsert_items(&src, &items, &t).unwrap();
+        let other_id = store
+            .add_source(crate::model::SourceKind::Hackernews, "HN", Category::Hackernews, "top")
+            .unwrap();
+        let other = store.get_source(other_id).unwrap().unwrap();
+        store.upsert_items(&other, &[new_item("https://e.com/hn", "hn", "", None)], &t).unwrap();
+
+        let n = store
+            .mark_all_read(&ItemFilter { category: Some(Category::TechJp), limit: 2, ..Default::default() })
+            .unwrap();
+        assert_eq!(n, 5);
+        let unread = store.query_items(&ItemFilter { unread_only: true, ..Default::default() }).unwrap();
+        assert_eq!(titles(&unread), vec!["hn"]);
+        let n = store.mark_all_read(&ItemFilter { category: Some(Category::TechJp), ..Default::default() }).unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[test]
     fn deleting_source_keeps_items() {
         let (store, src) = store_with_source(Category::TechJp);
         store
@@ -1565,6 +1590,18 @@ impl Store {
         Ok(())
     }
 
+    /// 絞り込みに一致する未読の記事をすべて既読にする。`limit` と `offset` は無視する。
+    pub fn mark_all_read(&self, f: &ItemFilter) -> Result<usize> {
+        let all = ItemFilter { limit: u32::MAX, offset: 0, unread_only: true, ..f.clone() };
+        let ids: Vec<i64> = self.query_items(&all)?.into_iter().map(|i| i.id).collect();
+        let tx = self.conn.unchecked_transaction()?;
+        for id in &ids {
+            tx.execute("UPDATE items SET read = 1 WHERE id = ?1", params![id])?;
+        }
+        tx.commit()?;
+        Ok(ids.len())
+    }
+
     /// `since` 以降に取得した記事を指標順に `limit` 件取り、そのうち要約がないものを返す。
     pub fn top_unsummarized(
         &self,
@@ -1590,7 +1627,7 @@ impl Store {
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cargo test -p infodesk-core store::items`
-Expected: 8 passed。
+Expected: 9 passed。
 
 `top_unsummarized` の外側SELECTで並び順が崩れてテストが失敗した場合は、外側に `ORDER BY score IS NULL, score DESC, fetched_at DESC, id DESC` を追加する。
 
