@@ -28,8 +28,9 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_category_fetched ON items(category, fetched_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(title, excerpt, tokenize='trigram');
+CREATE VIRTUAL TABLE IF NOT EXISTS items_words USING fts5(title, excerpt, tokenize='unicode61');
 CREATE TABLE IF NOT EXISTS topics (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     keywords TEXT NOT NULL
 );

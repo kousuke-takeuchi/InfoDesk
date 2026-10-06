@@ -29,14 +29,34 @@ fn row_to_item(r: &Row) -> rusqlite::Result<Item> {
     })
 }
 
+/// `items_words` (unicode61) に入れる文字列。unicode61 は「Rustの新機能」を1語として
+/// 扱うため、CJK以降の文字 (U+2E80 以上) を空白に置き換え、英数字の語を切り出せるようにする。
+/// この表は英数字だけのキーワードの照合にしか使わないので、CJKの文字を落としても困らない。
+fn word_index_text(s: &str) -> String {
+    s.chars()
+        .map(|c| if c >= '\u{2E80}' { ' ' } else { c })
+        .collect()
+}
+
+fn quote_phrase(s: &str) -> Value {
+    Value::Text(format!("\"{}\"", s.replace('"', "\"\"")))
+}
+
 /// キーワードのいずれかがタイトルか概要に含まれる、というSQL条件を作る。
-/// trigramのFTS5は3文字未満の語句に一致しないため、3文字未満はLIKEで照合する。
-/// 3文字以上はフレーズとして引用し、FTS5の演算子 (AND, *, NEAR など) を無効にする。
+/// 英数字だけのキーワード (`AI`, `Rust` など) は単語単位で照合する (大文字小文字は区別しない)。
+/// 部分一致だと `AI` が "again" に、`Rust` が "trust" に一致してしまうため。
+/// それ以外は部分一致: trigramのFTS5は3文字未満の語句に一致しないため、3文字未満はLIKEで照合する。
+/// FTS5に渡す語句はフレーズとして引用し、FTS5の演算子 (AND, *, NEAR など) を無効にする。
 fn keyword_clause(keywords: &[String], args: &mut Vec<Value>) -> String {
     let mut parts = Vec::new();
     for kw in keywords.iter().map(|k| k.trim()).filter(|k| !k.is_empty()) {
-        if kw.chars().count() >= 3 {
-            args.push(Value::Text(format!("\"{}\"", kw.replace('"', "\"\""))));
+        if kw.chars().all(|c| c.is_ascii_alphanumeric()) {
+            args.push(quote_phrase(kw));
+            parts.push(
+                "items.id IN (SELECT rowid FROM items_words WHERE items_words MATCH ?)".to_string(),
+            );
+        } else if kw.chars().count() >= 3 {
+            args.push(quote_phrase(kw));
             parts.push(
                 "items.id IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)".to_string(),
             );
@@ -95,6 +115,10 @@ impl Store {
                     "INSERT INTO items_fts(rowid, title, excerpt) VALUES (?1, ?2, ?3)",
                     params![id, it.title, it.excerpt],
                 )?;
+                tx.execute(
+                    "INSERT INTO items_words(rowid, title, excerpt) VALUES (?1, ?2, ?3)",
+                    params![id, word_index_text(&it.title), word_index_text(&it.excerpt)],
+                )?;
                 created += 1;
             } else if let Some(score) = it.score {
                 tx.execute(
@@ -151,7 +175,9 @@ impl Store {
                 "COALESCE(items.published_at, items.fetched_at) DESC, items.id DESC"
             }
             ItemOrder::Score => {
-                "items.score IS NULL, items.score DESC, items.fetched_at DESC, items.id DESC"
+                "items.score IS NULL, items.score DESC, \
+                 COALESCE(items.published_at, items.fetched_at) DESC, \
+                 items.fetched_at DESC, items.id DESC"
             }
         };
         let limit = if f.limit == 0 { 100 } else { f.limit };
@@ -228,8 +254,12 @@ impl Store {
         let sql = format!(
             "SELECT * FROM (SELECT {ITEM_COLS} FROM items \
              WHERE items.category = ?1 AND items.fetched_at >= ?2 \
-             ORDER BY items.score IS NULL, items.score DESC, items.fetched_at DESC, items.id DESC \
-             LIMIT ?3) WHERE ai_summary IS NULL"
+             ORDER BY items.score IS NULL, items.score DESC, \
+               COALESCE(items.published_at, items.fetched_at) DESC, \
+               items.fetched_at DESC, items.id DESC \
+             LIMIT ?3) WHERE ai_summary IS NULL \
+             ORDER BY score IS NULL, score DESC, COALESCE(published_at, fetched_at) DESC, \
+               fetched_at DESC, id DESC"
         );
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
@@ -528,6 +558,80 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(store.query_items(&f).unwrap().len(), 5);
+    }
+
+    #[test]
+    fn ascii_keywords_match_whole_words_only() {
+        let (store, src) = store_with_source(Category::TechIntl);
+        let t = at("2026-10-05T00:00:00Z");
+        store
+            .upsert_items(
+                &src,
+                &[
+                    new_item("https://e.com/1", "New AI model", "", None),
+                    new_item("https://e.com/2", "Spain wins again", "", None),
+                    new_item("https://e.com/3", "x", "maintainers said", None),
+                    new_item("https://e.com/4", "OpenAI ships", "", None),
+                    new_item("https://e.com/5", "In Rust we trust", "", None),
+                    new_item("https://e.com/6", "trust issues", "", None),
+                    new_item("https://e.com/7", "Rustの新機能", "", None),
+                    new_item("https://e.com/8", "生成AIの活用", "", None),
+                ],
+                &t,
+            )
+            .unwrap();
+        let search = |text: &str| {
+            let f = ItemFilter {
+                text: Some(text.to_string()),
+                ..Default::default()
+            };
+            let mut got: Vec<String> = titles(&store.query_items(&f).unwrap())
+                .into_iter()
+                .map(String::from)
+                .collect();
+            got.sort();
+            got
+        };
+        // "OpenAI" は単語として別物なので一致しない (単語単位照合の帰結)。
+        assert_eq!(search("AI"), vec!["New AI model", "生成AIの活用"]);
+        assert_eq!(search("ai"), vec!["New AI model", "生成AIの活用"]);
+        assert_eq!(search("Rust"), vec!["In Rust we trust", "Rustの新機能"]);
+        assert_eq!(search("trust"), vec!["In Rust we trust", "trust issues"]);
+
+        let topic = store.add_topic("AI", &kws(&["AI"])).unwrap();
+        let f = ItemFilter {
+            topic_id: Some(topic),
+            ..Default::default()
+        };
+        let items = store.query_items(&f).unwrap();
+        let mut got = titles(&items);
+        got.sort();
+        assert_eq!(got, vec!["New AI model", "生成AIの活用"]);
+    }
+
+    #[test]
+    fn unscored_items_order_by_published_time_under_score_order() {
+        let (store, src) = store_with_source(Category::TechJp);
+        let t = at("2026-10-05T00:00:00Z");
+        let mut items = Vec::new();
+        for (i, published) in ["2026-10-04", "2026-10-03", "2026-10-02"]
+            .iter()
+            .enumerate()
+        {
+            let mut it = new_item(&format!("https://e.com/{i}"), published, "", None);
+            it.published_at = Some(at(&format!("{published}T00:00:00Z")));
+            items.push(it);
+        }
+        store.upsert_items(&src, &items, &t).unwrap();
+        let want = vec!["2026-10-04", "2026-10-03", "2026-10-02"];
+
+        let f = ItemFilter {
+            order: ItemOrder::Score,
+            ..Default::default()
+        };
+        assert_eq!(titles(&store.query_items(&f).unwrap()), want);
+        let top = store.top_unsummarized(Category::TechJp, &t, 10).unwrap();
+        assert_eq!(titles(&top), want);
     }
 
     #[test]

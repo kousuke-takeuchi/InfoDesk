@@ -1,8 +1,8 @@
-use rusqlite::{OptionalExtension, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::{Store, conv_err};
 use crate::error::Result;
-use crate::model::Topic;
+use crate::model::{DigestScope, Topic};
 
 fn row_to_topic(r: &Row) -> rusqlite::Result<Topic> {
     let raw: String = r.get(2)?;
@@ -20,6 +20,14 @@ fn clean_keywords(keywords: &[String]) -> Result<String> {
         .filter(|k| !k.is_empty())
         .collect();
     Ok(serde_json::to_string(&cleaned)?)
+}
+
+fn delete_topic_digests(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "DELETE FROM digests WHERE scope = ?1",
+        params![DigestScope::Topic(id).key()],
+    )?;
+    Ok(())
 }
 
 impl Store {
@@ -63,17 +71,34 @@ impl Store {
             .optional()?)
     }
 
+    /// キーワードが変わった場合は、古いキーワードで作ったこのトピックのダイジェストを消す。
     pub fn update_topic(&self, id: i64, name: &str, keywords: &[String]) -> Result<()> {
-        self.conn.execute(
+        let cleaned = clean_keywords(keywords)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let stored: Option<String> = tx
+            .query_row(
+                "SELECT keywords FROM topics WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        tx.execute(
             "UPDATE topics SET name = ?2, keywords = ?3 WHERE id = ?1",
-            params![id, name.trim(), clean_keywords(keywords)?],
+            params![id, name.trim(), cleaned],
         )?;
+        if stored.is_some_and(|s| s != cleaned) {
+            delete_topic_digests(&tx, id)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
+    /// トピックと、そのトピックのダイジェストを消す。
     pub fn delete_topic(&self, id: i64) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM topics WHERE id = ?1", params![id])?;
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM topics WHERE id = ?1", params![id])?;
+        delete_topic_digests(&tx, id)?;
+        tx.commit()?;
         Ok(())
     }
 }
@@ -81,6 +106,9 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Period;
+    use crate::store::NewDigest;
+    use chrono::NaiveDate;
 
     fn kws(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
@@ -108,6 +136,65 @@ mod tests {
 
         store.delete_topic(id).unwrap();
         assert!(store.get_topic(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn deleted_topic_id_is_not_reused() {
+        let store = Store::open_in_memory().unwrap();
+        store.add_topic("a", &kws(&["x"])).unwrap();
+        let b = store.add_topic("b", &kws(&["y"])).unwrap();
+        store.delete_topic(b).unwrap();
+        let c = store.add_topic("c", &kws(&["z"])).unwrap();
+        assert_ne!(c, b);
+    }
+
+    fn save_topic_digest(store: &Store, topic: i64) {
+        let d = NewDigest {
+            period: Period::Day,
+            period_start: NaiveDate::from_ymd_opt(2026, 10, 5).unwrap(),
+            scope: DigestScope::Topic(topic),
+            body: "body".into(),
+            item_ids: vec![],
+            provider: "mock".into(),
+        };
+        store
+            .save_digest_done(&d, &crate::testutil::at("2026-10-06T00:00:00Z"))
+            .unwrap();
+    }
+
+    fn has_topic_digest(store: &Store, topic: i64) -> bool {
+        store
+            .get_digest(
+                Period::Day,
+                NaiveDate::from_ymd_opt(2026, 10, 5).unwrap(),
+                &DigestScope::Topic(topic),
+            )
+            .unwrap()
+            .is_some()
+    }
+
+    #[test]
+    fn topic_digests_follow_topic_lifecycle() {
+        let store = Store::open_in_memory().unwrap();
+        let id = store.add_topic("t", &kws(&["AI", "LLM"])).unwrap();
+        let other = store.add_topic("o", &kws(&["Rust"])).unwrap();
+        save_topic_digest(&store, id);
+        save_topic_digest(&store, other);
+
+        // 名前だけの変更 (キーワードの空白の違いを含む) ではダイジェストを残す。
+        store
+            .update_topic(id, "renamed", &kws(&[" AI", "LLM "]))
+            .unwrap();
+        assert!(has_topic_digest(&store, id));
+
+        // キーワードが変わると古いダイジェストは別物なので消す。
+        store.update_topic(id, "renamed", &kws(&["AI"])).unwrap();
+        assert!(!has_topic_digest(&store, id));
+
+        save_topic_digest(&store, id);
+        store.delete_topic(id).unwrap();
+        assert!(!has_topic_digest(&store, id));
+        assert!(has_topic_digest(&store, other));
     }
 
     #[test]
