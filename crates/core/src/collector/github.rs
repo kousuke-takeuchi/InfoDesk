@@ -65,7 +65,13 @@ pub fn parse(html: &str) -> Result<Vec<NewItem>> {
 
 pub async fn fetch(http: &reqwest::Client, base: &str, since: &str) -> Result<Vec<NewItem>> {
     let url = format!("{base}/trending?since={since}");
-    let html = http.get(&url).send().await?.error_for_status()?.text().await?;
+    let html = http
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
     parse(&html)
 }
 

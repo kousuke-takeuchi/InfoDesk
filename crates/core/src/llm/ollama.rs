@@ -3,7 +3,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::json;
 
-use super::{clean_output, LlmProvider};
+use super::{LlmProvider, clean_output};
 use crate::error::{Error, Result};
 
 /// 既定の4096では長い入力が切り捨てられるため、明示する。
@@ -95,17 +95,25 @@ mod tests {
     #[tokio::test]
     async fn error_status_empty_content_and_unreachable_are_errors() {
         let server = MockServer::start().await;
-        Mock::given(method("POST")).and(path("/api/chat"))
-            .respond_with(ResponseTemplate::new(404).set_body_json(json!({"error": "model not found"})))
-            .mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": "model not found"})),
+            )
+            .mount(&server)
+            .await;
         let p = OllamaProvider::new(&server.uri(), "missing").unwrap();
         let err = p.complete("s", "p").await.unwrap_err().to_string();
         assert!(err.contains("model not found"), "{err}");
 
         let server = MockServer::start().await;
-        Mock::given(method("POST")).and(path("/api/chat"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"message": {"content": "  "}})))
-            .mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"message": {"content": "  "}})),
+            )
+            .mount(&server)
+            .await;
         let p = OllamaProvider::new(&server.uri(), "m").unwrap();
         assert!(matches!(p.complete("s", "p").await, Err(Error::Llm(_))));
 

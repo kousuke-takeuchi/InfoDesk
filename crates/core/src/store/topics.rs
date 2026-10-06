@@ -1,6 +1,6 @@
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{OptionalExtension, Row, params};
 
-use super::{conv_err, Store};
+use super::{Store, conv_err};
 use crate::error::Result;
 use crate::model::Topic;
 
@@ -98,7 +98,9 @@ mod tests {
         assert_eq!(store.find_topic_by_name("認知症").unwrap().unwrap().id, id);
         assert!(store.find_topic_by_name("なし").unwrap().is_none());
 
-        store.update_topic(id, "認知症ケア", &kws(&["介護"])).unwrap();
+        store
+            .update_topic(id, "認知症ケア", &kws(&["介護"]))
+            .unwrap();
         let all = store.list_topics().unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].name, "認知症ケア");

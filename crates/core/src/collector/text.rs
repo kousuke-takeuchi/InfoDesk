@@ -8,11 +8,7 @@ pub fn collapse_ws(s: &str) -> String {
 /// HTMLタグを除き、実体参照を文字に戻す。
 pub fn strip_html(s: &str) -> String {
     let fragment = Html::parse_fragment(s);
-    let text = fragment
-        .root_element()
-        .text()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let text = fragment.root_element().text().collect::<Vec<_>>().join(" ");
     collapse_ws(&text)
 }
 

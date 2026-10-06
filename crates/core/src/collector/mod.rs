@@ -111,7 +111,11 @@ mod tests {
         let (_, items) =
             feed::parse_feed(include_bytes!("../../tests/fixtures/arxiv_cs_ai.xml")).unwrap();
         assert!(!items.is_empty());
-        assert!(items.iter().all(|i| i.url.contains("arxiv.org/abs/")), "{:?}", items[0].url);
+        assert!(
+            items.iter().all(|i| i.url.contains("arxiv.org/abs/")),
+            "{:?}",
+            items[0].url
+        );
         assert!(items.iter().all(|i| !i.title.contains('\n')));
         assert!(items.iter().all(|i| i.published_at.is_some()));
     }
@@ -119,22 +123,41 @@ mod tests {
     #[tokio::test]
     async fn one_failing_source_does_not_stop_the_others() {
         let server = MockServer::start().await;
-        Mock::given(method("GET")).and(path("/ok"))
+        Mock::given(method("GET"))
+            .and(path("/ok"))
             .respond_with(ResponseTemplate::new(200).set_body_string(RSS))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/broken"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/broken"))
             .respond_with(ResponseTemplate::new(500))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
 
         let store = Store::open_in_memory().unwrap();
         let broken = store
-            .add_source(SourceKind::Rss, "Broken", Category::TechJp, &format!("{}/broken", server.uri()))
+            .add_source(
+                SourceKind::Rss,
+                "Broken",
+                Category::TechJp,
+                &format!("{}/broken", server.uri()),
+            )
             .unwrap();
         let ok = store
-            .add_source(SourceKind::Rss, "Ok", Category::TechJp, &format!("{}/ok", server.uri()))
+            .add_source(
+                SourceKind::Rss,
+                "Ok",
+                Category::TechJp,
+                &format!("{}/ok", server.uri()),
+            )
             .unwrap();
         let disabled = store
-            .add_source(SourceKind::Rss, "Off", Category::TechJp, &format!("{}/off", server.uri()))
+            .add_source(
+                SourceKind::Rss,
+                "Off",
+                Category::TechJp,
+                &format!("{}/off", server.uri()),
+            )
             .unwrap();
         store.set_source_enabled(disabled, false).unwrap();
 
@@ -158,7 +181,14 @@ mod tests {
         let s = store.get_source(ok).unwrap().unwrap();
         assert_eq!(s.last_error, None);
         assert_eq!(s.last_fetched_at, Some(now));
-        assert!(store.get_source(disabled).unwrap().unwrap().last_fetched_at.is_none());
+        assert!(
+            store
+                .get_source(disabled)
+                .unwrap()
+                .unwrap()
+                .last_fetched_at
+                .is_none()
+        );
         assert_eq!(store.query_items(&ItemFilter::default()).unwrap().len(), 2);
 
         // 2回目は新規0件。

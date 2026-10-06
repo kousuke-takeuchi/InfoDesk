@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use super::{clean_output, LlmProvider};
+use super::{LlmProvider, clean_output};
 use crate::error::{Error, Result};
 
 pub struct ClaudeProvider {
@@ -87,10 +87,17 @@ mod tests {
     #[tokio::test]
     async fn passes_flags_and_prompt_and_returns_result() {
         let dir = tempfile::tempdir().unwrap();
-        let bin = fake_claude(dir.path(), r#"{"is_error":false,"result":" 要約です。 "}"#, 0);
+        let bin = fake_claude(
+            dir.path(),
+            r#"{"is_error":false,"result":" 要約です。 "}"#,
+            0,
+        );
         let p = ClaudeProvider::new(bin);
         assert_eq!(p.name(), "claude");
-        assert_eq!(p.complete("システム指示", "本文プロンプト").await.unwrap(), "要約です。");
+        assert_eq!(
+            p.complete("システム指示", "本文プロンプト").await.unwrap(),
+            "要約です。"
+        );
 
         let args = std::fs::read_to_string(dir.path().join("args.txt")).unwrap();
         let args: Vec<&str> = args.lines().collect();
@@ -116,8 +123,16 @@ mod tests {
     #[tokio::test]
     async fn error_flag_nonzero_exit_garbage_and_missing_binary_are_errors() {
         let dir = tempfile::tempdir().unwrap();
-        let bin = fake_claude(dir.path(), r#"{"is_error":true,"result":"Not logged in"}"#, 0);
-        let err = ClaudeProvider::new(bin).complete("s", "p").await.unwrap_err().to_string();
+        let bin = fake_claude(
+            dir.path(),
+            r#"{"is_error":true,"result":"Not logged in"}"#,
+            0,
+        );
+        let err = ClaudeProvider::new(bin)
+            .complete("s", "p")
+            .await
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("Not logged in"), "{err}");
 
         let dir = tempfile::tempdir().unwrap();

@@ -1,12 +1,11 @@
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{OptionalExtension, Row, params};
 
-use super::{col_opt_ts, col_parse, ts, Store};
+use super::{Store, col_opt_ts, col_parse, ts};
 use crate::error::Result;
 use crate::model::{Category, Source, SourceKind};
 
-const SOURCE_COLS: &str =
-    "id, kind, name, category, config, enabled, last_fetched_at, last_error";
+const SOURCE_COLS: &str = "id, kind, name, category, config, enabled, last_fetched_at, last_error";
 
 fn row_to_source(r: &Row) -> rusqlite::Result<Source> {
     Ok(Source {
@@ -108,7 +107,12 @@ mod tests {
     fn add_list_update_toggle() {
         let store = Store::open_in_memory().unwrap();
         let id = store
-            .add_source(SourceKind::Rss, "Zenn", Category::TechJp, "https://zenn.dev/feed")
+            .add_source(
+                SourceKind::Rss,
+                "Zenn",
+                Category::TechJp,
+                "https://zenn.dev/feed",
+            )
             .unwrap();
         let s = store.get_source(id).unwrap().unwrap();
         assert_eq!(s.name, "Zenn");
@@ -117,7 +121,12 @@ mod tests {
         assert!(s.last_fetched_at.is_none());
 
         store
-            .update_source(id, "Zenn トレンド", Category::TechIntl, "https://zenn.dev/feed2")
+            .update_source(
+                id,
+                "Zenn トレンド",
+                Category::TechIntl,
+                "https://zenn.dev/feed2",
+            )
             .unwrap();
         store.set_source_enabled(id, false).unwrap();
         let s = store.list_sources().unwrap().remove(0);

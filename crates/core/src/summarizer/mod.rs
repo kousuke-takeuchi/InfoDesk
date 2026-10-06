@@ -6,10 +6,8 @@ use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
 
 use crate::collector::text::truncate_chars;
 use crate::error::{Error, Result};
-use crate::llm::{clean_output, LlmProvider};
-use crate::model::{
-    Category, DigestScope, DigestStatus, Item, ItemFilter, ItemOrder, Period,
-};
+use crate::llm::{LlmProvider, clean_output};
+use crate::model::{Category, DigestScope, DigestStatus, Item, ItemFilter, ItemOrder, Period};
 use crate::period::{period_end, period_start, utc_range};
 use crate::store::{NewDigest, Store};
 
@@ -253,7 +251,11 @@ mod tests {
     fn seeded() -> (Store, Source) {
         let (store, src) = store_with_source(Category::Github);
         store
-            .upsert_items(&src, &[new_item("https://e.com/prev", "前日の記事", "", Some(999))], &at("2026-10-05T14:00:00Z"))
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/prev", "前日の記事", "", Some(999))],
+                &at("2026-10-05T14:00:00Z"),
+            )
             .unwrap();
         store
             .upsert_items(
@@ -272,17 +274,32 @@ mod tests {
     async fn item_summaries_are_saved_for_top_items() {
         let (store, _) = seeded();
         let llm = MockProvider::ok(" 一文要約。 ");
-        let report =
-            summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 1)
-                .await
-                .unwrap();
-        assert_eq!(report, ItemSummaryReport { ok: 1, failed: 0, error: None });
+        let report = summarize_top_items(
+            &store,
+            &llm,
+            Category::Github,
+            &at("2026-10-05T15:00:00Z"),
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            report,
+            ItemSummaryReport {
+                ok: 1,
+                failed: 0,
+                error: None
+            }
+        );
         let calls = llm.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, prompts::ITEM_SYSTEM);
         assert!(calls[0].1.contains("高スコア記事"));
         let items = store
-            .query_items(&ItemFilter { text: Some("高スコア記事".into()), ..Default::default() })
+            .query_items(&ItemFilter {
+                text: Some("高スコア記事".into()),
+                ..Default::default()
+            })
             .unwrap();
         assert_eq!(items[0].ai_summary.as_deref(), Some("一文要約。"));
     }
@@ -291,29 +308,45 @@ mod tests {
     async fn item_summary_failure_stops_early_and_leaves_items_for_retry() {
         let (store, _) = seeded();
         let llm = MockProvider::failing("connection refused");
-        let report =
-            summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 10)
-                .await
-                .unwrap();
+        let report = summarize_top_items(
+            &store,
+            &llm,
+            Category::Github,
+            &at("2026-10-05T15:00:00Z"),
+            10,
+        )
+        .await
+        .unwrap();
         assert_eq!((report.ok, report.failed), (0, 2));
         let err = report.error.expect("LLM error must be surfaced");
         assert!(err.contains("connection refused"), "error was: {err}");
         assert_eq!(llm.calls().len(), 1);
         assert_eq!(
-            store.top_unsummarized(Category::Github, &at("2026-10-05T15:00:00Z"), 10).unwrap().len(),
+            store
+                .top_unsummarized(Category::Github, &at("2026-10-05T15:00:00Z"), 10)
+                .unwrap()
+                .len(),
             2
         );
 
         // Review Focus 5: 空の出力は保存しない。
         let llm = MockProvider::ok("   ");
-        let report =
-            summarize_top_items(&store, &llm, Category::Github, &at("2026-10-05T15:00:00Z"), 10)
-                .await
-                .unwrap();
+        let report = summarize_top_items(
+            &store,
+            &llm,
+            Category::Github,
+            &at("2026-10-05T15:00:00Z"),
+            10,
+        )
+        .await
+        .unwrap();
         assert_eq!((report.ok, report.failed), (0, 2));
         assert!(report.error.is_some());
         let items = store
-            .query_items(&ItemFilter { category: Some(Category::Github), ..Default::default() })
+            .query_items(&ItemFilter {
+                category: Some(Category::Github),
+                ..Default::default()
+            })
             .unwrap();
         assert!(!items.is_empty());
         assert!(items.iter().all(|i| i.ai_summary.is_none()));
@@ -323,16 +356,28 @@ mod tests {
     async fn day_digest_uses_items_of_that_local_day_in_score_order() {
         let (store, _) = seeded();
         let high = store
-            .query_items(&ItemFilter { text: Some("高スコア記事".into()), ..Default::default() })
+            .query_items(&ItemFilter {
+                text: Some("高スコア記事".into()),
+                ..Default::default()
+            })
             .unwrap()[0]
             .id;
         store.set_ai_summary(high, "AI要約B").unwrap();
 
         let llm = MockProvider::ok("日次まとめ");
         let scope = DigestScope::Category(Category::Github);
-        let st = run_digest(&store, &llm, Period::Day, d("2026-10-06"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Day,
+            d("2026-10-06"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
 
         let (system, prompt) = llm.calls().remove(0);
@@ -345,7 +390,10 @@ mod tests {
         assert!(prompt.contains("概要A"));
         assert!(prompt.find("高スコア記事").unwrap() < prompt.find("低スコア記事").unwrap());
 
-        let saved = store.get_digest(Period::Day, d("2026-10-06"), &scope).unwrap().unwrap();
+        let saved = store
+            .get_digest(Period::Day, d("2026-10-06"), &scope)
+            .unwrap()
+            .unwrap();
         assert_eq!(saved.body, "日次まとめ");
         assert_eq!(saved.provider, "mock");
         assert_eq!(saved.item_ids.len(), 2);
@@ -357,54 +405,113 @@ mod tests {
         let (store, _) = seeded();
         let llm = MockProvider::ok("x");
         let scope = DigestScope::Category(Category::Arxiv);
-        let st = run_digest(&store, &llm, Period::Day, d("2026-10-06"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Day,
+            d("2026-10-06"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, None);
         // 日次要約がまだない週次も同じ。
         let scope = DigestScope::Category(Category::Github);
-        let st = run_digest(&store, &llm, Period::Week, d("2026-10-06"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Week,
+            d("2026-10-06"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, None);
         assert!(llm.calls().is_empty());
-        assert!(store.get_digest(Period::Week, d("2026-10-05"), &scope).unwrap().is_none());
+        assert!(
+            store
+                .get_digest(Period::Week, d("2026-10-05"), &scope)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]
     async fn week_uses_day_digests_and_month_uses_week_digests() {
         let (store, _) = seeded();
         let scope = DigestScope::Category(Category::Github);
-        for (day, body) in [("2026-10-05", "月曜のまとめ"), ("2026-10-06", "火曜のまとめ")] {
+        for (day, body) in [
+            ("2026-10-05", "月曜のまとめ"),
+            ("2026-10-06", "火曜のまとめ"),
+        ] {
             let llm = MockProvider::ok(body);
-            run_digest(&store, &llm, Period::Day, d(day), &scope, jst(), false, &at(NOW))
-                .await
-                .unwrap();
+            run_digest(
+                &store,
+                &llm,
+                Period::Day,
+                d(day),
+                &scope,
+                jst(),
+                false,
+                &at(NOW),
+            )
+            .await
+            .unwrap();
         }
 
         let llm = MockProvider::ok("週次まとめ");
-        let st = run_digest(&store, &llm, Period::Week, d("2026-10-08"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Week,
+            d("2026-10-08"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("期間: 今週"));
         assert!(prompt.contains("月曜のまとめ") && prompt.contains("火曜のまとめ"));
         assert!(prompt.find("月曜のまとめ").unwrap() < prompt.find("火曜のまとめ").unwrap());
         assert!(!prompt.contains("高スコア記事"));
-        let week = store.get_digest(Period::Week, d("2026-10-05"), &scope).unwrap().unwrap();
+        let week = store
+            .get_digest(Period::Week, d("2026-10-05"), &scope)
+            .unwrap()
+            .unwrap();
         assert_eq!(week.item_ids.len(), 3);
 
         let llm = MockProvider::ok("月次まとめ");
-        let st = run_digest(&store, &llm, Period::Month, d("2026-10-20"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Month,
+            d("2026-10-20"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("期間: 今月"));
         assert!(prompt.contains("週次まとめ"));
         assert!(!prompt.contains("月曜のまとめ"));
-        let month = store.get_digest(Period::Month, d("2026-10-01"), &scope).unwrap().unwrap();
+        let month = store
+            .get_digest(Period::Month, d("2026-10-01"), &scope)
+            .unwrap()
+            .unwrap();
         assert_eq!(month.body, "月次まとめ");
         assert_eq!(month.item_ids.len(), 3);
     }
@@ -414,26 +521,87 @@ mod tests {
         let (store, _) = seeded();
         let scope = DigestScope::Category(Category::Github);
         let day = d("2026-10-06");
-        run_digest(&store, &MockProvider::ok("v1"), Period::Day, day, &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        run_digest(
+            &store,
+            &MockProvider::ok("v1"),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
 
         let llm = MockProvider::ok("v2");
-        let st = run_digest(&store, &llm, Period::Day, day, &scope, jst(), false, &at(NOW)).await.unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, None);
         assert!(llm.calls().is_empty());
-        assert_eq!(store.get_digest(Period::Day, day, &scope).unwrap().unwrap().body, "v1");
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .body,
+            "v1"
+        );
 
-        let st = run_digest(&store, &llm, Period::Day, day, &scope, jst(), true, &at(NOW)).await.unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            true,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
-        assert_eq!(store.get_digest(Period::Day, day, &scope).unwrap().unwrap().body, "v2");
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .body,
+            "v2"
+        );
 
         // 強制再生成が失敗しても、生成済みの本文は残る。
-        let st = run_digest(&store, &MockProvider::failing("down"), Period::Day, day, &scope, jst(), true, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &MockProvider::failing("down"),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            true,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
-        assert_eq!(store.get_digest(Period::Day, day, &scope).unwrap().unwrap().body, "v2");
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .body,
+            "v2"
+        );
     }
 
     #[tokio::test]
@@ -442,26 +610,62 @@ mod tests {
         let (store, _) = seeded();
         let scope = DigestScope::Category(Category::Github);
         let day = d("2026-10-06");
-        let st = run_digest(&store, &MockProvider::failing("down"), Period::Day, day, &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &MockProvider::failing("down"),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Pending));
-        let st = run_digest(&store, &MockProvider::ok("  \n "), Period::Day, day, &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &MockProvider::ok("  \n "),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Pending));
         let saved = store.get_digest(Period::Day, day, &scope).unwrap().unwrap();
         assert_eq!(saved.body, "");
         assert_eq!(saved.attempts, 2);
-        let st = run_digest(&store, &MockProvider::failing("down"), Period::Day, day, &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &MockProvider::failing("down"),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Failed));
 
         // 保留または失敗の後でも、成功すれば生成済みになる。
-        let st = run_digest(&store, &MockProvider::ok("復旧"), Period::Day, day, &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &MockProvider::ok("復旧"),
+            Period::Day,
+            day,
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
     }
 
@@ -482,21 +686,45 @@ mod tests {
         let scope = DigestScope::Topic(topic);
 
         let llm = MockProvider::ok("トピック週次");
-        let st = run_digest(&store, &llm, Period::Week, d("2026-10-06"), &scope, jst(), false, &at(NOW))
-            .await
-            .unwrap();
+        let st = run_digest(
+            &store,
+            &llm,
+            Period::Week,
+            d("2026-10-06"),
+            &scope,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await
+        .unwrap();
         assert_eq!(st, Some(DigestStatus::Done));
         let prompt = llm.calls().remove(0).1;
         assert!(prompt.contains("対象: 介護"));
         assert!(prompt.contains("介護報酬の改定"));
         assert!(!prompt.contains("無関係な記事"));
         assert_eq!(
-            store.get_digest(Period::Week, d("2026-10-05"), &scope).unwrap().unwrap().item_ids.len(),
+            store
+                .get_digest(Period::Week, d("2026-10-05"), &scope)
+                .unwrap()
+                .unwrap()
+                .item_ids
+                .len(),
             1
         );
 
         let missing = DigestScope::Topic(9999);
-        let err = run_digest(&store, &llm, Period::Day, d("2026-10-06"), &missing, jst(), false, &at(NOW)).await;
+        let err = run_digest(
+            &store,
+            &llm,
+            Period::Day,
+            d("2026-10-06"),
+            &missing,
+            jst(),
+            false,
+            &at(NOW),
+        )
+        .await;
         assert!(matches!(err, Err(Error::Invalid(_))));
     }
 }

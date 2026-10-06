@@ -61,11 +61,17 @@ pub(crate) mod mock {
 
     impl MockProvider {
         pub fn ok(reply: &str) -> Self {
-            Self { reply: Ok(reply.to_string()), calls: Mutex::new(Vec::new()) }
+            Self {
+                reply: Ok(reply.to_string()),
+                calls: Mutex::new(Vec::new()),
+            }
         }
 
         pub fn failing(msg: &str) -> Self {
-            Self { reply: Err(msg.to_string()), calls: Mutex::new(Vec::new()) }
+            Self {
+                reply: Err(msg.to_string()),
+                calls: Mutex::new(Vec::new()),
+            }
         }
 
         pub fn calls(&self) -> Vec<(String, String)> {
@@ -106,16 +112,25 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         // 設定がなければ既定のOllama。
         assert_eq!(
-            provider_from_settings(&store, LlmRole::Items).unwrap().name(),
+            provider_from_settings(&store, LlmRole::Items)
+                .unwrap()
+                .name(),
             "ollama:gemma4:26b"
         );
         store.set_setting("ollama.model", "other:1b").unwrap();
         store.set_setting("llm.digest_provider", "claude").unwrap();
         assert_eq!(
-            provider_from_settings(&store, LlmRole::Items).unwrap().name(),
+            provider_from_settings(&store, LlmRole::Items)
+                .unwrap()
+                .name(),
             "ollama:other:1b"
         );
-        assert_eq!(provider_from_settings(&store, LlmRole::Digest).unwrap().name(), "claude");
+        assert_eq!(
+            provider_from_settings(&store, LlmRole::Digest)
+                .unwrap()
+                .name(),
+            "claude"
+        );
 
         store.set_setting("llm.items_provider", "gpt").unwrap();
         assert!(matches!(

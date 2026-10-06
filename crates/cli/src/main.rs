@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use chrono::{FixedOffset, Local, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use infodesk_core::collector::{self, feed};
-use infodesk_core::llm::{provider_from_settings, LlmRole};
+use infodesk_core::llm::{LlmRole, provider_from_settings};
 use infodesk_core::model::{
     Category, DigestScope, DigestStatus, ItemFilter, ItemOrder, Period, SourceKind,
 };
 use infodesk_core::period::{period_start, utc_range};
-use infodesk_core::{seed, summarizer, Error, Result, Store};
+use infodesk_core::{Error, Result, Store, seed, summarizer};
 
 #[derive(Parser)]
 #[command(name = "infodesk", about = "情報収集と要約")]
@@ -81,9 +81,15 @@ enum SourceCommand {
         #[arg(long)]
         name: Option<String>,
     },
-    Remove { id: i64 },
-    Enable { id: i64 },
-    Disable { id: i64 },
+    Remove {
+        id: i64,
+    },
+    Enable {
+        id: i64,
+    },
+    Disable {
+        id: i64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -94,7 +100,9 @@ enum TopicCommand {
         #[arg(required = true)]
         keywords: Vec<String>,
     },
-    Remove { id: i64 },
+    Remove {
+        id: i64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -149,10 +157,7 @@ async fn summarize(store: &Store) -> Result<()> {
     for category in Category::ALL {
         let report =
             summarizer::summarize_top_items(store, llm.as_ref(), category, &since, limit).await?;
-        let detail = report
-            .error
-            .map(|e| format!(" ({e})"))
-            .unwrap_or_default();
+        let detail = report.error.map(|e| format!(" ({e})")).unwrap_or_default();
         println!(
             "{:<12} summarized {}, failed {}{detail}",
             category.as_str(),
@@ -170,8 +175,8 @@ async fn digest(
     topic: Option<String>,
     force: bool,
 ) -> Result<()> {
-    let period =
-        Period::parse(period).ok_or_else(|| Error::Invalid(format!("unknown period '{period}'")))?;
+    let period = Period::parse(period)
+        .ok_or_else(|| Error::Invalid(format!("unknown period '{period}'")))?;
     let date = match date {
         Some(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d")
             .map_err(|_| Error::Invalid(format!("invalid date '{s}'")))?,
@@ -179,7 +184,10 @@ async fn digest(
     };
     let scopes: Vec<DigestScope> = match topic {
         Some(name) => vec![DigestScope::Topic(topic_id(store, &name)?)],
-        None => Category::ALL.into_iter().map(DigestScope::Category).collect(),
+        None => Category::ALL
+            .into_iter()
+            .map(DigestScope::Category)
+            .collect(),
     };
     let llm = provider_from_settings(store, LlmRole::Digest)?;
     let start = period_start(period, date);
@@ -198,7 +206,10 @@ async fn digest(
         let saved = store.get_digest(period, start, scope)?;
         match (status, saved) {
             (Some(DigestStatus::Pending), _) | (Some(DigestStatus::Failed), _) => {
-                println!("## {} ({start}): 生成に失敗。次回に再試行する\n", scope.key())
+                println!(
+                    "## {} ({start}): 生成に失敗。次回に再試行する\n",
+                    scope.key()
+                )
             }
             (_, Some(d)) if d.status == DigestStatus::Done => {
                 println!(
@@ -255,16 +266,25 @@ async fn source(store: &Store, command: SourceCommand) -> Result<()> {
                     s.kind.as_str(),
                     s.name,
                     s.config,
-                    s.last_error.map(|e| format!("  ERROR: {e}")).unwrap_or_default()
+                    s.last_error
+                        .map(|e| format!("  ERROR: {e}"))
+                        .unwrap_or_default()
                 );
             }
         }
-        SourceCommand::AddRss { url, category, name } => {
+        SourceCommand::AddRss {
+            url,
+            category,
+            name,
+        } => {
             let category = parse_category(&category)?;
             let info = feed::validate(&collector::http_client()?, &url).await?;
             let name = name.filter(|n| !n.trim().is_empty()).unwrap_or(info.title);
             let id = store.add_source(SourceKind::Rss, &name, category, &url)?;
-            println!("added source {id}: {name} ({} items in feed)", info.item_count);
+            println!(
+                "added source {id}: {name} ({} items in feed)",
+                info.item_count
+            );
         }
         SourceCommand::Remove { id } => store.delete_source(id)?,
         SourceCommand::Enable { id } => store.set_source_enabled(id, true)?,
@@ -310,12 +330,19 @@ async fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Collect => collect(&store).await,
         Command::Summarize => summarize(&store).await,
-        Command::Digest { period, date, topic, force } => {
-            digest(&store, &period, date, topic, force).await
-        }
-        Command::Items { category, topic, days, text, limit } => {
-            items(&store, category, topic, days, text, limit)
-        }
+        Command::Digest {
+            period,
+            date,
+            topic,
+            force,
+        } => digest(&store, &period, date, topic, force).await,
+        Command::Items {
+            category,
+            topic,
+            days,
+            text,
+            limit,
+        } => items(&store, category, topic, days, text, limit),
         Command::Source { command } => source(&store, command).await,
         Command::Topic { command: c } => topic(&store, c),
         Command::Config { command: c } => config(&store, c),

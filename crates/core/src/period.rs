@@ -62,7 +62,10 @@ mod tests {
         assert_eq!(period_start(Period::Week, d("2026-10-06")), d("2026-10-05"));
         assert_eq!(period_start(Period::Week, d("2026-10-05")), d("2026-10-05"));
         assert_eq!(period_start(Period::Week, d("2026-10-11")), d("2026-10-05"));
-        assert_eq!(period_start(Period::Month, d("2026-10-06")), d("2026-10-01"));
+        assert_eq!(
+            period_start(Period::Month, d("2026-10-06")),
+            d("2026-10-01")
+        );
     }
 
     #[test]

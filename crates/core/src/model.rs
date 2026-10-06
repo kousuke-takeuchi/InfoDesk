@@ -140,9 +140,13 @@ impl DigestStatus {
     }
 
     pub fn parse(s: &str) -> Option<Self> {
-        [DigestStatus::Pending, DigestStatus::Done, DigestStatus::Failed]
-            .into_iter()
-            .find(|p| p.as_str() == s)
+        [
+            DigestStatus::Pending,
+            DigestStatus::Done,
+            DigestStatus::Failed,
+        ]
+        .into_iter()
+        .find(|p| p.as_str() == s)
     }
 }
 

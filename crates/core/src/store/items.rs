@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
-use rusqlite::{params, params_from_iter, OptionalExtension, Row};
+use rusqlite::{OptionalExtension, Row, params, params_from_iter};
 
-use super::{col_opt_ts, col_parse, col_ts, ts, Store};
+use super::{Store, col_opt_ts, col_parse, col_ts, ts};
 use crate::error::{Error, Result};
 use crate::model::{Category, Item, ItemFilter, ItemOrder, NewItem, Source};
 
@@ -43,7 +43,9 @@ fn keyword_clause(keywords: &[String], args: &mut Vec<Value>) -> String {
         } else {
             let pattern = format!(
                 "%{}%",
-                kw.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+                kw.replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_")
             );
             args.push(Value::Text(pattern.clone()));
             args.push(Value::Text(pattern));
@@ -176,8 +178,10 @@ impl Store {
     }
 
     pub fn set_read(&self, id: i64, read: bool) -> Result<()> {
-        self.conn
-            .execute("UPDATE items SET read = ?2 WHERE id = ?1", params![id, read])?;
+        self.conn.execute(
+            "UPDATE items SET read = ?2 WHERE id = ?1",
+            params![id, read],
+        )?;
         Ok(())
     }
 
@@ -199,7 +203,12 @@ impl Store {
 
     /// 絞り込みに一致する未読の記事をすべて既読にする。`limit` と `offset` は無視する。
     pub fn mark_all_read(&self, f: &ItemFilter) -> Result<usize> {
-        let all = ItemFilter { limit: u32::MAX, offset: 0, unread_only: true, ..f.clone() };
+        let all = ItemFilter {
+            limit: u32::MAX,
+            offset: 0,
+            unread_only: true,
+            ..f.clone()
+        };
         let ids: Vec<i64> = self.query_items(&all)?.into_iter().map(|i| i.id).collect();
         let tx = self.conn.unchecked_transaction()?;
         for id in &ids {
@@ -248,7 +257,11 @@ mod tests {
         let (store, src) = store_with_source(Category::TechJp);
         let t1 = at("2026-10-05T01:00:00Z");
         let n = store
-            .upsert_items(&src, &[new_item("https://e.com/a", "A", "x", Some(10))], &t1)
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/a", "A", "x", Some(10))],
+                &t1,
+            )
             .unwrap();
         assert_eq!(n, 1);
         let id = store.query_items(&ItemFilter::default()).unwrap()[0].id;
@@ -290,30 +303,56 @@ mod tests {
         store
             .upsert_items(&src, &[new_item("https://e.com/a", "A", "", None)], &t)
             .unwrap();
-        assert_eq!(store.query_items(&ItemFilter::default()).unwrap()[0].score, Some(10));
+        assert_eq!(
+            store.query_items(&ItemFilter::default()).unwrap()[0].score,
+            Some(10)
+        );
     }
 
     #[test]
     fn filters_by_category_time_read_star_source() {
         let (store, src) = store_with_source(Category::TechJp);
         let other_id = store
-            .add_source(crate::model::SourceKind::Hackernews, "HN", Category::Hackernews, "top")
+            .add_source(
+                crate::model::SourceKind::Hackernews,
+                "HN",
+                Category::Hackernews,
+                "top",
+            )
             .unwrap();
         let other = store.get_source(other_id).unwrap().unwrap();
         store
-            .upsert_items(&src, &[new_item("https://e.com/old", "old", "", None)], &at("2026-10-01T00:00:00Z"))
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/old", "old", "", None)],
+                &at("2026-10-01T00:00:00Z"),
+            )
             .unwrap();
         store
-            .upsert_items(&src, &[new_item("https://e.com/new", "new", "", None)], &at("2026-10-05T00:00:00Z"))
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/new", "new", "", None)],
+                &at("2026-10-05T00:00:00Z"),
+            )
             .unwrap();
         store
-            .upsert_items(&other, &[new_item("https://e.com/hn", "hn", "", Some(5))], &at("2026-10-05T00:00:00Z"))
+            .upsert_items(
+                &other,
+                &[new_item("https://e.com/hn", "hn", "", Some(5))],
+                &at("2026-10-05T00:00:00Z"),
+            )
             .unwrap();
 
-        let f = ItemFilter { category: Some(Category::TechJp), ..Default::default() };
+        let f = ItemFilter {
+            category: Some(Category::TechJp),
+            ..Default::default()
+        };
         assert_eq!(store.query_items(&f).unwrap().len(), 2);
 
-        let f = ItemFilter { source_id: Some(other.id), ..Default::default() };
+        let f = ItemFilter {
+            source_id: Some(other.id),
+            ..Default::default()
+        };
         assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["hn"]);
 
         let f = ItemFilter {
@@ -324,15 +363,30 @@ mod tests {
         };
         assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["new"]);
 
-        let f = ItemFilter { until: Some(at("2026-10-05T00:00:00Z")), ..Default::default() };
+        let f = ItemFilter {
+            until: Some(at("2026-10-05T00:00:00Z")),
+            ..Default::default()
+        };
         assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["old"]);
 
-        let new_id = store.query_items(&ItemFilter { text: Some("new".into()), ..Default::default() }).unwrap()[0].id;
+        let new_id = store
+            .query_items(&ItemFilter {
+                text: Some("new".into()),
+                ..Default::default()
+            })
+            .unwrap()[0]
+            .id;
         store.set_read(new_id, true).unwrap();
         store.set_starred(new_id, true).unwrap();
-        let f = ItemFilter { unread_only: true, ..Default::default() };
+        let f = ItemFilter {
+            unread_only: true,
+            ..Default::default()
+        };
         assert_eq!(store.query_items(&f).unwrap().len(), 2);
-        let f = ItemFilter { starred_only: true, ..Default::default() };
+        let f = ItemFilter {
+            starred_only: true,
+            ..Default::default()
+        };
         assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["new"]);
     }
 
@@ -350,10 +404,21 @@ mod tests {
         let recent = store.query_items(&ItemFilter::default()).unwrap();
         assert_eq!(titles(&recent), vec!["none", "low", "high"]);
 
-        let f = ItemFilter { order: ItemOrder::Score, ..Default::default() };
-        assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["high", "low", "none"]);
+        let f = ItemFilter {
+            order: ItemOrder::Score,
+            ..Default::default()
+        };
+        assert_eq!(
+            titles(&store.query_items(&f).unwrap()),
+            vec!["high", "low", "none"]
+        );
 
-        let f = ItemFilter { order: ItemOrder::Score, limit: 1, offset: 1, ..Default::default() };
+        let f = ItemFilter {
+            order: ItemOrder::Score,
+            limit: 1,
+            offset: 1,
+            ..Default::default()
+        };
         assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["low"]);
     }
 
@@ -375,22 +440,45 @@ mod tests {
             )
             .unwrap();
 
-        let long = store.add_topic("認知症", &kws(&["認知症", "dementia", "alzheimer"])).unwrap();
-        let f = ItemFilter { topic_id: Some(long), ..Default::default() };
-        let mut got = titles(&store.query_items(&f).unwrap()).into_iter().map(String::from).collect::<Vec<_>>();
+        let long = store
+            .add_topic("認知症", &kws(&["認知症", "dementia", "alzheimer"]))
+            .unwrap();
+        let f = ItemFilter {
+            topic_id: Some(long),
+            ..Default::default()
+        };
+        let mut got = titles(&store.query_items(&f).unwrap())
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
         got.sort();
-        assert_eq!(got, vec!["New Dementia drug approved", "無関係", "認知症ケアの最前線"]);
+        assert_eq!(
+            got,
+            vec!["New Dementia drug approved", "無関係", "認知症ケアの最前線"]
+        );
 
         // Review Focus 1: 2文字のキーワードも一致する。
         let short = store.add_topic("介護", &kws(&["介護"])).unwrap();
-        let f = ItemFilter { topic_id: Some(short), ..Default::default() };
-        assert_eq!(titles(&store.query_items(&f).unwrap()), vec!["介護報酬の改定"]);
+        let f = ItemFilter {
+            topic_id: Some(short),
+            ..Default::default()
+        };
+        assert_eq!(
+            titles(&store.query_items(&f).unwrap()),
+            vec!["介護報酬の改定"]
+        );
 
         let empty = store.add_topic("空", &[]).unwrap();
-        let f = ItemFilter { topic_id: Some(empty), ..Default::default() };
+        let f = ItemFilter {
+            topic_id: Some(empty),
+            ..Default::default()
+        };
         assert!(store.query_items(&f).unwrap().is_empty());
 
-        let f = ItemFilter { topic_id: Some(9999), ..Default::default() };
+        let f = ItemFilter {
+            topic_id: Some(9999),
+            ..Default::default()
+        };
         assert!(matches!(store.query_items(&f), Err(Error::Invalid(_))));
     }
 
@@ -418,14 +506,27 @@ mod tests {
             ("AND", "Cats AND dogs"),
             ("0%", "100% done"),
         ] {
-            let f = ItemFilter { text: Some(text.to_string()), ..Default::default() };
-            assert_eq!(titles(&store.query_items(&f).unwrap()), vec![want], "text={text}");
+            let f = ItemFilter {
+                text: Some(text.to_string()),
+                ..Default::default()
+            };
+            assert_eq!(
+                titles(&store.query_items(&f).unwrap()),
+                vec![want],
+                "text={text}"
+            );
         }
         for text in ["*", "a*", "NEAR(", "%", "_"] {
-            let f = ItemFilter { text: Some(text.to_string()), ..Default::default() };
+            let f = ItemFilter {
+                text: Some(text.to_string()),
+                ..Default::default()
+            };
             assert!(store.query_items(&f).is_ok(), "text={text}");
         }
-        let f = ItemFilter { text: Some("   ".into()), ..Default::default() };
+        let f = ItemFilter {
+            text: Some("   ".into()),
+            ..Default::default()
+        };
         assert_eq!(store.query_items(&f).unwrap().len(), 5);
     }
 
@@ -445,7 +546,11 @@ mod tests {
             )
             .unwrap();
         store
-            .upsert_items(&src, &[new_item("https://e.com/0", "old", "", Some(999))], &at("2026-10-01T00:00:00Z"))
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/0", "old", "", Some(999))],
+                &at("2026-10-01T00:00:00Z"),
+            )
             .unwrap();
 
         let top = store.top_unsummarized(Category::Github, &t, 2).unwrap();
@@ -454,7 +559,12 @@ mod tests {
         store.set_ai_summary(top[0].id, "済").unwrap();
         let top = store.top_unsummarized(Category::Github, &t, 2).unwrap();
         assert_eq!(titles(&top), vec!["s20"]);
-        assert!(store.top_unsummarized(Category::Arxiv, &t, 2).unwrap().is_empty());
+        assert!(
+            store
+                .top_unsummarized(Category::Arxiv, &t, 2)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -466,18 +576,39 @@ mod tests {
             .collect();
         store.upsert_items(&src, &items, &t).unwrap();
         let other_id = store
-            .add_source(crate::model::SourceKind::Hackernews, "HN", Category::Hackernews, "top")
+            .add_source(
+                crate::model::SourceKind::Hackernews,
+                "HN",
+                Category::Hackernews,
+                "top",
+            )
             .unwrap();
         let other = store.get_source(other_id).unwrap().unwrap();
-        store.upsert_items(&other, &[new_item("https://e.com/hn", "hn", "", None)], &t).unwrap();
+        store
+            .upsert_items(&other, &[new_item("https://e.com/hn", "hn", "", None)], &t)
+            .unwrap();
 
         let n = store
-            .mark_all_read(&ItemFilter { category: Some(Category::TechJp), limit: 2, ..Default::default() })
+            .mark_all_read(&ItemFilter {
+                category: Some(Category::TechJp),
+                limit: 2,
+                ..Default::default()
+            })
             .unwrap();
         assert_eq!(n, 5);
-        let unread = store.query_items(&ItemFilter { unread_only: true, ..Default::default() }).unwrap();
+        let unread = store
+            .query_items(&ItemFilter {
+                unread_only: true,
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(titles(&unread), vec!["hn"]);
-        let n = store.mark_all_read(&ItemFilter { category: Some(Category::TechJp), ..Default::default() }).unwrap();
+        let n = store
+            .mark_all_read(&ItemFilter {
+                category: Some(Category::TechJp),
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(n, 0);
     }
 
@@ -485,7 +616,11 @@ mod tests {
     fn deleting_source_keeps_items() {
         let (store, src) = store_with_source(Category::TechJp);
         store
-            .upsert_items(&src, &[new_item("https://e.com/a", "A", "", None)], &at("2026-10-05T00:00:00Z"))
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/a", "A", "", None)],
+                &at("2026-10-05T00:00:00Z"),
+            )
             .unwrap();
         store.delete_source(src.id).unwrap();
         let items = store.query_items(&ItemFilter::default()).unwrap();

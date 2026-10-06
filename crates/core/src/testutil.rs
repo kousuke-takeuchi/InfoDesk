@@ -22,7 +22,12 @@ pub fn new_item(url: &str, title: &str, excerpt: &str, score: Option<i64>) -> Ne
 pub fn store_with_source(category: Category) -> (Store, Source) {
     let store = Store::open_in_memory().unwrap();
     let id = store
-        .add_source(SourceKind::Rss, "Test Feed", category, "https://example.com/feed")
+        .add_source(
+            SourceKind::Rss,
+            "Test Feed",
+            category,
+            "https://example.com/feed",
+        )
         .unwrap();
     let source = store.get_source(id).unwrap().unwrap();
     (store, source)

@@ -4,25 +4,105 @@ use crate::store::Store;
 
 /// (種類, 表示名, カテゴリー, config)。URLは2026-10-06に取得と解析を確認した。
 pub const DEFAULT_SOURCES: &[(SourceKind, &str, Category, &str)] = &[
-    (SourceKind::GithubTrending, "GitHub Trending (日)", Category::Github, "daily"),
-    (SourceKind::GithubTrending, "GitHub Trending (週)", Category::Github, "weekly"),
-    (SourceKind::GithubTrending, "GitHub Trending (月)", Category::Github, "monthly"),
+    (
+        SourceKind::GithubTrending,
+        "GitHub Trending (日)",
+        Category::Github,
+        "daily",
+    ),
+    (
+        SourceKind::GithubTrending,
+        "GitHub Trending (週)",
+        Category::Github,
+        "weekly",
+    ),
+    (
+        SourceKind::GithubTrending,
+        "GitHub Trending (月)",
+        Category::Github,
+        "monthly",
+    ),
     (SourceKind::Arxiv, "arXiv cs.AI", Category::Arxiv, "cs.AI"),
     (SourceKind::Arxiv, "arXiv cs.CL", Category::Arxiv, "cs.CL"),
     (SourceKind::Arxiv, "arXiv cs.LG", Category::Arxiv, "cs.LG"),
-    (SourceKind::HfModels, "Hugging Face Trending Models", Category::Huggingface, "trending"),
-    (SourceKind::HfPapers, "Hugging Face Daily Papers", Category::Huggingface, "daily"),
-    (SourceKind::Hackernews, "Hacker News", Category::Hackernews, "top"),
-    (SourceKind::Rss, "はてなブックマーク IT", Category::TechJp, "https://b.hatena.ne.jp/hotentry/it.rss"),
-    (SourceKind::Rss, "Publickey", Category::TechJp, "https://www.publickey1.jp/atom.xml"),
-    (SourceKind::Rss, "ITmedia", Category::TechJp, "https://rss.itmedia.co.jp/rss/2.0/itmedia_all.xml"),
-    (SourceKind::Rss, "Zenn", Category::TechJp, "https://zenn.dev/feed"),
-    (SourceKind::Rss, "TechCrunch", Category::TechIntl, "https://techcrunch.com/feed/"),
-    (SourceKind::Rss, "The Verge", Category::TechIntl, "https://www.theverge.com/rss/index.xml"),
-    (SourceKind::Rss, "Ars Technica", Category::TechIntl, "https://feeds.arstechnica.com/arstechnica/index"),
-    (SourceKind::Rss, "MIT Technology Review", Category::TechIntl, "https://www.technologyreview.com/feed/"),
-    (SourceKind::Rss, "joint-kaigo.com", Category::Medcare, "https://www.joint-kaigo.com/feed/"),
-    (SourceKind::Rss, "care-news.jp", Category::Medcare, "http://www.care-news.jp/media.rss"),
+    (
+        SourceKind::HfModels,
+        "Hugging Face Trending Models",
+        Category::Huggingface,
+        "trending",
+    ),
+    (
+        SourceKind::HfPapers,
+        "Hugging Face Daily Papers",
+        Category::Huggingface,
+        "daily",
+    ),
+    (
+        SourceKind::Hackernews,
+        "Hacker News",
+        Category::Hackernews,
+        "top",
+    ),
+    (
+        SourceKind::Rss,
+        "はてなブックマーク IT",
+        Category::TechJp,
+        "https://b.hatena.ne.jp/hotentry/it.rss",
+    ),
+    (
+        SourceKind::Rss,
+        "Publickey",
+        Category::TechJp,
+        "https://www.publickey1.jp/atom.xml",
+    ),
+    (
+        SourceKind::Rss,
+        "ITmedia",
+        Category::TechJp,
+        "https://rss.itmedia.co.jp/rss/2.0/itmedia_all.xml",
+    ),
+    (
+        SourceKind::Rss,
+        "Zenn",
+        Category::TechJp,
+        "https://zenn.dev/feed",
+    ),
+    (
+        SourceKind::Rss,
+        "TechCrunch",
+        Category::TechIntl,
+        "https://techcrunch.com/feed/",
+    ),
+    (
+        SourceKind::Rss,
+        "The Verge",
+        Category::TechIntl,
+        "https://www.theverge.com/rss/index.xml",
+    ),
+    (
+        SourceKind::Rss,
+        "Ars Technica",
+        Category::TechIntl,
+        "https://feeds.arstechnica.com/arstechnica/index",
+    ),
+    (
+        SourceKind::Rss,
+        "MIT Technology Review",
+        Category::TechIntl,
+        "https://www.technologyreview.com/feed/",
+    ),
+    (
+        SourceKind::Rss,
+        "joint-kaigo.com",
+        Category::Medcare,
+        "https://www.joint-kaigo.com/feed/",
+    ),
+    (
+        SourceKind::Rss,
+        "care-news.jp",
+        Category::Medcare,
+        "http://www.care-news.jp/media.rss",
+    ),
     (
         SourceKind::Rss,
         "Google News: 認知症",
@@ -83,13 +163,21 @@ mod tests {
         assert_eq!(added, DEFAULT_SOURCES.len());
         let sources = store.list_sources().unwrap();
         for c in Category::ALL {
-            assert!(sources.iter().any(|s| s.category == c), "no source for {c:?}");
+            assert!(
+                sources.iter().any(|s| s.category == c),
+                "no source for {c:?}"
+            );
         }
-        assert!(sources
-            .iter()
-            .filter(|s| s.kind == SourceKind::Rss)
-            .all(|s| s.config.starts_with("http")));
-        assert_eq!(store.get_setting("ollama.model").unwrap().as_deref(), Some("gemma4:26b"));
+        assert!(
+            sources
+                .iter()
+                .filter(|s| s.kind == SourceKind::Rss)
+                .all(|s| s.config.starts_with("http"))
+        );
+        assert_eq!(
+            store.get_setting("ollama.model").unwrap().as_deref(),
+            Some("gemma4:26b")
+        );
 
         assert_eq!(seed_defaults(&store).unwrap(), 0);
         assert_eq!(store.list_sources().unwrap().len(), DEFAULT_SOURCES.len());
@@ -103,7 +191,13 @@ mod tests {
         store.delete_source(first.id).unwrap();
         store.set_setting("ollama.model", "other").unwrap();
         seed_defaults(&store).unwrap();
-        assert_eq!(store.list_sources().unwrap().len(), DEFAULT_SOURCES.len() - 1);
-        assert_eq!(store.get_setting("ollama.model").unwrap().as_deref(), Some("other"));
+        assert_eq!(
+            store.list_sources().unwrap().len(),
+            DEFAULT_SOURCES.len() - 1
+        );
+        assert_eq!(
+            store.get_setting("ollama.model").unwrap().as_deref(),
+            Some("other")
+        );
     }
 }

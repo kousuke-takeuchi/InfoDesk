@@ -1,6 +1,6 @@
-mod schema;
 mod digests;
 mod items;
+mod schema;
 mod settings;
 mod sources;
 mod topics;

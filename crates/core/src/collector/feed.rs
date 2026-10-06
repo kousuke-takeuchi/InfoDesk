@@ -147,41 +147,74 @@ mod tests {
     fn non_feed_content_is_invalid_feed() {
         let err = parse_feed(b"<html><body>not a feed</body></html>").unwrap_err();
         assert!(matches!(err, Error::InvalidFeed(_)));
-        assert!(matches!(parse_feed(b"").unwrap_err(), Error::InvalidFeed(_)));
+        assert!(matches!(
+            parse_feed(b"").unwrap_err(),
+            Error::InvalidFeed(_)
+        ));
     }
 
     #[tokio::test]
     async fn validate_accepts_rss_and_atom() {
         let server = MockServer::start().await;
-        Mock::given(method("GET")).and(path("/rss"))
+        Mock::given(method("GET"))
+            .and(path("/rss"))
             .respond_with(ResponseTemplate::new(200).set_body_string(RSS))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/atom"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/atom"))
             .respond_with(ResponseTemplate::new(200).set_body_string(ATOM))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
         let http = http_client().unwrap();
-        let info = validate(&http, &format!("{}/rss", server.uri())).await.unwrap();
-        assert_eq!(info, FeedInfo { title: "テストフィード".into(), item_count: 2 });
-        let info = validate(&http, &format!("{}/atom", server.uri())).await.unwrap();
+        let info = validate(&http, &format!("{}/rss", server.uri()))
+            .await
+            .unwrap();
+        assert_eq!(
+            info,
+            FeedInfo {
+                title: "テストフィード".into(),
+                item_count: 2
+            }
+        );
+        let info = validate(&http, &format!("{}/atom", server.uri()))
+            .await
+            .unwrap();
         assert_eq!(info.title, "Atom Feed");
-        assert_eq!(fetch(&http, &format!("{}/rss", server.uri())).await.unwrap().len(), 2);
+        assert_eq!(
+            fetch(&http, &format!("{}/rss", server.uri()))
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[tokio::test]
     async fn validate_rejects_html_404_and_unreachable() {
         let server = MockServer::start().await;
-        Mock::given(method("GET")).and(path("/html"))
+        Mock::given(method("GET"))
+            .and(path("/html"))
             .respond_with(ResponseTemplate::new(200).set_body_string("<html></html>"))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/missing"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/missing"))
             .respond_with(ResponseTemplate::new(404))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
         let http = http_client().unwrap();
-        let err = validate(&http, &format!("{}/html", server.uri())).await.unwrap_err();
+        let err = validate(&http, &format!("{}/html", server.uri()))
+            .await
+            .unwrap_err();
         assert!(matches!(err, Error::InvalidFeed(_)));
-        let err = validate(&http, &format!("{}/missing", server.uri())).await.unwrap_err();
+        let err = validate(&http, &format!("{}/missing", server.uri()))
+            .await
+            .unwrap_err();
         assert!(matches!(err, Error::Http(_)));
-        let err = validate(&http, "http://127.0.0.1:1/feed").await.unwrap_err();
+        let err = validate(&http, "http://127.0.0.1:1/feed")
+            .await
+            .unwrap_err();
         assert!(matches!(err, Error::Http(_)));
         let err = validate(&http, "not a url").await.unwrap_err();
         assert!(matches!(err, Error::Http(_)));
@@ -191,9 +224,11 @@ mod tests {
     async fn validate_uses_url_when_feed_has_no_title() {
         let server = MockServer::start().await;
         let xml = r#"<rss version="2.0"><channel><item><title>t</title><link>https://e.com/x</link></item></channel></rss>"#;
-        Mock::given(method("GET")).and(path("/untitled"))
+        Mock::given(method("GET"))
+            .and(path("/untitled"))
             .respond_with(ResponseTemplate::new(200).set_body_string(xml))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
         let url = format!("{}/untitled", server.uri());
         let info = validate(&http_client().unwrap(), &url).await.unwrap();
         assert_eq!(info.title, url);

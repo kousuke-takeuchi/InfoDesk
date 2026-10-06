@@ -78,7 +78,10 @@ mod tests {
     #[test]
     fn story_without_url_links_to_discussion() {
         let json = br#"{"by":"a","id":42,"score":5,"time":1,"title":"Ask HN: x","type":"story"}"#;
-        assert_eq!(parse_item(json).unwrap().url, "https://news.ycombinator.com/item?id=42");
+        assert_eq!(
+            parse_item(json).unwrap().url,
+            "https://news.ycombinator.com/item?id=42"
+        );
     }
 
     #[test]
@@ -91,20 +94,33 @@ mod tests {
     #[tokio::test]
     async fn fetch_takes_first_n_and_skips_broken_items() {
         let server = MockServer::start().await;
-        Mock::given(method("GET")).and(path("/topstories.json"))
+        Mock::given(method("GET"))
+            .and(path("/topstories.json"))
             .respond_with(ResponseTemplate::new(200).set_body_string("[1,2,3,4]"))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/item/1.json"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_string(r#"{"id":1,"title":"one","score":10,"time":1,"type":"story"}"#))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/item/2.json"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/item/1.json"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(
+                    r#"{"id":1,"title":"one","score":10,"time":1,"type":"story"}"#,
+                ),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/item/2.json"))
             .respond_with(ResponseTemplate::new(200).set_body_string("null"))
-            .mount(&server).await;
-        Mock::given(method("GET")).and(path("/item/3.json"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/item/3.json"))
             .respond_with(ResponseTemplate::new(500))
-            .mount(&server).await;
-        let items = fetch(&http_client().unwrap(), &server.uri(), 3).await.unwrap();
+            .mount(&server)
+            .await;
+        let items = fetch(&http_client().unwrap(), &server.uri(), 3)
+            .await
+            .unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "one");
     }
@@ -112,9 +128,15 @@ mod tests {
     #[tokio::test]
     async fn fetch_fails_when_list_fails() {
         let server = MockServer::start().await;
-        Mock::given(method("GET")).and(path("/topstories.json"))
+        Mock::given(method("GET"))
+            .and(path("/topstories.json"))
             .respond_with(ResponseTemplate::new(503))
-            .mount(&server).await;
-        assert!(fetch(&http_client().unwrap(), &server.uri(), 3).await.is_err());
+            .mount(&server)
+            .await;
+        assert!(
+            fetch(&http_client().unwrap(), &server.uri(), 3)
+                .await
+                .is_err()
+        );
     }
 }

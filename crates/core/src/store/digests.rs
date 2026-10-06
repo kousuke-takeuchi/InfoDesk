@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{OptionalExtension, Row, params};
 
-use super::{col_parse, col_ts, conv_err, ts, Store};
+use super::{Store, col_parse, col_ts, conv_err, ts};
 use crate::error::Result;
 use crate::model::{Digest, DigestScope, DigestStatus, Period};
 
@@ -85,7 +85,13 @@ impl Store {
                attempts = attempts + 1, \
                status = CASE WHEN attempts + 1 >= ?5 THEN 'failed' ELSE 'pending' END \
              WHERE digests.status != 'done'",
-            params![period.as_str(), date_str(start), scope.key(), ts(now), MAX_ATTEMPTS],
+            params![
+                period.as_str(),
+                date_str(start),
+                scope.key(),
+                ts(now),
+                MAX_ATTEMPTS
+            ],
         )?;
         let status = self.conn.query_row(
             "SELECT status FROM digests WHERE period = ?1 AND period_start = ?2 AND scope = ?3",
@@ -139,7 +145,12 @@ impl Store {
         ))?;
         let rows = stmt
             .query_map(
-                params![period.as_str(), scope.key(), date_str(from), date_str(to_exclusive)],
+                params![
+                    period.as_str(),
+                    scope.key(),
+                    date_str(from),
+                    date_str(to_exclusive)
+                ],
                 row_to_digest,
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -184,18 +195,38 @@ mod tests {
         let scope = DigestScope::Category(Category::Github);
         let now = at("2026-10-06T00:00:00Z");
         store
-            .save_digest_done(&nd(Period::Day, "2026-10-06", scope.clone(), "v1", &[1, 2]), &now)
+            .save_digest_done(
+                &nd(Period::Day, "2026-10-06", scope.clone(), "v1", &[1, 2]),
+                &now,
+            )
             .unwrap();
         store
-            .save_digest_done(&nd(Period::Day, "2026-10-06", scope.clone(), "v2", &[3]), &now)
+            .save_digest_done(
+                &nd(Period::Day, "2026-10-06", scope.clone(), "v2", &[3]),
+                &now,
+            )
             .unwrap();
-        let got = store.get_digest(Period::Day, d("2026-10-06"), &scope).unwrap().unwrap();
+        let got = store
+            .get_digest(Period::Day, d("2026-10-06"), &scope)
+            .unwrap()
+            .unwrap();
         assert_eq!(got.body, "v2");
         assert_eq!(got.item_ids, vec![3]);
         assert_eq!(got.status, DigestStatus::Done);
         assert_eq!(got.provider, "mock");
-        assert!(store.get_digest(Period::Week, d("2026-10-05"), &scope).unwrap().is_none());
-        assert_eq!(store.list_digests(Period::Day, d("2026-10-06")).unwrap().len(), 1);
+        assert!(
+            store
+                .get_digest(Period::Week, d("2026-10-05"), &scope)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            store
+                .list_digests(Period::Day, d("2026-10-06"))
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -205,26 +236,46 @@ mod tests {
         let now = at("2026-10-06T00:00:00Z");
         let day = d("2026-10-06");
         assert_eq!(
-            store.mark_digest_attempt_failed(Period::Day, day, &scope, &now).unwrap(),
+            store
+                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .unwrap(),
             DigestStatus::Pending
         );
         assert_eq!(store.pending_digests().unwrap().len(), 1);
         assert_eq!(
-            store.mark_digest_attempt_failed(Period::Day, day, &scope, &now).unwrap(),
+            store
+                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .unwrap(),
             DigestStatus::Pending
         );
         assert_eq!(
-            store.mark_digest_attempt_failed(Period::Day, day, &scope, &now).unwrap(),
+            store
+                .mark_digest_attempt_failed(Period::Day, day, &scope, &now)
+                .unwrap(),
             DigestStatus::Failed
         );
         assert!(store.pending_digests().unwrap().is_empty());
-        assert_eq!(store.get_digest(Period::Day, day, &scope).unwrap().unwrap().attempts, 3);
+        assert_eq!(
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .attempts,
+            3
+        );
 
         store
-            .save_digest_done(&nd(Period::Day, "2026-10-06", scope.clone(), "ok", &[]), &now)
+            .save_digest_done(
+                &nd(Period::Day, "2026-10-06", scope.clone(), "ok", &[]),
+                &now,
+            )
             .unwrap();
         assert_eq!(
-            store.get_digest(Period::Day, day, &scope).unwrap().unwrap().status,
+            store
+                .get_digest(Period::Day, day, &scope)
+                .unwrap()
+                .unwrap()
+                .status,
             DigestStatus::Done
         );
     }
@@ -235,13 +286,19 @@ mod tests {
         let scope = DigestScope::Category(Category::Arxiv);
         let now = at("2026-10-06T00:00:00Z");
         store
-            .save_digest_done(&nd(Period::Day, "2026-10-06", scope.clone(), "keep", &[]), &now)
+            .save_digest_done(
+                &nd(Period::Day, "2026-10-06", scope.clone(), "keep", &[]),
+                &now,
+            )
             .unwrap();
         let st = store
             .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &scope, &now)
             .unwrap();
         assert_eq!(st, DigestStatus::Done);
-        let got = store.get_digest(Period::Day, d("2026-10-06"), &scope).unwrap().unwrap();
+        let got = store
+            .get_digest(Period::Day, d("2026-10-06"), &scope)
+            .unwrap()
+            .unwrap();
         assert_eq!(got.body, "keep");
     }
 
@@ -257,7 +314,9 @@ mod tests {
             ("2026-10-12", gh.clone(), "next week"),
             ("2026-10-06", ax.clone(), "other scope"),
         ] {
-            store.save_digest_done(&nd(Period::Day, day, scope, body, &[]), &now).unwrap();
+            store
+                .save_digest_done(&nd(Period::Day, day, scope, body, &[]), &now)
+                .unwrap();
         }
         store
             .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &gh, &now)

@@ -92,12 +92,20 @@ async fn get_bytes(http: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
         .to_vec())
 }
 
-pub async fn fetch_models(http: &reqwest::Client, base: &str, limit: usize) -> Result<Vec<NewItem>> {
+pub async fn fetch_models(
+    http: &reqwest::Client,
+    base: &str,
+    limit: usize,
+) -> Result<Vec<NewItem>> {
     let url = format!("{base}/api/models?sort=trendingScore&limit={limit}");
     parse_models(&get_bytes(http, &url).await?)
 }
 
-pub async fn fetch_papers(http: &reqwest::Client, base: &str, limit: usize) -> Result<Vec<NewItem>> {
+pub async fn fetch_papers(
+    http: &reqwest::Client,
+    base: &str,
+    limit: usize,
+) -> Result<Vec<NewItem>> {
     let url = format!("{base}/api/daily_papers?limit={limit}");
     parse_papers(&get_bytes(http, &url).await?)
 }
@@ -117,7 +125,10 @@ mod tests {
         assert_eq!(items[0].url, "https://huggingface.co/Cloudflare/clef");
         assert_eq!(items[0].title, "Cloudflare/clef");
         assert_eq!(items[0].score, Some(1353));
-        assert_eq!(items[0].excerpt, "text-generation · likes 1452 · downloads 5416");
+        assert_eq!(
+            items[0].excerpt,
+            "text-generation · likes 1452 · downloads 5416"
+        );
         assert_eq!(items[0].author.as_deref(), Some("Cloudflare"));
         assert_eq!(
             items[0].published_at.unwrap().to_rfc3339(),
@@ -150,10 +161,18 @@ mod tests {
     fn parses_saved_real_responses() {
         let models = parse_models(include_bytes!("../../tests/fixtures/hf_models.json")).unwrap();
         assert!(!models.is_empty());
-        assert!(models.iter().all(|m| m.url.starts_with("https://huggingface.co/")));
+        assert!(
+            models
+                .iter()
+                .all(|m| m.url.starts_with("https://huggingface.co/"))
+        );
         let papers = parse_papers(include_bytes!("../../tests/fixtures/hf_papers.json")).unwrap();
         assert!(!papers.is_empty());
-        assert!(papers.iter().all(|p| p.url.starts_with("https://huggingface.co/papers/")));
+        assert!(
+            papers
+                .iter()
+                .all(|p| p.url.starts_with("https://huggingface.co/papers/"))
+        );
         assert!(papers.iter().all(|p| !p.title.is_empty()));
     }
 }
