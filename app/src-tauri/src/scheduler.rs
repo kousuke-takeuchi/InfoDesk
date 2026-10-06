@@ -152,50 +152,56 @@ fn record(state: &AppState, key: &str, value: &str) {
     let _ = state.with_store(|s| s.set_setting(key, value));
 }
 
-/// 1つのジョブを実行する。日次の後は現在の週次と月次を作り直す。
-async fn run_job(state: &AppState, job: &Job) {
+/// ジョブが実行する要約生成を順に返す (期間、対象日、作り直すか)。
+///
+/// 日次の後は今日を含む週次と月次を作り直す。週次と月次のジョブは期間ごとに1回だけ
+/// 出るので、日次の作り直しで生成済みになった前期間も、最終日を含めて作り直す。
+pub fn job_plan(job: &Job, today: NaiveDate) -> Vec<(Period, NaiveDate, bool)> {
+    match job {
+        Job::Collect => Vec::new(),
+        Job::Daily(day) => vec![
+            (Period::Day, *day, false),
+            (Period::Week, today, true),
+            (Period::Month, today, true),
+        ],
+        Job::Weekly(start) => vec![(Period::Week, *start, true)],
+        Job::Monthly(start) => vec![(Period::Month, *start, true)],
+    }
+}
+
+/// 1つのジョブを実行する。`today` は `state.tz` での今日。
+async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
+    if let Job::Collect = job {
+        // 収集のエラーは `run_collect` 自身が記録する。収集中の拒否は記録しない。
+        let _ = jobs::run_collect(state).await;
+        return;
+    }
     let scopes = jobs::all_category_scopes();
-    let today = chrono::Local::now().date_naive();
-    let outcome = match job {
-        Job::Collect => jobs::run_collect(state).await.map(|_| ()),
-        Job::Daily(day) => {
-            let r = jobs::run_digests(state, Period::Day, *day, &scopes, false)
-                .await
-                .map(|_| ());
-            if r.is_ok() {
-                record(state, "schedule.last_daily_for", &day.to_string());
-                let _ = jobs::run_digests(state, Period::Week, today, &scopes, true).await;
-                let _ = jobs::run_digests(state, Period::Month, today, &scopes, true).await;
-            }
-            r
-        }
-        Job::Weekly(start) => {
-            let r = jobs::run_digests(state, Period::Week, *start, &scopes, false)
-                .await
-                .map(|_| ());
-            if r.is_ok() {
-                record(state, "schedule.last_weekly_for", &start.to_string());
-            }
-            r
-        }
-        Job::Monthly(start) => {
-            let r = jobs::run_digests(state, Period::Month, *start, &scopes, false)
-                .await
-                .map(|_| ());
-            if r.is_ok() {
-                record(state, "schedule.last_monthly_for", &start.to_string());
-            }
-            r
-        }
+    let mut plan = job_plan(job, today).into_iter();
+    // 最初の生成がジョブ本体。成功したら記録し、残り (日次後の作り直し) の失敗は無視する。
+    let Some((period, start, force)) = plan.next() else {
+        return;
     };
-    if let Err(e) = outcome {
+    if let Err(e) = jobs::run_digests(state, period, start, &scopes, force).await {
         state.update_status(|s| s.last_error = Some(e.message));
+        return;
+    }
+    let (key, value) = match job {
+        Job::Daily(day) => ("schedule.last_daily_for", day),
+        Job::Weekly(start) => ("schedule.last_weekly_for", start),
+        Job::Monthly(start) => ("schedule.last_monthly_for", start),
+        Job::Collect => unreachable!("handled above"),
+    };
+    record(state, key, &value.to_string());
+    for (period, start, force) in plan {
+        let _ = jobs::run_digests(state, period, start, &scopes, force).await;
     }
 }
 
 /// 起動直後と60秒ごとに `due_jobs` を評価する。
 pub async fn run_loop(app: AppHandle) {
     let mut ticker = tokio::time::interval(StdDuration::from_secs(60));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         ticker.tick().await;
         let state = app.state::<AppState>();
@@ -206,8 +212,9 @@ pub async fn run_loop(app: AppHandle) {
         let now = chrono::Local::now().with_timezone(&state.tz);
         state.update_status(|s| s.next_collect_at = Some(next_collect_at(now, &cfg, &last)));
         let due = due_jobs(now, &cfg, &last);
+        let today = now.date_naive();
         for job in &due {
-            run_job(&state, job).await;
+            run_job(&state, job, today).await;
         }
         if !due.is_empty() {
             let _ = jobs::retry_pending(&state).await;
@@ -379,6 +386,37 @@ mod tests {
             collect_at: Some(early.with_timezone(&Utc)),
         };
         assert!(due_jobs(early, &cfg(), &last).is_empty());
+    }
+
+    #[test]
+    fn job_plan_lists_digest_runs_in_order() {
+        let today = d("2026-10-06");
+        assert!(job_plan(&Job::Collect, today).is_empty());
+        assert_eq!(
+            job_plan(&Job::Daily(d("2026-10-05")), today),
+            vec![
+                (Period::Day, d("2026-10-05"), false),
+                (Period::Week, today, true),
+                (Period::Month, today, true),
+            ]
+        );
+        // 週次と月次は期間ごとに1回だけ出るので、最終日を含めて作り直す (force)。
+        assert_eq!(
+            job_plan(&Job::Weekly(d("2026-09-28")), today),
+            vec![(Period::Week, d("2026-09-28"), true)]
+        );
+        assert_eq!(
+            job_plan(&Job::Monthly(d("2026-09-01")), today),
+            vec![(Period::Month, d("2026-09-01"), true)]
+        );
+    }
+
+    #[tokio::test]
+    async fn rejected_collect_does_not_set_last_error() {
+        let (state, _) = crate::state::test_state();
+        state.update_status(|s| s.collecting = true);
+        run_job(&state, &Job::Collect, d("2026-10-06")).await;
+        assert_eq!(state.status().last_error, None);
     }
 
     #[test]

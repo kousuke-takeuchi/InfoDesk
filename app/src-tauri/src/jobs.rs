@@ -125,6 +125,7 @@ pub async fn run_digests(
 /// 保留中の要約を再試行する。成功した件数を返す。
 pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
     let pending = state.with_store(|s| s.pending_digests())?;
+    let had_pending = !pending.is_empty();
     let mut recovered = 0;
     for d in pending {
         let results = run_digests(
@@ -141,8 +142,9 @@ pub async fn retry_pending(state: &AppState) -> AppResult<usize> {
             recovered += 1;
         }
     }
-    // 一部だけ復旧した場合は、残りのエラーを `last_error` に残す。
-    if state.with_store(|s| s.pending_digests())?.is_empty() {
+    // 一部だけ復旧した場合は、残りのエラーを `last_error` に残す。もともと何も
+    // 保留していなければ、他のジョブのエラーを消さないよう `last_error` に触れない。
+    if had_pending && state.with_store(|s| s.pending_digests())?.is_empty() {
         state.update_status(|s| s.last_error = None);
     }
     Ok(recovered)
@@ -478,6 +480,15 @@ mod tests {
                 .unwrap()
                 .contains("still down")
         );
+    }
+
+    #[tokio::test]
+    async fn retry_pending_with_nothing_pending_keeps_last_error() {
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("x"));
+        state.update_status(|s| s.last_error = Some("x".into()));
+        assert_eq!(retry_pending(&state).await.unwrap(), 0);
+        assert_eq!(state.status().last_error.as_deref(), Some("x"));
     }
 
     #[tokio::test]
