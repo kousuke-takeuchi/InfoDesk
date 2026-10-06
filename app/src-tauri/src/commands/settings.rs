@@ -27,9 +27,40 @@ pub fn settings_map(state: &AppState) -> AppResult<HashMap<String, String>> {
     })
 }
 
+/// 実行ファイルを指す設定。コマンド名 (`^[A-Za-z0-9_.-]+$`) か、存在する通常ファイルの
+/// 絶対パスだけを受け付ける。
+const EXECUTABLE_SETTINGS: &[&str] = &["claude.bin", "node.bin"];
+
+fn is_bare_command(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+fn validate_executable(key: &str, value: &str) -> AppResult<()> {
+    if is_bare_command(value) || (value.starts_with('/') && std::path::Path::new(value).is_file()) {
+        return Ok(());
+    }
+    Err(format!(
+        "invalid value for '{key}': use a command name or the absolute path of an existing file"
+    )
+    .into())
+}
+
 pub fn set_setting_value(state: &AppState, key: &str, value: &str) -> AppResult<()> {
     if !DEFAULT_SETTINGS.iter().any(|(k, _)| *k == key) {
         return Err(format!("unknown setting '{key}'").into());
+    }
+    if key == "app.launch_at_login" {
+        return Err(
+            "'app.launch_at_login' cannot be set directly; use set_launch_at_login"
+                .to_string()
+                .into(),
+        );
+    }
+    if EXECUTABLE_SETTINGS.contains(&key) {
+        validate_executable(key, value)?;
     }
     state.with_store(|store| store.set_setting(key, value))
 }
@@ -56,11 +87,12 @@ pub fn set_launch_at_login(
         launcher.disable()
     };
     result.map_err(|e| e.to_string())?;
-    set_setting_value(
-        &state,
-        "app.launch_at_login",
-        if enabled { "true" } else { "false" },
-    )
+    state.with_store(|s| {
+        s.set_setting(
+            "app.launch_at_login",
+            if enabled { "true" } else { "false" },
+        )
+    })
 }
 
 #[tauri::command]
@@ -153,6 +185,45 @@ mod tests {
         assert!(stay_resident(&state), "不正な値は既定の true");
     }
 
+    #[test]
+    fn launch_at_login_is_not_a_plain_setting() {
+        let (state, _) = test_state();
+        let err = set_setting_value(&state, "app.launch_at_login", "true").unwrap_err();
+        assert!(
+            err.message.contains("set_launch_at_login"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn executable_settings_accept_bare_names_or_existing_absolute_files() {
+        let (state, _) = test_state();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let abs = file.path().to_str().unwrap().to_string();
+        let dir = file.path().parent().unwrap().to_str().unwrap().to_string();
+        for key in ["claude.bin", "node.bin"] {
+            for ok in ["claude", "node-22", "my_tool.v2", abs.as_str()] {
+                set_setting_value(&state, key, ok).unwrap_or_else(|e| panic!("{key}={ok}: {e}"));
+                assert_eq!(settings_map(&state).unwrap()[key], ok);
+            }
+            for bad in [
+                "",
+                "claude -p",
+                "./claude",
+                "bin/claude",
+                "claude;rm -rf ~",
+                "/nonexistent/claude",
+                dir.as_str(),
+            ] {
+                assert!(
+                    set_setting_value(&state, key, bad).is_err(),
+                    "{key}={bad:?} should be rejected"
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn ollama_probe_reports_unreachable() {
         let (state, _) = test_state();
@@ -165,7 +236,9 @@ mod tests {
     #[tokio::test]
     async fn claude_probe_reports_missing_binary() {
         let (state, _) = test_state();
-        set_setting_value(&state, "claude.bin", "/nonexistent/claude").unwrap();
+        state
+            .with_store(|s| s.set_setting("claude.bin", "/nonexistent/claude"))
+            .unwrap();
         let r = probe_claude(&state).await;
         assert!(!r.ok);
     }

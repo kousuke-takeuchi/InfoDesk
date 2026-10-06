@@ -34,3 +34,4 @@ tauri-plugin-autostart = "2"
 [dev-dependencies]
 async-trait = "0.1.92"
 wiremock = "0.6.5"
+tempfile = "3.27.0"
