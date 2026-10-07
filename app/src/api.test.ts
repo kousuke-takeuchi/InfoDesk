@@ -32,6 +32,15 @@ describe("api", () => {
     expect(s.config).toBe("https://e.com/feed");
   });
 
+  it("reads per-source item counts keyed by source id", async () => {
+    const ipc = setupIpc({ source_item_counts: () => ({ "1": 25, "4": 3 }) });
+    const counts = await api.sourceItemCounts();
+    expect(counts["1"]).toBe(25);
+    expect(counts[String(4)]).toBe(3);
+    expect(counts["2"]).toBeUndefined();
+    expect(ipc.calls).toEqual([{ cmd: "source_item_counts", args: {} }]);
+  });
+
   it("rejects with the backend message", async () => {
     setupIpc({ collect_now: () => { throw { message: "collect already running" }; } });
     await expect(api.collectNow()).rejects.toMatchObject({ message: "collect already running" });

@@ -74,6 +74,7 @@ pub fn run() {
             commands::sources::update_source,
             commands::sources::set_source_enabled,
             commands::sources::delete_source,
+            commands::sources::source_item_counts,
             commands::topics::list_topics,
             commands::topics::add_topic,
             commands::topics::update_topic,

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use infodesk_core::collector::feed;
 use infodesk_core::model::{Category, Source, SourceKind};
 use tauri::State;
@@ -51,6 +53,11 @@ pub fn delete_source_impl(state: &AppState, id: i64) -> AppResult<()> {
     state.with_store(|s| s.delete_source(id))
 }
 
+/// ソース ID ごとの保存済み記事数。記事のないソースは含まない。
+pub fn source_item_counts_impl(state: &AppState) -> AppResult<HashMap<i64, i64>> {
+    state.with_store(|s| s.item_counts_by_source())
+}
+
 #[tauri::command]
 pub fn list_sources(state: State<'_, AppState>) -> AppResult<Vec<Source>> {
     list_sources_impl(&state)
@@ -85,6 +92,11 @@ pub fn set_source_enabled(state: State<'_, AppState>, id: i64, enabled: bool) ->
 #[tauri::command]
 pub fn delete_source(state: State<'_, AppState>, id: i64) -> AppResult<()> {
     delete_source_impl(&state, id)
+}
+
+#[tauri::command]
+pub fn source_item_counts(state: State<'_, AppState>) -> AppResult<HashMap<i64, i64>> {
+    source_item_counts_impl(&state)
 }
 
 #[cfg(test)]
@@ -161,5 +173,40 @@ mod tests {
                 .all(|x| x.id != first.id)
         );
         assert!(update_source_impl(&state, first.id, "x", "bad", "c").is_err());
+    }
+
+    #[test]
+    fn source_item_counts_reports_items_per_source() {
+        use infodesk_core::model::NewItem;
+        let (state, _) = test_state();
+        let mut all = list_sources_impl(&state).unwrap();
+        let first = all.remove(0);
+        let second = all.remove(0);
+        assert!(source_item_counts_impl(&state).unwrap().is_empty());
+
+        let item = |url: &str| NewItem {
+            url: url.to_string(),
+            title: "t".into(),
+            excerpt: String::new(),
+            author: None,
+            published_at: None,
+            score: None,
+        };
+        state
+            .with_store(|s| {
+                s.upsert_items(
+                    &first,
+                    &[item("https://e.com/1"), item("https://e.com/2")],
+                    &chrono::Utc::now(),
+                )
+            })
+            .unwrap();
+
+        let counts = source_item_counts_impl(&state).unwrap();
+        assert_eq!(counts.get(&first.id), Some(&2));
+        assert!(!counts.contains_key(&second.id));
+        // フロントエンドには文字列キーの JSON オブジェクトとして渡る。
+        let json = serde_json::to_value(&counts).unwrap();
+        assert_eq!(json[first.id.to_string()], 2);
     }
 }

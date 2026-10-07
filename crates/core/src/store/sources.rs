@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 
@@ -90,6 +92,17 @@ impl Store {
         Ok(())
     }
 
+    /// ソースごとの保存済み記事数。記事が1件もないソースは含まない。
+    pub fn item_counts_by_source(&self) -> Result<HashMap<i64, i64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT source_id, COUNT(*) FROM items WHERE source_id IS NOT NULL GROUP BY source_id",
+        )?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?
+            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+        Ok(rows)
+    }
+
     pub fn record_fetch(&self, id: i64, at: &DateTime<Utc>, error: Option<&str>) -> Result<()> {
         self.conn.execute(
             "UPDATE sources SET last_fetched_at = ?2, last_error = ?3 WHERE id = ?1",
@@ -174,5 +187,48 @@ mod tests {
         store.delete_source(id).unwrap();
         assert!(store.get_source(id).unwrap().is_none());
         assert!(store.list_sources().unwrap().is_empty());
+    }
+
+    #[test]
+    fn item_counts_by_source_counts_per_source_and_omits_empty() {
+        use crate::testutil::{at, new_item};
+        let store = Store::open_in_memory().unwrap();
+        let mut ids = Vec::new();
+        for name in ["A", "B", "C"] {
+            let url = format!("https://{name}/feed");
+            ids.push(
+                store
+                    .add_source(SourceKind::Rss, name, Category::TechJp, &url)
+                    .unwrap(),
+            );
+        }
+        let now = at("2026-10-06T00:00:00Z");
+        let a = store.get_source(ids[0]).unwrap().unwrap();
+        let b = store.get_source(ids[1]).unwrap().unwrap();
+        store
+            .upsert_items(
+                &a,
+                &[
+                    new_item("https://a/1", "a1", "", None),
+                    new_item("https://a/2", "a2", "", None),
+                ],
+                &now,
+            )
+            .unwrap();
+        store
+            .upsert_items(&b, &[new_item("https://b/1", "b1", "", None)], &now)
+            .unwrap();
+
+        let counts = store.item_counts_by_source().unwrap();
+        assert_eq!(counts.get(&ids[0]), Some(&2));
+        assert_eq!(counts.get(&ids[1]), Some(&1));
+        assert!(!counts.contains_key(&ids[2]), "no items, so absent");
+        assert_eq!(counts.len(), 2);
+
+        // 削除されたソースの記事 (source_id が NULL) は数えない。
+        store.delete_source(ids[0]).unwrap();
+        let counts = store.item_counts_by_source().unwrap();
+        assert_eq!(counts.len(), 1);
+        assert_eq!(counts.get(&ids[1]), Some(&1));
     }
 }

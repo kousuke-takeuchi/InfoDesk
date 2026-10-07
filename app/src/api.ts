@@ -29,6 +29,8 @@ export const api = {
     invoke<void>("update_source", { id, name, category, config }),
   setSourceEnabled: (id: number, enabled: boolean) => invoke<void>("set_source_enabled", { id, enabled }),
   deleteSource: (id: number) => invoke<void>("delete_source", { id }),
+  /** ソース ID (文字列キー) ごとの保存済み記事数。記事のないソースは含まれない。 */
+  sourceItemCounts: () => invoke<Record<string, number>>("source_item_counts"),
   listTopics: () => invoke<Topic[]>("list_topics"),
   addTopic: (name: string, keywords: string[]) => invoke<Topic>("add_topic", { name, keywords }),
   updateTopic: (id: number, name: string, keywords: string[]) => invoke<void>("update_topic", { id, name, keywords }),
