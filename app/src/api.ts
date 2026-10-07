@@ -15,6 +15,7 @@ export const EVENTS = {
 export const api = {
   getStatus: () => invoke<AppStatus>("get_status"),
   listItems: (filter: ItemFilter) => invoke<Item[]>("list_items", { filter }),
+  countItems: (filter: ItemFilter) => invoke<number>("count_items", { filter }),
   getItem: (id: number) => invoke<Item | null>("get_item", { id }),
   setRead: (id: number, read: boolean) => invoke<void>("set_read", { id, read }),
   setStarred: (id: number, starred: boolean) => invoke<void>("set_starred", { id, starred }),

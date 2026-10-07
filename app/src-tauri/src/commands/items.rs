@@ -19,6 +19,11 @@ pub fn list_items_impl(state: &AppState, filter: ItemFilter) -> AppResult<Vec<It
     state.with_store(|s| s.query_items(&filter))
 }
 
+/// 絞り込みに一致する記事の総数。`limit` と `offset` は無視する。
+pub fn count_items_impl(state: &AppState, filter: ItemFilter) -> AppResult<i64> {
+    state.with_store(|s| s.count_items(&filter))
+}
+
 pub fn get_item_impl(state: &AppState, id: i64) -> AppResult<Option<Item>> {
     state.with_store(|s| s.get_item(id))
 }
@@ -86,6 +91,11 @@ pub fn sidebar_counts_impl(state: &AppState) -> AppResult<SidebarCounts> {
 #[tauri::command]
 pub fn list_items(state: State<'_, AppState>, filter: ItemFilter) -> AppResult<Vec<Item>> {
     list_items_impl(&state, filter)
+}
+
+#[tauri::command]
+pub fn count_items(state: State<'_, AppState>, filter: ItemFilter) -> AppResult<i64> {
+    count_items_impl(&state, filter)
 }
 
 #[tauri::command]
@@ -195,6 +205,25 @@ mod tests {
         assert_eq!(c.categories["medcare"], 2);
         assert_eq!(c.categories["github"], 0);
         assert_eq!(c.topics[&topic], 1);
+    }
+
+    #[test]
+    fn count_items_ignores_limit_and_respects_unread_only() {
+        let (state, _) = test_state();
+        let ids = seed_items(&state);
+        set_read_impl(&state, ids[0], true).unwrap();
+        let all = ItemFilter {
+            category: Some(Category::Medcare),
+            limit: 1,
+            ..Default::default()
+        };
+        assert_eq!(list_items_impl(&state, all.clone()).unwrap().len(), 1);
+        assert_eq!(count_items_impl(&state, all.clone()).unwrap(), 3);
+        let unread = ItemFilter {
+            unread_only: true,
+            ..all
+        };
+        assert_eq!(count_items_impl(&state, unread).unwrap(), 2);
     }
 
     #[test]

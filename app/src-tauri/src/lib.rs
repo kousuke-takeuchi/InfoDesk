@@ -62,6 +62,7 @@ pub fn run() {
             commands::settings::set_launch_at_login,
             commands::settings::show_main_window,
             commands::items::list_items,
+            commands::items::count_items,
             commands::items::get_item,
             commands::items::set_read,
             commands::items::set_starred,

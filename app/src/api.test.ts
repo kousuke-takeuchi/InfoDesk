@@ -7,6 +7,7 @@ describe("api", () => {
   it("sends the full filter and camelCase arguments", async () => {
     const ipc = setupIpc({
       list_items: () => [],
+      count_items: () => 7,
       get_digests: () => [],
       add_rss_source: (a) => ({ id: 1, kind: "rss", name: a.name ?? "t", category: a.category, config: a.url, enabled: true, last_fetched_at: null, last_error: null }),
     });
@@ -16,6 +17,8 @@ describe("api", () => {
     };
     await api.listItems(filter);
     expect(ipc.last("list_items")).toEqual({ filter });
+    expect(await api.countItems(filter)).toBe(7);
+    expect(ipc.last("count_items")).toEqual({ filter });
 
     await api.getDigests("week", "2026-10-06", 3);
     expect(ipc.last("get_digests")).toEqual({ period: "week", date: "2026-10-06", topicId: 3 });
