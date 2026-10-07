@@ -19,15 +19,20 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus>(IDLE_STATUS);
   const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [shellError, setShellError] = useState<string | null>(null);
+  // エラーは発生源ごとに持つ。ある取得の成功が別の発生源のエラーを消さないようにする。
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [countsError, setCountsError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(() => {
-    api.getStatus().then(setStatus).catch((e) => setShellError(errorMessage(e)));
+    api.getStatus()
+      .then((s) => { setStatus(s); setStatusError(null); })
+      .catch((e) => setStatusError(errorMessage(e)));
   }, []);
   const refreshCounts = useCallback(() => {
     Promise.all([api.sidebarCounts(), api.listTopics()])
-      .then(([c, t]) => { setCounts(c); setTopics(t); setShellError(null); })
-      .catch((e) => setShellError(errorMessage(e)));
+      .then(([c, t]) => { setCounts(c); setTopics(t); setCountsError(null); })
+      .catch((e) => setCountsError(errorMessage(e)));
   }, []);
 
   useEffect(() => { refreshStatus(); refreshCounts(); }, [refreshStatus, refreshCounts]);
@@ -36,18 +41,32 @@ export default function App() {
   useTauriEvent(EVENTS.digests, refreshCounts);
   useTauriEvent(EVENTS.openSettings, () => setView("settings"));
 
+  const collectNow = useCallback(() => {
+    api.collectNow()
+      .then(() => setActionError(null))
+      .catch((e) => setActionError(errorMessage(e)));
+  }, []);
+
   const select = (s: Selection) => {
     setSelection(s);
     if (view === "settings") setView("digest");
   };
 
+  const hasError = statusError !== null || countsError !== null || actionError !== null;
+
   return (
     <div className="app">
       <Sidebar selection={selection} view={view} counts={counts} topics={topics} status={status}
         onSelect={select} onOpenSettings={() => setView("settings")}
-        onCollectNow={() => api.collectNow().catch((e) => setShellError(errorMessage(e)))} />
+        onCollectNow={collectNow} />
       <main className="main">
-        <ErrorLine message={shellError} />
+        {hasError && (
+          <div className="shell-errors">
+            <ErrorLine message={statusError} />
+            <ErrorLine message={countsError} />
+            <ErrorLine message={actionError} />
+          </div>
+        )}
         <div className="view">{/* Task 4〜6 でビューを差し込む */}</div>
       </main>
     </div>
