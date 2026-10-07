@@ -4,6 +4,7 @@ import { Sidebar, type Selection, type View } from "./components/Sidebar";
 import { ErrorLine } from "./components/ErrorLine";
 import { DigestView } from "./views/DigestView";
 import { FeedView } from "./views/FeedView";
+import { SettingsView } from "./views/SettingsView";
 import { useTauriEvent } from "./hooks/useTauriEvent";
 import { errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
 
@@ -75,7 +76,7 @@ export default function App() {
         {view === "feed" && (
           <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
         )}
-        {view === "settings" && <div className="view">{/* Task 6 */}</div>}
+        {view === "settings" && <SettingsView />}
       </main>
     </div>
   );

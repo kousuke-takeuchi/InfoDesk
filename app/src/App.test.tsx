@@ -67,7 +67,7 @@ describe("App", () => {
   });
 
   it("switches to settings when open-settings fires", async () => {
-    setupIpc(handlers());
+    setupIpc(handlers({ list_sources: () => [] }));
     render(<App />);
     await waitFor(() => expect(allItem()).toHaveTextContent("7"));
     const settings = screen.getByRole("button", { name: "設定" });
