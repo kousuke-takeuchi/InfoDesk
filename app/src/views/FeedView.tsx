@@ -1,5 +1,5 @@
 import { Newspaper, Search, Star } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, EVENTS } from "../api";
 import { ErrorLine } from "../components/ErrorLine";
 import { Segmented, ViewSwitch } from "../components/Segmented";
@@ -17,6 +17,9 @@ interface Props {
   onSwitchView: (v: View) => void;
 }
 
+const PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 200;
+
 function selectionTitle(selection: Selection, topics: Topic[]): string {
   if (selection.kind === "all") return "すべての記事";
   if (selection.kind === "category") return categoryLabel(selection.category);
@@ -28,31 +31,76 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
   const [sourceId, setSourceId] = useState<number | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [starredOnly, setStarredOnly] = useState(false);
+  // input は入力欄の表示、query は変換確定済みの文字列、text はデバウンス後に問い合わせへ使う文字列。
+  const [input, setInput] = useState("");
+  const [query, setQuery] = useState("");
   const [text, setText] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [items, setItems] = useState<Item[] | null>(null);
+  // 件数はバックエンドの値だけを使う。未取得・取得失敗のあいだは null のままにして何も表示しない。
+  const [total, setTotal] = useState<number | null>(null);
+  const [unreadTotal, setUnreadTotal] = useState<number | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const composing = useRef(false);
+  const requestSeq = useRef(0);
 
   const state: FeedState = useMemo(
     () => ({ selection, range, sourceId, unreadOnly, starredOnly, text }),
     [selection, range, sourceId, unreadOnly, starredOnly, text],
   );
+  // 選択や絞り込みが変わったら、同じレンダー内で表示件数を先頭ページへ戻す (古い limit での問い合わせを出さない)。
+  const filterKey = JSON.stringify(state);
+  const [limitKey, setLimitKey] = useState(filterKey);
+  if (limitKey !== filterKey) {
+    setLimitKey(filterKey);
+    setLimit(PAGE_SIZE);
+  }
   // 一度も収集していなければ初回起動の空状態、それ以外の0件は絞り込みの結果として扱う。
   const neverCollected = status.last_collect_at === null;
 
-  const load = useCallback(() => {
-    api.listItems(buildItemFilter(state, new Date()))
-      .then((list) => { setItems(list); setError(null); })
-      .catch((e) => setError(errorMessage(e)));
-  }, [state]);
+  useEffect(() => {
+    const timer = setTimeout(() => setText(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  useEffect(load, [load]);
+  const load = useCallback(() => {
+    // 最後に出した問い合わせの応答だけを反映する。追い越された応答は捨てる。
+    const seq = ++requestSeq.current;
+    const filter = buildItemFilter(state, new Date(), limit);
+    Promise.all([
+      api.listItems(filter),
+      api.countItems(filter),
+      api.countItems({ ...filter, unread_only: true }),
+    ]).then(([list, count, unreadCount]) => {
+      if (seq !== requestSeq.current) return;
+      setItems(list);
+      setTotal(count);
+      setUnreadTotal(unreadCount);
+      setLoadError(null);
+    }).catch((e) => {
+      if (seq !== requestSeq.current) return;
+      setTotal(null);
+      setUnreadTotal(null);
+      setLoadError(errorMessage(e));
+    });
+  }, [state, limit]);
+
+  useEffect(() => {
+    load();
+    // アンマウント後や次の問い合わせの前に届いた応答を無効にする
+    return () => { requestSeq.current += 1; };
+  }, [load]);
   useEffect(() => { api.listSources().then(setSources).catch(() => setSources([])); }, []);
   useTauriEvent(EVENTS.items, load);
 
-  const run = (p: Promise<unknown>) => p.then(load).catch((e) => setError(errorMessage(e)));
-  const unread = items?.filter((i) => !i.read).length ?? 0;
+  // 操作後の再取得はバックエンドが出す items-changed に任せる。
+  const run = (p: Promise<unknown>) => {
+    p.then(() => setActionError(null)).catch((e) => setActionError(errorMessage(e)));
+  };
   const now = new Date();
+  const shown = items?.length ?? 0;
 
   return (
     <>
@@ -70,20 +118,35 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
         </button>
         <label className="search">
           <Search size={14} />
-          <input placeholder="検索" value={text} onChange={(e) => setText(e.target.value)} />
+          <input
+            placeholder="検索"
+            aria-label="検索"
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // 変換中の文字列では検索しない。確定時に onCompositionEnd で反映する。
+              if (!composing.current) setQuery(e.target.value);
+            }}
+            onCompositionStart={() => { composing.current = true; }}
+            onCompositionEnd={(e) => {
+              composing.current = false;
+              setQuery(e.currentTarget.value);
+            }}
+          />
         </label>
       </div>
       <div className="view feed">
-        <ErrorLine message={error} />
+        <ErrorLine message={loadError} />
+        <ErrorLine message={actionError} />
         <div className="view-header">
           <h1>{selectionTitle(selection, topics)}</h1>
-          <span className="text-secondary">未読 {unread}件</span>
+          {unreadTotal !== null && <span className="text-secondary">未読 {unreadTotal}件</span>}
           <div className="spacer" />
-          {items && items.length > 0 && (
+          {unreadTotal !== null && unreadTotal > 0 && (
             <button className="link-btn" onClick={() => run(api.markAllRead(buildItemFilter(state, new Date())))}>すべて既読にする</button>
           )}
         </div>
-        {items && items.length === 0 && neverCollected && !error && (
+        {items && items.length === 0 && neverCollected && !loadError && (
           <div className="empty">
             <Newspaper size={40} className="text-tertiary" />
             <h2>まだ記事がありません</h2>
@@ -94,7 +157,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
             <p className="tiny text-tertiary">収集には1〜2分かかります。進行状況はサイドバー下部に表示されます。</p>
           </div>
         )}
-        {items && items.length === 0 && !neverCollected && !error && (
+        {items && items.length === 0 && !neverCollected && !loadError && (
           <div className="state-box"><span>条件に一致する記事がありません</span></div>
         )}
         {items?.map((it) => (
@@ -116,6 +179,12 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
             </button>
           </article>
         ))}
+        {total !== null && total > shown && (
+          <div className="feed-footer">
+            <span className="text-secondary">{total}件中 {shown}件を表示</span>
+            <button className="btn" onClick={() => setLimit(limit + PAGE_SIZE)}>さらに表示</button>
+          </div>
+        )}
       </div>
     </>
   );

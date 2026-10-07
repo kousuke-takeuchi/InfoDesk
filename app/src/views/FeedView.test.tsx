@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FeedView } from "./FeedView";
 import { emitEvent, setupIpc } from "../test/ipc";
@@ -11,10 +11,13 @@ const item = (over: Partial<Item>): Item => ({
   title: "認知症の新薬", excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
   score: null, ai_summary: "要約文。", read: false, starred: false, ...over,
 });
+const UNREAD_COUNT = /未読\s*\d+件/;
+const tick = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
 function renderFeed(items: Item[], extra: Record<string, (a: any) => unknown> = {}, st: AppStatus = status) {
   const ipc = setupIpc({
     list_items: () => items,
+    count_items: (a) => items.filter((i) => !a.filter.unread_only || !i.read).length,
     list_sources: () => [{ id: 1, kind: "rss", name: "Google News: 認知症", category: "medcare", config: "u", enabled: true, last_fetched_at: null, last_error: null }],
     set_read: () => undefined, set_starred: () => undefined, open_item: () => undefined,
     mark_all_read: () => items.filter((i) => !i.read).length, collect_now: () => undefined,
@@ -42,6 +45,7 @@ describe("FeedView", () => {
     );
     expect(screen.getByRole("heading", { name: /医療介護/ })).toBeInTheDocument();
     expect(screen.getByText("未読 1件")).toBeInTheDocument();
+    expect(ipc.unmocked).toEqual([]);
   });
 
   it("opens, stars, filters, and marks all read", async () => {
@@ -70,13 +74,16 @@ describe("FeedView", () => {
     await userEvent.click(screen.getByRole("button", { name: "今すぐ収集" }));
     expect(ipc.count("collect_now")).toBe(1);
 
-    setupIpc({ list_items: () => { throw { message: "database lock poisoned" }; }, list_sources: () => [] });
+    setupIpc({ list_items: () => { throw { message: "database lock poisoned" }; }, count_items: () => 0, list_sources: () => [] });
     render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("database lock poisoned");
   });
 
   it("shows the filtered empty state when items exist elsewhere", async () => {
-    renderFeed([], { list_items: (a) => (a.filter.unread_only ? [] : [item({ read: true })]) });
+    renderFeed([], {
+      list_items: (a) => (a.filter.unread_only ? [] : [item({ read: true })]),
+      count_items: (a) => (a.filter.unread_only ? 0 : 1),
+    });
     await screen.findByText("認知症の新薬");
     await userEvent.click(screen.getByRole("button", { name: "未読のみ" }));
     expect(await screen.findByText("条件に一致する記事がありません")).toBeInTheDocument();
@@ -88,5 +95,155 @@ describe("FeedView", () => {
     const before = ipc.count("list_items");
     await emitEvent("items-changed");
     await waitFor(() => expect(ipc.count("list_items")).toBeGreaterThan(before));
+  });
+
+  it("shows the backend unread total instead of the page count", async () => {
+    const ipc = renderFeed([item({}), item({ id: 2, title: "二本目" })], {
+      count_items: (a) => (a.filter.unread_only ? 137 : 250),
+    });
+    expect(await screen.findByText("未読 137件")).toBeInTheDocument();
+    expect(screen.queryByText("未読 2件")).not.toBeInTheDocument();
+    // 件数の問い合わせは一覧と同じ絞り込みで、未読の合計だけ unread_only を立てる
+    const page = ipc.last("list_items").filter;
+    const counts = ipc.calls.filter((c) => c.cmd === "count_items").map((c) => c.args.filter);
+    expect(counts).toContainEqual(page);
+    expect(counts).toContainEqual({ ...page, unread_only: true });
+  });
+
+  it("renders no unread count before the first response", async () => {
+    let resolve: (v: Item[]) => void = () => {};
+    renderFeed([], {
+      list_items: () => new Promise<Item[]>((r) => { resolve = r; }),
+      count_items: (a) => (a.filter.unread_only ? 137 : 250),
+    });
+    await tick();
+    expect(screen.queryByText(UNREAD_COUNT)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "すべて既読にする" })).not.toBeInTheDocument();
+    await act(async () => { resolve([item({})]); });
+    expect(await screen.findByText("未読 137件")).toBeInTheDocument();
+  });
+
+  it("renders no unread count after a failed load", async () => {
+    let fail = false;
+    const ipc = renderFeed([item({})], {
+      list_items: () => { if (fail) throw { message: "database lock poisoned" }; return [item({})]; },
+      count_items: () => 5,
+    });
+    expect(await screen.findByText("未読 5件")).toBeInTheDocument();
+    fail = true;
+    await emitEvent("items-changed");
+    expect(await screen.findByRole("alert")).toHaveTextContent("database lock poisoned");
+    expect(screen.queryByText(UNREAD_COUNT)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "すべて既読にする" })).not.toBeInTheDocument();
+    expect(ipc.unmocked).toEqual([]);
+  });
+
+  it("hides mark-all-read when the backend reports no unread items", async () => {
+    renderFeed([item({ read: true })]);
+    expect(await screen.findByText("未読 0件")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "すべて既読にする" })).not.toBeInTheDocument();
+  });
+
+  it("shows the total, loads more, and resets the limit when a filter changes", async () => {
+    const ipc = renderFeed([item({}), item({ id: 2, title: "二本目" })], {
+      count_items: (a) => (a.filter.unread_only ? 137 : 250),
+    });
+    expect(await screen.findByText("250件中 2件を表示")).toBeInTheDocument();
+    expect(ipc.last("list_items").filter.limit).toBe(100);
+
+    await userEvent.click(screen.getByRole("button", { name: "さらに表示" }));
+    await waitFor(() => expect(ipc.last("list_items").filter.limit).toBe(200));
+
+    await userEvent.click(screen.getByRole("button", { name: "未読のみ" }));
+    await waitFor(() => expect(ipc.last("list_items").filter.unread_only).toBe(true));
+    await tick();
+    const unreadCalls = ipc.calls.filter((c) => c.cmd === "list_items" && c.args.filter.unread_only);
+    expect(unreadCalls.map((c) => c.args.filter.limit)).toEqual([100]);
+  });
+
+  it("shows no footer when everything is displayed", async () => {
+    renderFeed([item({})]);
+    await screen.findByText("未読 1件");
+    expect(screen.queryByText(/件を表示/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "さらに表示" })).not.toBeInTheDocument();
+  });
+
+  it("debounces the search text into a single request", async () => {
+    const ipc = renderFeed([item({})]);
+    await screen.findByText("未読 1件");
+    const before = ipc.count("list_items");
+    const input = screen.getByRole("textbox", { name: "検索" });
+    await userEvent.type(input, "新薬");
+    expect(input).toHaveValue("新薬");
+    await waitFor(() => expect(ipc.last("list_items").filter.text).toBe("新薬"));
+    await tick();
+    const texts = ipc.calls.filter((c) => c.cmd === "list_items").map((c) => c.args.filter.text);
+    expect(texts).not.toContain("新");
+    expect(ipc.count("list_items")).toBe(before + 1);
+  });
+
+  it("ignores intermediate text while an IME composition is in progress", async () => {
+    const ipc = renderFeed([item({})]);
+    await screen.findByText("未読 1件");
+    const input = screen.getByRole("textbox", { name: "検索" });
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "しんやく" } });
+    expect(input).toHaveValue("しんやく");
+    // デバウンスより長く待っても、変換中の文字列では問い合わせない
+    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    fireEvent.change(input, { target: { value: "新薬" } });
+    fireEvent.compositionEnd(input);
+    await waitFor(() => expect(ipc.last("list_items").filter.text).toBe("新薬"));
+    const texts = ipc.calls.filter((c) => c.cmd === "list_items").map((c) => c.args.filter.text);
+    expect(texts).not.toContain("しんやく");
+  });
+
+  it("drops a stale response that arrives after a newer one", async () => {
+    let resolveSlow: (v: Item[]) => void = () => {};
+    const ipc = renderFeed([], {
+      list_items: (a) => {
+        if (a.filter.starred_only) return [item({ id: 3, title: "新しい結果" })];
+        if (a.filter.unread_only) return new Promise<Item[]>((r) => { resolveSlow = r; });
+        return [item({})];
+      },
+      count_items: () => 1,
+    });
+    await screen.findByText("認知症の新薬");
+    await userEvent.click(screen.getByRole("button", { name: "未読のみ" }));
+    await waitFor(() => expect(ipc.last("list_items").filter.unread_only).toBe(true));
+    await userEvent.click(screen.getByRole("button", { name: /スター$/ }));
+    expect(await screen.findByText("新しい結果")).toBeInTheDocument();
+    await act(async () => { resolveSlow([item({ id: 4, title: "古い結果" })]); });
+    await tick();
+    expect(screen.getByText("新しい結果")).toBeInTheDocument();
+    expect(screen.queryByText("古い結果")).not.toBeInTheDocument();
+  });
+
+  it("keeps an action error across a reload and clears it on the next successful action", async () => {
+    const ipc = renderFeed([item({})], {
+      open_item: () => { throw { message: "unsupported URL scheme" }; },
+    });
+    await screen.findByText("認知症の新薬");
+    await userEvent.click(screen.getByRole("button", { name: "認知症の新薬" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("unsupported URL scheme");
+
+    const before = ipc.count("list_items");
+    await emitEvent("items-changed");
+    await waitFor(() => expect(ipc.count("list_items")).toBeGreaterThan(before));
+    await tick();
+    expect(screen.getByRole("alert")).toHaveTextContent("unsupported URL scheme");
+
+    await userEvent.click(screen.getByRole("button", { name: "スターを付ける" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("does not reload by itself after an action that emits items-changed", async () => {
+    const ipc = renderFeed([item({})]);
+    await screen.findByText("未読 1件");
+    const before = ipc.count("list_items");
+    await userEvent.click(screen.getByRole("button", { name: "スターを付ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "すべて既読にする" }));
+    await tick();
+    expect(ipc.count("list_items")).toBe(before);
   });
 });
