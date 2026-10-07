@@ -1,0 +1,91 @@
+.app { display: flex; height: 100%; }
+
+.sidebar {
+  width: 220px; flex: none; display: flex; flex-direction: column; gap: 2px;
+  padding: 16px 10px 12px; background: var(--bg-sidebar); border-right: 1px solid var(--border);
+}
+.sidebar-head { padding: 14px 8px 4px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+.nav-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  border-radius: 6px; text-align: left; color: var(--text-primary);
+}
+.nav-item:hover { background: var(--bg-subtle); }
+.nav-item[aria-current="true"] { background: var(--selection); font-weight: 600; }
+.nav-item[aria-current="true"] svg { color: var(--accent); }
+.nav-item svg { color: var(--text-secondary); flex: none; }
+.nav-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item .count { font-size: 12px; color: var(--text-tertiary); }
+.sidebar-spacer { flex: 1; }
+.sidebar-status { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12px; color: var(--text-secondary); }
+.sidebar-status svg { flex: none; }
+.sidebar-status .spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sidebar-error { padding: 4px 8px; font-size: 11px; color: var(--danger); line-height: 1.4; }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
+.toolbar .spacer { flex: 1; }
+.search { display: flex; align-items: center; gap: 6px; width: 200px; padding: 5px 10px; border-radius: var(--radius-md); background: var(--bg-subtle); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 12px; }
+.search svg { color: var(--text-secondary); }
+
+.view { flex: 1; overflow: auto; padding: 24px 48px; }
+.view-header { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 24px; }
+.view-header h1 { font-size: 22px; margin: 0; }
+.view-header .spacer { flex: 1; }
+
+/* ダイジェスト */
+.digest-section { max-width: 720px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+.digest-head { display: flex; align-items: center; gap: 10px; }
+.digest-head h2 { font-size: 15px; margin: 0; }
+.digest-bullets { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.digest-bullets li { display: flex; gap: 8px; line-height: 1.6; }
+.digest-bullets li::before { content: "•"; color: var(--text-tertiary); }
+.digest-refs { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding-left: 16px; font-size: 12px; }
+
+/* フィード */
+.feed { padding: 20px 32px 0; }
+.item-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.item-row .unread { width: 8px; padding-top: 7px; flex: none; }
+.item-row .unread i { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.item-row .content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.item-row .title { font-size: 14px; font-weight: 600; text-align: left; line-height: 1.4; color: var(--text-primary); }
+.item-row.read .title { font-weight: 400; color: var(--text-secondary); }
+.item-row .meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+.item-row .meta .time, .item-row .meta .sep { color: var(--text-tertiary); }
+.item-row .summary { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.item-row .star { color: var(--text-tertiary); align-self: flex-start; }
+.item-row .star[aria-pressed="true"] { color: var(--star); }
+
+/* 設定 */
+.settings { padding: 16px 32px; display: flex; flex-direction: column; gap: 32px; }
+.section { display: flex; flex-direction: column; gap: 12px; }
+.section h2 { font-size: 15px; margin: 0; }
+.section .desc { font-size: 12px; color: var(--text-secondary); }
+.setting-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.setting-row .label { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.setting-row .label .hint { font-size: 11px; color: var(--text-tertiary); }
+.table-head, .table-row { display: grid; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.table-head { font-size: 11px; font-weight: 600; color: var(--text-tertiary); padding: 8px 0; }
+.sources-grid { grid-template-columns: 44px 1fr 110px 90px 230px 56px; }
+.topics-grid { grid-template-columns: 200px 1fr 60px 56px; }
+.cell-name { display: flex; flex-direction: column; gap: 2px; }
+.cell-name .url { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.cell-status.error { color: var(--danger); }
+.cell-actions { display: flex; gap: 6px; color: var(--text-secondary); }
+.card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: var(--bg-subtle); max-width: 560px; }
+.card .row { display: flex; align-items: center; gap: 12px; }
+.card .row > label { width: 90px; font-size: 12px; }
+.card .row .field { flex: 1; }
+.card .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ダイアログ */
+.overlay { position: fixed; inset: 0; background: #00000040; display: flex; align-items: center; justify-content: center; }
+.dialog { width: 480px; display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 12px; background: var(--bg-sidebar); border: 1px solid var(--border); box-shadow: 0 12px 40px #00000040; }
+.dialog h2 { font-size: 15px; margin: 0; }
+.dialog .row { display: flex; flex-direction: column; gap: 6px; }
+.dialog .row label { font-size: 12px; color: var(--text-secondary); }
+.dialog .validation { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-secondary); min-height: 20px; }
+.dialog .validation.error { color: var(--danger); }
+.dialog .actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }

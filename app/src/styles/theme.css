@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+  --bg-window: #ffffff;
+  --bg-sidebar: #f2f2f4;
+  --bg-subtle: #f5f5f7;
+  --border: #e0e0e3;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #8e8e93;
+  --accent: #0a6cff;
+  --selection: #0a6cff1f;
+  --on-accent: #ffffff;
+  --success: #1e9e48;
+  --danger: #d93025;
+  --star: #f5a623;
+  --seg-selected: #ffffff;
+  --toggle-off: #d1d1d6;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-window: #1e1e1e;
+    --bg-sidebar: #2a2a2c;
+    --bg-subtle: #2c2c2e;
+    --border: #3a3a3c;
+    --text-primary: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #7c7c80;
+    --accent: #3b8cff;
+    --selection: #3b8cff33;
+    --success: #32d074;
+    --danger: #ff6961;
+    --star: #ffd60a;
+    --seg-selected: #636366;
+    --toggle-off: #48484a;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-window);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.small { font-size: 12px; }
+.tiny { font-size: 11px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--bg-window);
+  font-size: 12px; font-weight: 600;
+}
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.btn-ghost { border-color: transparent; color: var(--text-secondary); font-weight: 400; }
+.btn-ghost:hover { background: var(--bg-subtle); }
+.link-btn { color: var(--accent); font-size: 12px; }
+
+.field {
+  padding: 5px 10px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--bg-window); font-size: 12px; min-width: 0;
+}
+.field:focus { outline: 2px solid var(--selection); border-color: var(--accent); }
+.field-error { border-color: var(--danger); }
+
+.segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--bg-subtle); border: 1px solid var(--border); }
+.segmented button { padding: 4px 14px; border-radius: var(--radius-sm); font-size: 12px; border: 1px solid transparent; }
+.segmented button[aria-pressed="true"] { background: var(--seg-selected); border-color: var(--border); font-weight: 600; }
+
+.toggle { position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--toggle-off); transition: background .15s; }
+.toggle[aria-checked="true"] { background: var(--accent); }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.toggle[aria-checked="true"]::after { transform: translateX(14px); }
+
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.dot-success { background: var(--success); }
+.dot-danger { background: var(--danger); }
+.dot-muted { background: var(--text-tertiary); }
+.dot-accent { background: var(--accent); }
+
+.error-line { display: flex; gap: 8px; align-items: center; color: var(--danger); font-size: 12px; }
+
+.state-box { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.state-box .grow { flex: 1; }
+
+.empty { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 420px; margin: 0 auto; text-align: center; }
+.empty h2 { font-size: 17px; margin: 0; }
+
+.chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; background: var(--bg-subtle); font-size: 11px; }
