@@ -75,10 +75,19 @@
 .cell-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
 .cell-status.error { color: var(--danger); }
 .cell-actions { display: flex; gap: 6px; color: var(--text-secondary); }
+/* 削除の確認中は操作列を内容の幅まで広げ、伸縮する列を縮める */
+.sources-grid.confirming { grid-template-columns: 44px minmax(0, 1fr) 110px 90px 230px auto; }
+.topics-grid.confirming { grid-template-columns: 200px minmax(0, 1fr) 60px auto; }
+.cell-confirm { display: flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }
+.cell-confirm .btn-danger { color: var(--danger); }
 .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: var(--bg-subtle); max-width: 560px; }
 .card .row { display: flex; align-items: center; gap: 12px; }
 .card .row > label { width: 90px; font-size: 12px; }
 .card .row .field { flex: 1; }
+.card .row .row-label { width: 90px; flex: none; font-size: 12px; }
+.card .row.readonly { align-items: flex-start; }
+.card .readonly-value { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.card .readonly-value .value { color: var(--text-secondary); overflow-wrap: anywhere; user-select: text; }
 .card .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ダイアログ */

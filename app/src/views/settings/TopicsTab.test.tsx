@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TopicsTab } from "./TopicsTab";
 import { setupIpc } from "../../test/ipc";
 import type { Topic } from "../../types";
+
+const COUNTS = { total_unread: 0, categories: {}, topics: {} };
 
 describe("TopicsTab", () => {
   it("lists, adds, edits, and deletes topics", async () => {
@@ -37,6 +39,8 @@ describe("TopicsTab", () => {
     expect(ipc.last("update_topic")).toEqual({ id: 1, name: "認知症", keywords: ["認知症", "Alzheimer"] });
 
     await userEvent.click(screen.getByRole("button", { name: "介護 を削除" }));
+    expect(ipc.count("delete_topic")).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "削除する" }));
     expect(ipc.last("delete_topic")).toEqual({ id: 2 });
     await waitFor(() => expect(screen.queryByText("介護保険")).not.toBeInTheDocument());
   });
@@ -48,5 +52,91 @@ describe("TopicsTab", () => {
     await userEvent.type(screen.getByLabelText("キーワード"), "x");
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
     expect(ipc.count("add_topic")).toBe(0);
+  });
+
+  it("asks before deleting and warns that digests go too", async () => {
+    let list: Topic[] = [
+      { id: 1, name: "認知症", keywords: ["dementia"] },
+      { id: 2, name: "介護", keywords: ["caregiving"] },
+    ];
+    const ipc = setupIpc({
+      list_topics: () => list,
+      sidebar_counts: () => COUNTS,
+      delete_topic: (a) => { list = list.filter((t) => t.id !== a.id); },
+    });
+    render(<TopicsTab />);
+    await screen.findByText("認知症");
+    const rowOf = (name: string) => within(screen.getByText(name).closest(".table-row") as HTMLElement);
+    const CONFIRM = "削除しますか? このトピックの要約も削除されます。";
+
+    await userEvent.click(screen.getByRole("button", { name: "認知症 を削除" }));
+    expect(rowOf("認知症").getByText(CONFIRM)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(screen.queryByText(CONFIRM)).not.toBeInTheDocument();
+    expect(ipc.count("delete_topic")).toBe(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "認知症 を削除" }));
+    await userEvent.click(screen.getByRole("button", { name: "介護 を削除" }));
+    expect(screen.getAllByText(CONFIRM)).toHaveLength(1);
+    expect(rowOf("介護").getByText(CONFIRM)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "認知症 を削除" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "削除する" }));
+    expect(ipc.last("delete_topic")).toEqual({ id: 2 });
+    expect(ipc.count("delete_topic")).toBe(1);
+    await waitFor(() => expect(screen.queryByText("介護")).not.toBeInTheDocument());
+    expect(screen.getByText("認知症")).toBeInTheDocument();
+  });
+
+  it("requires a keyword, removes duplicates, and explains keyword edits", async () => {
+    let list: Topic[] = [{ id: 1, name: "認知症", keywords: ["dementia"] }];
+    const HINT = "キーワードを変えると、このトピックの要約は作り直しになります。";
+    const ipc = setupIpc({
+      list_topics: () => list,
+      sidebar_counts: () => COUNTS,
+      add_topic: (a) => { const t = { id: 2, name: a.name, keywords: a.keywords }; list = [...list, t]; return t; },
+    });
+    render(<TopicsTab />);
+    await screen.findByText("認知症");
+
+    await userEvent.click(screen.getByRole("button", { name: "トピックを追加" }));
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("名前"), "介護");
+    const save = screen.getByRole("button", { name: "保存" });
+    expect(save).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("キーワード"), " , 、 ");
+    expect(save).toBeDisabled();
+    expect(ipc.count("add_topic")).toBe(0);
+
+    await userEvent.clear(screen.getByLabelText("キーワード"));
+    await userEvent.type(screen.getByLabelText("キーワード"), "介護, caregiving, 介護 、Caregiving,caregiving");
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+    expect(ipc.last("add_topic")).toEqual({ name: "介護", keywords: ["介護", "caregiving", "Caregiving"] });
+    await screen.findByText("Caregiving");
+
+    await userEvent.click(screen.getByRole("button", { name: "認知症 を編集" }));
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it("sends one request when 保存 is clicked twice", async () => {
+    let finish: () => void = () => {};
+    const ipc = setupIpc({
+      list_topics: () => [],
+      sidebar_counts: () => COUNTS,
+      add_topic: (a) => new Promise<Topic>((r) => { finish = () => r({ id: 2, name: a.name, keywords: a.keywords }); }),
+    });
+    render(<TopicsTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "トピックを追加" }));
+    await userEvent.type(screen.getByLabelText("名前"), "介護");
+    await userEvent.type(screen.getByLabelText("キーワード"), "介護");
+    const save = screen.getByRole("button", { name: "保存" });
+    await userEvent.click(save);
+    expect(save).toBeDisabled();
+    await userEvent.click(save);
+    expect(ipc.count("add_topic")).toBe(1);
+    await act(async () => { finish(); });
+    await waitFor(() => expect(screen.queryByLabelText("名前")).not.toBeInTheDocument());
+    expect(ipc.count("add_topic")).toBe(1);
   });
 });

@@ -1,5 +1,5 @@
 import { CircleAlert, Loader } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../api";
 import { CATEGORIES, errorMessage, type Category, type Source } from "../../types";
 
@@ -11,21 +11,32 @@ export function AddRssDialog({ onClose, onAdded }: { onClose: () => void; onAdde
   const [error, setError] = useState<string | null>(null);
   const canSubmit = url.trim().length > 0 && !busy;
 
-  const submit = () => {
+  // 検証中は閉じない。結果が届く前に閉じると、追加できたのか分からなくなる。
+  const dismiss = () => { if (!busy) onClose(); };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
     setBusy(true);
     setError(null);
     api.addRssSource(url.trim(), name.trim() ? name.trim() : null, category)
       .then((s) => { onAdded(s); onClose(); })
-      .catch((e) => { setError(errorMessage(e)); setBusy(false); });
+      .catch((err) => { setError(errorMessage(err)); setBusy(false); });
   };
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog" role="dialog" aria-label="RSSフィードを追加" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay" onClick={dismiss}>
+      <form className="dialog" role="dialog" aria-label="RSSフィードを追加" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h2>RSSフィードを追加</h2>
         <div className="row">
           <label htmlFor="rss-url">フィードURL</label>
-          <input id="rss-url" className={`field ${error ? "field-error" : ""}`} value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://" />
+          <input id="rss-url" autoFocus className={`field ${error ? "field-error" : ""}`} value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://" />
         </div>
         <div className="row">
           <label htmlFor="rss-name">表示名 (任意)</label>
@@ -42,10 +53,10 @@ export function AddRssDialog({ onClose, onAdded }: { onClose: () => void; onAdde
           {error && <><CircleAlert size={14} /><span>{error} このURLは保存されません。</span></>}
         </div>
         <div className="actions">
-          <button className="btn" onClick={onClose}>キャンセル</button>
-          <button className="btn btn-primary" disabled={!canSubmit} onClick={submit}>追加</button>
+          <button type="button" className="btn" disabled={busy} onClick={dismiss}>キャンセル</button>
+          <button type="submit" className="btn btn-primary" disabled={!canSubmit}>追加</button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
