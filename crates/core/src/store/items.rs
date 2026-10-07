@@ -288,6 +288,15 @@ mod tests {
     use super::*;
     use crate::testutil::{at, new_item, store_with_source};
 
+    #[test]
+    fn item_filter_deserializes_with_missing_fields() {
+        let f: ItemFilter = serde_json::from_str(r#"{"category":"medcare"}"#).unwrap();
+        assert_eq!(f.category, Some(Category::Medcare));
+        assert_eq!(f.limit, 0);
+        assert!(!f.unread_only);
+        assert_eq!(f.order, ItemOrder::Recent);
+    }
+
     fn titles(items: &[Item]) -> Vec<&str> {
         items.iter().map(|i| i.title.as_str()).collect()
     }

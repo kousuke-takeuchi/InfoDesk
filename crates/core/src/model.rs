@@ -252,6 +252,7 @@ pub enum ItemOrder {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ItemFilter {
     pub category: Option<Category>,
     pub topic_id: Option<i64>,
