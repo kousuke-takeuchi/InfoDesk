@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, EVENTS } from "./api";
 import { Sidebar, type Selection, type View } from "./components/Sidebar";
 import { ErrorLine } from "./components/ErrorLine";
+import { DigestView } from "./views/DigestView";
 import { FeedView } from "./views/FeedView";
 import { useTauriEvent } from "./hooks/useTauriEvent";
 import { errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
@@ -68,10 +69,13 @@ export default function App() {
             <ErrorLine message={actionError} />
           </div>
         )}
+        {view === "digest" && (
+          <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
+        )}
         {view === "feed" && (
           <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
         )}
-        {view !== "feed" && <div className="view">{/* Task 5〜6 */}</div>}
+        {view === "settings" && <div className="view">{/* Task 6 */}</div>}
       </main>
     </div>
   );

@@ -22,6 +22,8 @@ function handlers(over: IpcHandlers = {}): IpcHandlers {
     sidebar_counts: () => counts(7),
     list_topics: () => TOPICS,
     collect_now: () => undefined,
+    get_digests: () => [],
+    get_item: () => null,
     ...over,
   };
 }

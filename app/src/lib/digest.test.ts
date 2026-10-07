@@ -18,6 +18,27 @@ describe("parseDigestBody", () => {
     });
     expect(parseDigestBody("")).toEqual({ bullets: [], paragraphs: [] });
   });
+  it("skips empty bullets and marker-only lines", () => {
+    expect(parseDigestBody("- \n*\n・\n•\n- 本文")).toEqual({ bullets: ["本文"], paragraphs: [] });
+  });
+
+  it("drops horizontal rules", () => {
+    expect(parseDigestBody("---\n- 一つ\n***\n* * *\n段落")).toEqual({ bullets: ["一つ"], paragraphs: ["段落"] });
+  });
+
+  it("strips bold markers from bullets and paragraphs", () => {
+    expect(parseDigestBody("- **重要**な点\n- __強調__です\n**全体**の傾向")).toEqual({
+      bullets: ["重要な点", "強調です"],
+      paragraphs: ["全体の傾向"],
+    });
+  });
+
+  it("turns heading lines into paragraphs without hashes", () => {
+    expect(parseDigestBody("# 見出し1\n###### 見出し6\n- 項目")).toEqual({
+      bullets: ["項目"],
+      paragraphs: ["見出し1", "見出し6"],
+    });
+  });
 });
 
 describe("digestDisplay", () => {
