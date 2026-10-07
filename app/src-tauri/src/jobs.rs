@@ -87,13 +87,14 @@ pub async fn run_digests(
     scopes: &[DigestScope],
     force: bool,
 ) -> AppResult<Vec<(DigestScope, Option<DigestOutcome>)>> {
-    let llm = state.llm_provider(LlmRole::Digest)?;
     let tz = state.tz;
-    state.update_status(|s| s.digesting = true);
+    // 他の要約ジョブと重なってもよいよう、フラグではなくジョブ数で数える。
+    let job_guard = state.begin_digest_job();
     let mut results = Vec::new();
     let mut first_error: Option<String> = None;
-    // エラーでも必ずフラグを戻すため、本体を内側のブロックで実行する。
+    // エラーでも必ず完了を通知するため、本体を内側のブロックで実行する。
     let result: AppResult<()> = async {
+        let llm = state.llm_provider(LlmRole::Digest)?;
         for scope in scopes {
             let job = state.with_store(|s| plan_digest(s, period, date, scope, tz, force))?;
             let outcome = match job {
@@ -113,12 +114,11 @@ pub async fn run_digests(
         Ok(())
     }
     .await;
-    state.update_status(|s| {
-        s.digesting = false;
-        if first_error.is_some() {
-            s.last_error = first_error.clone();
-        }
-    });
+    if first_error.is_some() {
+        state.update_status(|s| s.last_error = first_error.clone());
+    }
+    // `digests-changed` を受けた画面が古い `digesting` を見ないよう、先にジョブ数を戻す。
+    drop(job_guard);
     state.notify(EVENT_DIGESTS);
     result.map(|()| results)
 }
@@ -618,6 +618,39 @@ mod tests {
         .await;
         assert!(result.is_err());
         assert!(!state.status().digesting);
+    }
+
+    #[tokio::test]
+    async fn run_digests_error_leaves_other_running_job_counted() {
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("x"));
+        let today = Local::now().date_naive();
+        let other = state.begin_digest_job();
+        let result = run_digests(
+            &state,
+            Period::Day,
+            today,
+            &[DigestScope::Topic(9999)],
+            true,
+        )
+        .await;
+        assert!(result.is_err());
+        // 失敗したジョブは自分の分だけ戻す。もう一方が動いている間は digesting のまま。
+        assert!(state.status().digesting);
+        drop(other);
+        assert!(!state.status().digesting);
+    }
+
+    #[tokio::test]
+    async fn run_digests_without_provider_still_notifies_and_resets() {
+        let (mut state, events) = test_state();
+        state.llm = Arc::new(|_, _| Err(infodesk_core::Error::Invalid("no provider".into())));
+        let today = Local::now().date_naive();
+        let result = run_digests(&state, Period::Day, today, &all_category_scopes(), true).await;
+        assert!(result.is_err());
+        assert!(!state.status().digesting);
+        // 画面の「生成中」を解除できるよう、失敗しても完了を通知する。
+        assert!(events.lock().unwrap().contains(&EVENT_DIGESTS.to_string()));
     }
 
     #[tokio::test]

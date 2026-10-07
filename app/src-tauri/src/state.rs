@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, FixedOffset, Local, Utc};
@@ -29,6 +30,8 @@ pub struct AppState {
     pub store: Mutex<Store>,
     pub http: reqwest::Client,
     pub status: Mutex<AppStatus>,
+    /// 実行中の期間要約ジョブの数。`status` のロック中にだけ書き換える。
+    digest_jobs: AtomicU32,
     pub tz: FixedOffset,
     pub notify: Notifier,
     pub llm: LlmFactory,
@@ -40,6 +43,7 @@ impl AppState {
             store: Mutex::new(store),
             http: infodesk_core::collector::http_client().expect("http client"),
             status: Mutex::new(AppStatus::default()),
+            digest_jobs: AtomicU32::new(0),
             tz: *Local::now().offset(),
             notify,
             llm: Arc::new(provider_from_settings),
@@ -83,6 +87,30 @@ impl AppState {
         (self.notify)(EVENT_STATUS);
     }
 
+    /// 期間要約ジョブの開始を記録する。戻り値を破棄した時点で終了とみなす。
+    /// ジョブが重なっても、`digesting` は最後の1つが終わるまで `true` のまま。
+    pub fn begin_digest_job(&self) -> DigestJob<'_> {
+        self.count_digest_job(|n| n + 1);
+        DigestJob { state: self }
+    }
+
+    /// ジョブ数を更新し、`digesting` が切り替わったときだけ通知する。
+    fn count_digest_job(&self, change: impl FnOnce(u32) -> u32) {
+        let flipped = {
+            // 破棄中にも呼ぶので、ロックが汚染されていても続行する。
+            let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
+            let jobs = change(self.digest_jobs.load(Ordering::SeqCst));
+            self.digest_jobs.store(jobs, Ordering::SeqCst);
+            let digesting = jobs > 0;
+            let flipped = status.digesting != digesting;
+            status.digesting = digesting;
+            flipped
+        };
+        if flipped {
+            (self.notify)(EVENT_STATUS);
+        }
+    }
+
     pub fn notify(&self, event: &str) {
         (self.notify)(event);
     }
@@ -91,6 +119,17 @@ impl AppState {
     pub fn llm_provider(&self, role: LlmRole) -> AppResult<Box<dyn LlmProvider>> {
         let factory = self.llm.clone();
         self.with_store(|store| factory(store, role))
+    }
+}
+
+/// 実行中の期間要約ジョブ1つ分。破棄するとジョブ数を戻す (エラーや中断でも戻る)。
+pub struct DigestJob<'a> {
+    state: &'a AppState,
+}
+
+impl Drop for DigestJob<'_> {
+    fn drop(&mut self) {
+        self.state.count_digest_job(|n| n.saturating_sub(1));
     }
 }
 
@@ -128,6 +167,23 @@ mod tests {
         state.update_status(|s| s.collecting = true);
         assert!(state.status().collecting);
         assert_eq!(events.lock().unwrap().as_slice(), [EVENT_STATUS]);
+    }
+
+    #[test]
+    fn overlapping_digest_jobs_keep_digesting_until_all_finish() {
+        let (state, events) = test_state();
+        let first = state.begin_digest_job();
+        let second = state.begin_digest_job();
+        assert!(state.status().digesting);
+        drop(first);
+        assert!(state.status().digesting, "one job is still running");
+        drop(second);
+        assert!(!state.status().digesting);
+        // 通知は切り替わったときだけ (開始1回、終了1回)。
+        assert_eq!(
+            events.lock().unwrap().as_slice(),
+            [EVENT_STATUS, EVENT_STATUS]
+        );
     }
 
     #[test]
