@@ -11,6 +11,8 @@ export function useTauriEvent(name: string, handler: () => void) {
     onEvent(name, () => latest.current()).then((fn) => {
       if (cancelled) fn();
       else unlisten = fn;
+    }).catch(() => {
+      // listen に失敗したら購読が無いだけ。未処理の reject にはしない。
     });
     return () => {
       cancelled = true;
