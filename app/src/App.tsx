@@ -76,7 +76,7 @@ export default function App() {
         {view === "feed" && (
           <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
         )}
-        {view === "settings" && <SettingsView />}
+        {view === "settings" && <SettingsView status={status} />}
       </main>
     </div>
   );
