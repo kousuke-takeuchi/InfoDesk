@@ -9,6 +9,7 @@ describe("api", () => {
       list_items: () => [],
       count_items: () => 7,
       get_digests: () => [],
+      regenerate_digest: () => undefined,
       add_rss_source: (a) => ({ id: 1, kind: "rss", name: a.name ?? "t", category: a.category, config: a.url, enabled: true, last_fetched_at: null, last_error: null }),
     });
     const filter: ItemFilter = {
@@ -22,6 +23,9 @@ describe("api", () => {
 
     await api.getDigests("week", "2026-10-06", 3);
     expect(ipc.last("get_digests")).toEqual({ period: "week", date: "2026-10-06", topicId: 3 });
+
+    await api.regenerateDigest("week", "2026-10-06", [{ category: "github" }, { topic: 3 }]);
+    expect(ipc.last("regenerate_digest")).toEqual({ period: "week", date: "2026-10-06", scopes: [{ category: "github" }, { topic: 3 }] });
 
     const s = await api.addRssSource("https://e.com/feed", null, "tech_jp");
     expect(ipc.last("add_rss_source")).toEqual({ url: "https://e.com/feed", name: null, category: "tech_jp" });

@@ -29,17 +29,25 @@ export function parseDigestBody(body: string): { bullets: string[]; paragraphs: 
 }
 
 export type DigestDisplay =
-  | { kind: "done"; digest: Digest }
+  /** `regenerating`: 本文を残したまま、この scope の再生成を依頼済み。 */
+  | { kind: "done"; digest: Digest; regenerating: boolean }
   | { kind: "generating" }
   | { kind: "pending"; error: string | null; attempts: number }
   | { kind: "failed"; error: string | null; attempts: number }
-  | { kind: "none" };
+  /** `itemCount`: この期間の記事数。0 なら要約する対象が無い。 */
+  | { kind: "none"; itemCount: number };
 
-export function digestDisplay(view: DigestView, status: AppStatus): DigestDisplay {
+/**
+ * セクションの表示を決める。
+ * `requested` はこの画面からこの scope の生成を依頼して、まだ完了通知が来ていないこと。
+ * 依頼していない scope は、全体の `status.digesting` だけを手がかりにする (失敗は失敗のまま見せる)。
+ */
+export function digestDisplay(view: DigestView, status: AppStatus, requested = false): DigestDisplay {
   const d = view.digest;
-  if (d && d.status === "done") return { kind: "done", digest: d };
+  if (d && d.status === "done") return { kind: "done", digest: d, regenerating: requested };
+  if (requested) return { kind: "generating" };
   if (status.digesting && (!d || d.status === "pending")) return { kind: "generating" };
   if (d && d.status === "pending") return { kind: "pending", error: d.last_error, attempts: d.attempts };
   if (d && d.status === "failed") return { kind: "failed", error: d.last_error, attempts: d.attempts };
-  return { kind: "none" };
+  return { kind: "none", itemCount: view.item_count };
 }

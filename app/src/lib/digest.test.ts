@@ -7,7 +7,7 @@ const digest = (over: Partial<Digest>): Digest => ({
   id: 1, period: "day", period_start: "2026-10-06", scope: { category: "github" }, body: "", item_ids: [],
   provider: "ollama:gemma4:26b", status: "done", attempts: 0, created_at: "2026-10-06T00:00:00Z", last_error: null, ...over,
 });
-const view = (d: Digest | null): DigestView => ({ scope: { category: "github" }, label: "GitHub", digest: d });
+const view = (d: Digest | null, item_count = 0): DigestView => ({ scope: { category: "github" }, label: "GitHub", digest: d, item_count });
 
 describe("parseDigestBody", () => {
   it("extracts bullets and keeps the rest as paragraphs", () => {
@@ -53,5 +53,38 @@ describe("digestDisplay", () => {
     expect(failed).toEqual({ kind: "failed", error: "404", attempts: 3 });
     // 生成済みは digesting 中でもそのまま表示する。
     expect(digestDisplay(view(digest({ body: "x" })), { ...status, digesting: true }).kind).toBe("done");
+  });
+
+  it("carries the period item count when there is no digest", () => {
+    expect(digestDisplay(view(null, 0), status)).toEqual({ kind: "none", itemCount: 0 });
+    expect(digestDisplay(view(null, 12), status)).toEqual({ kind: "none", itemCount: 12 });
+  });
+
+  it("shows a requested scope as generating whatever its stored state", () => {
+    const pending = digest({ status: "pending", attempts: 1, last_error: "ollama down" });
+    const failed = digest({ status: "failed", attempts: 3, last_error: "404" });
+    expect(digestDisplay(view(null, 12), status, true)).toEqual({ kind: "generating" });
+    expect(digestDisplay(view(null, 0), status, true)).toEqual({ kind: "generating" });
+    expect(digestDisplay(view(pending), status, true)).toEqual({ kind: "generating" });
+    expect(digestDisplay(view(failed), status, true)).toEqual({ kind: "generating" });
+  });
+
+  it("keeps a requested done digest and flags it as regenerating", () => {
+    const done = digest({ body: "x" });
+    expect(digestDisplay(view(done), status, true)).toEqual({ kind: "done", digest: done, regenerating: true });
+    expect(digestDisplay(view(done), status)).toEqual({ kind: "done", digest: done, regenerating: false });
+    expect(digestDisplay(view(done), { ...status, digesting: true }, false)).toEqual({ kind: "done", digest: done, regenerating: false });
+  });
+
+  it("leaves scopes that were not requested to the global flag", () => {
+    const busy = { ...status, digesting: true };
+    const failed = digest({ status: "failed", attempts: 3, last_error: "404" });
+    // 他のジョブが動いていても、失敗は失敗のまま見せる。
+    expect(digestDisplay(view(failed), busy, false)).toEqual({ kind: "failed", error: "404", attempts: 3 });
+    expect(digestDisplay(view(failed), status, false)).toEqual({ kind: "failed", error: "404", attempts: 3 });
+    expect(digestDisplay(view(null, 12), busy, false)).toEqual({ kind: "generating" });
+    expect(digestDisplay(view(digest({ status: "pending" })), busy, false)).toEqual({ kind: "generating" });
+    expect(digestDisplay(view(digest({ status: "pending", attempts: 2, last_error: "x" })), status, false))
+      .toEqual({ kind: "pending", error: "x", attempts: 2 });
   });
 });

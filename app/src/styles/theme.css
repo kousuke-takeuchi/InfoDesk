@@ -100,6 +100,9 @@ a { color: var(--accent); text-decoration: none; }
 .state-box { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 .state-box .grow { flex: 1; }
 
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 420px; margin: 0 auto; text-align: center; }
 .empty h2 { font-size: 17px; margin: 0; }
 

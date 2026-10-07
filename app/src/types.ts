@@ -88,6 +88,8 @@ export interface DigestView {
   scope: DigestScope;
   label: string;
   digest: Digest | null;
+  /** 取得日時がこの期間に入る記事の数。 */
+  item_count: number;
 }
 
 export interface AppStatus {
