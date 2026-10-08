@@ -68,6 +68,8 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
   const [requests, setRequests] = useState<{ context: string; keys: ReadonlySet<string> }>({ context: "", keys: NO_KEYS });
   const [error, setError] = useState<string | null>(null);
   const latestLoad = useRef(0);
+  // 完了通知による再取得が、応答を反映する前に別の再取得に追い越されても、依頼中の印を外し損ねないよう覚えておく。
+  const settlePending = useRef(false);
   const today = new Date();
   const date = localDateString(today);
   const topicId = selection.kind === "topic" ? selection.topicId : null;
@@ -79,7 +81,12 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
   /** `finished`: 生成ジョブの完了通知による再取得。結果を反映するときに依頼中の印を外す。 */
   const load = useCallback((finished: boolean) => {
     const mine = ++latestLoad.current;
-    const settle = () => { if (finished) setRequests({ context: "", keys: NO_KEYS }); };
+    if (finished) settlePending.current = true;
+    const settle = () => {
+      if (!settlePending.current) return;
+      settlePending.current = false;
+      setRequests({ context: "", keys: NO_KEYS });
+    };
     api.getDigests(period, date, topicId)
       .then((v) => {
         // 後から出した要求があるなら、この応答は古い。
@@ -101,8 +108,10 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
     // アンマウント後や条件変更後に届いた応答を捨てる。
     return () => { latestLoad.current++; };
   }, [load]);
-  // status は prop で届く。再取得は完了通知 (digests-changed) のときだけ。
+  // status は prop で届く。再取得は完了通知 (digests-changed) と記事の増減 (items-changed) のとき。
   useTauriEvent(EVENTS.digests, () => load(true));
+  // 収集で item_count が変わる。生成ジョブの完了ではないので、依頼中の印は外さない。
+  useTauriEvent(EVENTS.items, () => load(false));
 
   const fail = (e: unknown) => setError(errorMessage(e));
   const request = (scopes: DigestScope[]) => {

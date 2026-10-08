@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SourcesTab } from "./SourcesTab";
-import { setupIpc } from "../../test/ipc";
+import { EVENTS } from "../../api";
+import { emitEvent, setupIpc } from "../../test/ipc";
 import type { Source } from "../../types";
 
 const sources: Source[] = [
@@ -367,5 +368,79 @@ describe("SourcesTab", () => {
     expect(ipc.count("add_rss_source")).toBe(1);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("GIGAZINE")).toBeInTheDocument();
+  });
+  it("reloads the list on status-changed and items-changed", async () => {
+    let list: Source[] = [
+      { id: 4, kind: "rss", name: "GIGAZINE", category: "tech_jp", config: "https://gigazine.net/news/rss_2.0/", enabled: true, last_fetched_at: null, last_error: null },
+    ];
+    let itemCounts: Record<string, number> = {};
+    const ipc = setupIpc({ list_sources: () => list, source_item_counts: () => itemCounts });
+    render(<SourcesTab />);
+    await screen.findByText("GIGAZINE");
+    expect(rowOf("GIGAZINE").getByText("未取得")).toBeInTheDocument();
+    expect(ipc.count("list_sources")).toBe(1);
+
+    // 全ソースが失敗した収集は status-changed しか出さない
+    list = [{ ...list[0], last_fetched_at: "2026-10-06T03:00:00Z" }];
+    itemCounts = { "4": 12 };
+    await emitEvent(EVENTS.status);
+    expect(await rowOf("GIGAZINE").findByText("12件")).toBeInTheDocument();
+    expect(ipc.count("list_sources")).toBe(2);
+    expect(ipc.count("source_item_counts")).toBe(2);
+
+    itemCounts = { "4": 15 };
+    await emitEvent(EVENTS.items);
+    expect(await rowOf("GIGAZINE").findByText("15件")).toBeInTheDocument();
+    expect(ipc.count("list_sources")).toBe(3);
+  });
+
+  it("keeps the edit card, the delete confirmation, and the action error across an event reload", async () => {
+    let itemCounts: Record<string, number> = { "1": 3 };
+    const ipc = setupIpc({
+      list_sources: () => sources,
+      source_item_counts: () => itemCounts,
+      set_source_enabled: () => { throw { message: "database is locked" }; },
+    });
+    render(<SourcesTab />);
+    await screen.findByText("Zenn");
+    await userEvent.click(screen.getByRole("switch", { name: "The Verge を有効にする" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("database is locked");
+    await userEvent.click(screen.getByRole("button", { name: "Zenn を編集" }));
+    await userEvent.clear(screen.getByLabelText("表示名"));
+    await userEvent.type(screen.getByLabelText("表示名"), "Zenn 未保存");
+    await userEvent.click(screen.getByRole("button", { name: "GitHub Trending (日) を削除" }));
+    expect(screen.getByText("削除しますか?")).toBeInTheDocument();
+
+    itemCounts = { "1": 8 };
+    await emitEvent(EVENTS.status);
+    expect(await rowOf("GitHub Trending (日)").findByText("8件")).toBeInTheDocument();
+    expect(ipc.count("list_sources")).toBe(2);
+    expect(screen.getByLabelText("表示名")).toHaveValue("Zenn 未保存");
+    expect(screen.getByText("削除しますか?")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("database is locked");
+    expect(ipc.count("update_source")).toBe(0);
+  });
+
+  it("ignores a stale reload that resolves after a newer one", async () => {
+    let resolveSlow: (v: Record<string, number>) => void = () => {};
+    let calls = 0;
+    setupIpc({
+      list_sources: () => sources,
+      source_item_counts: () => {
+        calls += 1;
+        if (calls === 1) return { "1": 3 };
+        if (calls === 2) return new Promise<Record<string, number>>((r) => { resolveSlow = r; });
+        return { "1": 9 };
+      },
+    });
+    render(<SourcesTab />);
+    await screen.findByText("Zenn");
+    expect(rowOf("GitHub Trending (日)").getByText("3件")).toBeInTheDocument();
+    await emitEvent(EVENTS.status);
+    await emitEvent(EVENTS.status);
+    expect(await rowOf("GitHub Trending (日)").findByText("9件")).toBeInTheDocument();
+    await act(async () => { resolveSlow({ "1": 5 }); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(rowOf("GitHub Trending (日)").getByText("9件")).toBeInTheDocument();
   });
 });

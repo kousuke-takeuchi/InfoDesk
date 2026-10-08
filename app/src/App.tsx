@@ -17,7 +17,10 @@ const IDLE_STATUS: AppStatus = {
 };
 
 export default function App() {
-  const [view, setView] = useState<View>("digest");
+  // 設定を開いているあいだも、その前に見ていた表示を覚えておき、サイドバーの項目を選んだらそこへ戻る。
+  const [contentView, setContentView] = useState<Exclude<View, "settings">>("digest");
+  const [inSettings, setInSettings] = useState(false);
+  const view: View = inSettings ? "settings" : contentView;
   const [selection, setSelection] = useState<Selection>({ kind: "all" });
   const [status, setStatus] = useState<AppStatus>(IDLE_STATUS);
   const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS);
@@ -34,7 +37,11 @@ export default function App() {
   }, []);
   const refreshCounts = useCallback(() => {
     Promise.all([api.sidebarCounts(), api.listTopics()])
-      .then(([c, t]) => { setCounts(c); setTopics(t); setCountsError(null); })
+      .then(([c, t]) => {
+        setCounts(c); setTopics(t); setCountsError(null);
+        // 選択中のトピックが削除されていたら、存在しない選択を残さず「すべて」に戻す。
+        setSelection((cur) => (cur.kind === "topic" && !t.some((x) => x.id === cur.topicId) ? { kind: "all" } : cur));
+      })
       .catch((e) => setCountsError(errorMessage(e)));
   }, []);
 
@@ -42,7 +49,13 @@ export default function App() {
   useTauriEvent(EVENTS.status, refreshStatus);
   useTauriEvent(EVENTS.items, refreshCounts);
   useTauriEvent(EVENTS.digests, refreshCounts);
-  useTauriEvent(EVENTS.openSettings, () => setView("settings"));
+  const openSettings = useCallback(() => setInSettings(true), []);
+  useTauriEvent(EVENTS.openSettings, openSettings);
+  const switchView = useCallback((v: View) => {
+    if (v === "settings") { setInSettings(true); return; }
+    setContentView(v);
+    setInSettings(false);
+  }, []);
 
   const collectNow = useCallback(() => {
     api.collectNow()
@@ -52,7 +65,7 @@ export default function App() {
 
   const select = (s: Selection) => {
     setSelection(s);
-    if (view === "settings") setView("digest");
+    setInSettings(false);
   };
 
   const hasError = statusError !== null || countsError !== null || actionError !== null;
@@ -60,7 +73,7 @@ export default function App() {
   return (
     <div className="app">
       <Sidebar selection={selection} view={view} counts={counts} topics={topics} status={status}
-        onSelect={select} onOpenSettings={() => setView("settings")}
+        onSelect={select} onOpenSettings={openSettings}
         onCollectNow={collectNow} />
       <main className="main">
         {hasError && (
@@ -71,10 +84,11 @@ export default function App() {
           </div>
         )}
         {view === "digest" && (
-          <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
+          <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView} />
         )}
         {view === "feed" && (
-          <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={setView} />
+          <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
+            onOpenSources={openSettings} />
         )}
         {view === "settings" && <SettingsView status={status} />}
       </main>

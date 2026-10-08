@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TopicsTab } from "./TopicsTab";
-import { setupIpc } from "../../test/ipc";
+import { EVENTS } from "../../api";
+import { emitEvent, setupIpc } from "../../test/ipc";
 import type { Topic } from "../../types";
 
 const COUNTS = { total_unread: 0, categories: {}, topics: {} };
@@ -171,5 +172,36 @@ describe("TopicsTab", () => {
     await act(async () => { finish(); });
     await waitFor(() => expect(screen.queryByLabelText("名前")).not.toBeInTheDocument());
     expect(ipc.count("add_topic")).toBe(1);
+  });
+  it("reloads the counts on items-changed and keeps an unsaved edit, a confirmation, and the action error", async () => {
+    const list: Topic[] = [
+      { id: 1, name: "認知症", keywords: ["dementia"] },
+      { id: 2, name: "介護", keywords: ["caregiving"] },
+    ];
+    let unread = 6;
+    const ipc = setupIpc({
+      list_topics: () => list,
+      sidebar_counts: () => ({ total_unread: 0, categories: {}, topics: { "1": unread } }),
+      update_topic: () => { throw { message: "database is locked" }; },
+    });
+    render(<TopicsTab />);
+    expect(await screen.findByText("6")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "認知症 を編集" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("database is locked");
+    await userEvent.clear(screen.getByLabelText("名前"));
+    await userEvent.type(screen.getByLabelText("名前"), "認知症 未保存");
+    await userEvent.click(screen.getByRole("button", { name: "介護 を削除" }));
+    expect(screen.getByText(/削除しますか/)).toBeInTheDocument();
+
+    unread = 9;
+    await emitEvent(EVENTS.items);
+    expect(await screen.findByText("9")).toBeInTheDocument();
+    expect(ipc.count("list_topics")).toBe(2);
+    expect(ipc.count("sidebar_counts")).toBe(2);
+    expect(screen.getByLabelText("名前")).toHaveValue("認知症 未保存");
+    expect(screen.getByText(/削除しますか/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("database is locked");
   });
 });

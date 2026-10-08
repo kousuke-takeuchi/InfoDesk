@@ -314,4 +314,50 @@ describe("DigestView", () => {
     expect(await screen.findByRole("button", { name: "記事11" })).toBeInTheDocument();
     expect(screen.getByText("根拠記事")).toBeInTheDocument();
   });
+  it("refetches on items-changed so a section picks up the new article count", async () => {
+    let itemCount = 0;
+    const ipc = setupIpc({
+      get_digests: () => [{ scope: { category: "huggingface" }, label: "Hugging Face", digest: null, item_count: itemCount }],
+    });
+    renderAll();
+    expect(await screen.findByText("この期間に記事がありません。")).toBeInTheDocument();
+
+    itemCount = 3;
+    await emitEvent(EVENTS.items);
+    expect(await screen.findByText("まだ要約がありません (記事 3件)")).toBeInTheDocument();
+    expect(screen.queryByText("この期間に記事がありません。")).not.toBeInTheDocument();
+    expect(ipc.count("get_digests")).toBe(2);
+  });
+
+  it("keeps the requested sections on items-changed and releases them on digests-changed", async () => {
+    let resolveSlow: (v: DV[]) => void = () => {};
+    let slow = false;
+    const ipc = setupIpc({
+      get_digests: () => (slow ? new Promise<DV[]>((r) => { resolveSlow = r; }) : fresh(views)),
+      get_item: item, regenerate_digest: () => undefined,
+    });
+    renderAll();
+    expect(await screen.findByText("一つ目。")).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "再生成" });
+    await userEvent.click(button);
+    expect(button).toBeDisabled();
+
+    await emitEvent(EVENTS.items);
+    await waitFor(() => expect(ipc.count("get_digests")).toBe(2));
+    await settle();
+    expect(button).toBeDisabled();
+    expect(section("GitHub").getByText("再生成中…")).toBeInTheDocument();
+
+    // 完了通知による再取得が items-changed の再取得に追い越されても、依頼中の印は外れる
+    slow = true;
+    await emitEvent(EVENTS.digests);
+    await waitFor(() => expect(ipc.count("get_digests")).toBe(3));
+    slow = false;
+    await emitEvent(EVENTS.items);
+    await waitFor(() => expect(button).toBeEnabled());
+    await act(async () => { resolveSlow(fresh(views)); });
+    await settle();
+    expect(button).toBeEnabled();
+    expect(screen.queryByText("再生成中…")).not.toBeInTheDocument();
+  });
 });

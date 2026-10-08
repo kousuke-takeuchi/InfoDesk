@@ -15,6 +15,8 @@ interface Props {
   status: AppStatus;
   view: View;
   onSwitchView: (v: View) => void;
+  /** 設定のソース一覧を開く。 */
+  onOpenSources: () => void;
 }
 
 const PAGE_SIZE = 100;
@@ -26,7 +28,7 @@ function selectionTitle(selection: Selection, topics: Topic[]): string {
   return topics.find((t) => t.id === selection.topicId)?.name ?? "トピック";
 }
 
-export function FeedView({ selection, topics, status, view, onSwitchView }: Props) {
+export function FeedView({ selection, topics, status, view, onSwitchView, onOpenSources }: Props) {
   const [range, setRange] = useState<FeedRange>("week");
   const [sourceId, setSourceId] = useState<number | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -56,6 +58,16 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
   if (limitKey !== filterKey) {
     setLimitKey(filterKey);
     setLimit(PAGE_SIZE);
+  }
+  // 選択が変わったら、同じレンダー内で前の選択の行と件数を消す (新しい見出しの下に前の記事を残さない)。
+  // 同じ選択の中で絞り込みを変えたときは、応答が届くまで行を残す。
+  const selectionKey = JSON.stringify(selection);
+  const [shownSelection, setShownSelection] = useState(selectionKey);
+  if (shownSelection !== selectionKey) {
+    setShownSelection(selectionKey);
+    setItems(null);
+    setTotal(null);
+    setUnreadTotal(null);
   }
   // 一度も収集していなければ初回起動の空状態、それ以外の0件は絞り込みの結果として扱う。
   const neverCollected = status.last_collect_at === null;
@@ -153,6 +165,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView }: Prop
             <p className="text-secondary">収集を始めると、GitHub、arXiv、Hugging Face、Hacker News、国内外のtechニュース、医療介護ニュースが集まり、朝7時に日次要約が生成されます。</p>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-primary" disabled={status.collecting} onClick={() => run(api.collectNow())}>今すぐ収集</button>
+              <button className="btn" onClick={onOpenSources}>ソースを確認</button>
             </div>
             <p className="tiny text-tertiary">収集には1〜2分かかります。進行状況はサイドバー下部に表示されます。</p>
           </div>

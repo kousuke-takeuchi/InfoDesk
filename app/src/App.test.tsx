@@ -103,4 +103,70 @@ describe("App", () => {
     await userEvent.click(screen.getByTitle("今すぐ収集"));
     expect(await screen.findByRole("alert")).toHaveTextContent("収集を開始できません");
   });
+  it("opens the sources settings from the first-launch empty feed", async () => {
+    setupIpc(handlers({
+      list_items: () => [], count_items: () => 0,
+      list_sources: () => [], source_item_counts: () => ({}),
+    }));
+    render(<App />);
+    await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+    await userEvent.click(screen.getByRole("button", { name: "フィード" }));
+    await userEvent.click(await screen.findByRole("button", { name: "ソースを確認" }));
+    expect(screen.getByRole("button", { name: "設定" })).toHaveAttribute("aria-current", "true");
+    expect(await screen.findByRole("heading", { name: "ソース" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "RSSを追加" })).toBeInTheDocument();
+  });
+
+  it("resets the selection to all when the selected topic disappears", async () => {
+    let topics: Topic[] = [{ id: 5, name: "認知症", keywords: ["認知症"] }];
+    const ipc = setupIpc(handlers({ list_topics: () => topics }));
+    render(<App />);
+    const topic = await screen.findByRole("button", { name: /認知症/ });
+    await userEvent.click(topic);
+    expect(topic).toHaveAttribute("aria-current", "true");
+    await waitFor(() => expect(ipc.last("get_digests").topicId).toBe(5));
+
+    topics = [];
+    await emitEvent(EVENTS.digests);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /認知症/ })).not.toBeInTheDocument());
+    expect(allItem()).toHaveAttribute("aria-current", "true");
+    await waitFor(() => expect(ipc.last("get_digests").topicId).toBeNull());
+  });
+
+  it("keeps a topic selection that is still in the refreshed list", async () => {
+    const topics: Topic[] = [{ id: 5, name: "認知症", keywords: ["認知症"] }];
+    const ipc = setupIpc(handlers({ list_topics: () => topics }));
+    render(<App />);
+    const topic = await screen.findByRole("button", { name: /認知症/ });
+    await userEvent.click(topic);
+    await emitEvent(EVENTS.items);
+    await waitFor(() => expect(ipc.count("list_topics")).toBe(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(topic).toHaveAttribute("aria-current", "true");
+  });
+
+  it("returns to the view shown before settings when a sidebar item is picked", async () => {
+    setupIpc(handlers({
+      list_items: () => [], count_items: () => 0,
+      list_sources: () => [], source_item_counts: () => ({}),
+    }));
+    render(<App />);
+    await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+    const feed = () => screen.getByRole("button", { name: "フィード" });
+
+    await userEvent.click(feed());
+    expect(feed()).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "設定" }));
+    expect(await screen.findByRole("button", { name: "RSSを追加" })).toBeInTheDocument();
+    // 設定を開いたまま再度開いても、戻り先は変わらない
+    await emitEvent(EVENTS.openSettings);
+    await userEvent.click(screen.getByRole("button", { name: "GitHub" }));
+    expect(feed()).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: "GitHub" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "ダイジェスト" }));
+    await userEvent.click(screen.getByRole("button", { name: "設定" }));
+    await userEvent.click(allItem());
+    expect(screen.getByRole("button", { name: "ダイジェスト" })).toHaveAttribute("aria-pressed", "true");
+  });
 });

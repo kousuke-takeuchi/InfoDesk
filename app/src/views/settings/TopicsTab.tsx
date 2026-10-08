@@ -1,8 +1,9 @@
 import { Hash, Pencil, Plus, Trash2 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useState } from "react";
-import { api } from "../../api";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { api, EVENTS } from "../../api";
 import { ErrorLine } from "../../components/ErrorLine";
 import { RevealCard } from "../../components/RevealCard";
+import { useTauriEvent } from "../../hooks/useTauriEvent";
 import { errorMessage, type SidebarCounts, type Topic } from "../../types";
 
 type Draft = { id: number | null; name: string; keywords: string };
@@ -16,18 +17,35 @@ export function TopicsTab() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [counts, setCounts] = useState<SidebarCounts | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // 一覧の取得の失敗と操作の失敗は別々に持つ。イベントによる再取得が操作のエラーを消さないようにする。
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // 削除の確認を出している行。同時に1行だけ。
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
 
+  const latestLoad = useRef(0);
+
+  // 入力中の draft や削除の確認は別の state なので、再取得では閉じない。
   const load = useCallback(() => {
+    // 最後に出した問い合わせの応答だけを反映する。追い越された応答は捨てる。
+    const mine = ++latestLoad.current;
     Promise.all([api.listTopics(), api.sidebarCounts()])
-      .then(([t, c]) => { setTopics(t); setCounts(c); setError(null); })
-      .catch((e) => setError(errorMessage(e)));
+      .then(([t, c]) => {
+        if (latestLoad.current !== mine) return;
+        setTopics(t); setCounts(c); setLoadError(null);
+      })
+      .catch((e) => { if (latestLoad.current === mine) setLoadError(errorMessage(e)); });
   }, []);
-  useEffect(load, [load]);
-  const run = (p: Promise<unknown>) => p.then(load).catch((e) => setError(errorMessage(e)));
+  useEffect(() => {
+    load();
+    // アンマウント後に届いた応答を捨てる
+    return () => { latestLoad.current += 1; };
+  }, [load]);
+  // 収集や既読操作で未読数が変わる
+  useTauriEvent(EVENTS.items, load);
+  const saved = () => { setActionError(null); load(); };
+  const run = (p: Promise<unknown>) => p.then(saved).catch((e) => setActionError(errorMessage(e)));
 
   const remove = (id: number) => {
     setConfirmingId(null);
@@ -41,8 +59,8 @@ export function TopicsTab() {
     if (!draft || !canSave) return;
     setSaving(true);
     const p = draft.id === null ? api.addTopic(draft.name.trim(), draftKeywords) : api.updateTopic(draft.id, draft.name.trim(), draftKeywords);
-    p.then(() => { setDraft(null); load(); })
-      .catch((e) => setError(errorMessage(e)))
+    p.then(() => { setDraft(null); saved(); })
+      .catch((e) => setActionError(errorMessage(e)))
       .finally(() => setSaving(false));
   };
 
@@ -74,7 +92,8 @@ export function TopicsTab() {
         <button className="btn btn-primary" onClick={() => setDraft({ id: null, name: "", keywords: "" })}><Plus size={14} /> トピックを追加</button>
       </div>
       <p className="desc">キーワードのいずれかを含む記事がトピックに属します。日本語と英語を併記すると両方の記事が集まります。英数字だけの語は単語単位で照合します。</p>
-      <ErrorLine message={error} />
+      <ErrorLine message={loadError} />
+      <ErrorLine message={actionError} />
       <div className="table-head topics-grid"><span>トピック</span><span>キーワード</span><span>未読</span><span /></div>
       {topics.map((t) => (
         <Fragment key={t.id}>

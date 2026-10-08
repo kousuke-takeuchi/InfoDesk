@@ -25,7 +25,7 @@ function renderFeed(items: Item[], extra: Record<string, (a: any) => unknown> = 
   });
   render(
     <FeedView selection={{ kind: "category", category: "medcare" }} topics={[]} status={st}
-      view="feed" onSwitchView={() => {}} />,
+      view="feed" onSwitchView={() => {}} onOpenSources={() => {}} />,
   );
   return ipc;
 }
@@ -75,7 +75,7 @@ describe("FeedView", () => {
     expect(ipc.count("collect_now")).toBe(1);
 
     setupIpc({ list_items: () => { throw { message: "database lock poisoned" }; }, count_items: () => 0, list_sources: () => [] });
-    render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} />);
+    render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} onOpenSources={() => {}} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("database lock poisoned");
   });
 
@@ -245,5 +245,54 @@ describe("FeedView", () => {
     await userEvent.click(screen.getByRole("button", { name: "すべて既読にする" }));
     await tick();
     expect(ipc.count("list_items")).toBe(before);
+  });
+  it("offers ソースを確認 next to 今すぐ収集 in the first-launch empty state", async () => {
+    let opened = 0;
+    setupIpc({ list_items: () => [], count_items: () => 0, list_sources: () => [], collect_now: () => undefined });
+    render(<FeedView selection={{ kind: "all" }} topics={[]} status={{ ...status, last_collect_at: null }}
+      view="feed" onSwitchView={() => {}} onOpenSources={() => { opened += 1; }} />);
+    expect(await screen.findByText("まだ記事がありません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "今すぐ収集" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "ソースを確認" }));
+    expect(opened).toBe(1);
+  });
+
+  it("clears the previous selection's rows as soon as the selection changes", async () => {
+    let resolveSlow: (v: Item[]) => void = () => {};
+    const ipc = setupIpc({
+      list_items: (a) => (a.filter.category === "medcare"
+        ? [item({})]
+        : new Promise<Item[]>((r) => { resolveSlow = r; })),
+      count_items: () => 1,
+      list_sources: () => [],
+    });
+    const props = { topics: [], status, view: "feed" as const, onSwitchView: () => {}, onOpenSources: () => {} };
+    const { rerender } = render(<FeedView selection={{ kind: "category", category: "medcare" }} {...props} />);
+    expect(await screen.findByText("認知症の新薬")).toBeInTheDocument();
+    expect(screen.getByText(UNREAD_COUNT)).toBeInTheDocument();
+
+    rerender(<FeedView selection={{ kind: "all" }} {...props} />);
+    expect(screen.getByRole("heading", { name: "すべての記事" })).toBeInTheDocument();
+    expect(screen.queryByText("認知症の新薬")).not.toBeInTheDocument();
+    expect(screen.queryByText(UNREAD_COUNT)).not.toBeInTheDocument();
+    expect(screen.queryByText("条件に一致する記事がありません")).not.toBeInTheDocument();
+    await waitFor(() => expect(ipc.last("list_items").filter.category).toBeNull());
+
+    await act(async () => { resolveSlow([item({ id: 7, title: "全体の記事" })]); });
+    expect(await screen.findByText("全体の記事")).toBeInTheDocument();
+  });
+
+  it("keeps the rows while a filter changes within the same selection", async () => {
+    let resolveSlow: (v: Item[]) => void = () => {};
+    const ipc = renderFeed([], {
+      list_items: (a) => (a.filter.unread_only ? new Promise<Item[]>((r) => { resolveSlow = r; }) : [item({})]),
+      count_items: () => 1,
+    });
+    await screen.findByText("認知症の新薬");
+    await userEvent.click(screen.getByRole("button", { name: "未読のみ" }));
+    await waitFor(() => expect(ipc.last("list_items").filter.unread_only).toBe(true));
+    expect(screen.getByText("認知症の新薬")).toBeInTheDocument();
+    await act(async () => { resolveSlow([item({ id: 8, title: "未読の記事" })]); });
+    expect(await screen.findByText("未読の記事")).toBeInTheDocument();
   });
 });
