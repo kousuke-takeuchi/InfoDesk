@@ -134,6 +134,8 @@ describe("ScheduleTab", () => {
     const sw = await screen.findByRole("switch", { name: "ウィンドウを閉じても常駐する" });
     await userEvent.click(sw);
     expect(screen.getByRole("switch", { name: "ウィンドウを閉じても常駐する" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "ウィンドウを閉じても常駐する" })).toHaveAttribute("disabled");
+    expect(document.querySelector("fieldset")).toBeNull();
     await userEvent.click(screen.getByRole("switch", { name: "ウィンドウを閉じても常駐する" }));
     expect(ipc.count("set_setting")).toBe(1);
     await act(async () => gate.resolve());
@@ -158,6 +160,46 @@ describe("ScheduleTab", () => {
     fail = false;
     await userEvent.click(screen.getByRole("button", { name: "今すぐ収集" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("shows a stored interval outside the option list as itself and sends nothing until another is picked", async () => {
+    const ipc = setupIpc({ get_settings: () => ({ ...settings, "schedule.collect_interval_hours": "2" }), set_setting: () => undefined });
+    render(<ScheduleTab status={status} />);
+    const interval = await screen.findByLabelText("収集間隔");
+    expect(interval).toHaveValue("2");
+    expect(screen.getByRole("option", { name: "2時間おき" })).toHaveProperty("selected", true);
+    expect(ipc.count("set_setting")).toBe(0);
+    await userEvent.selectOptions(interval, screen.getByRole("option", { name: "1時間おき" }));
+    expect(ipc.last("set_setting")).toEqual({ key: "schedule.collect_interval_hours", value: "1" });
+    expect(ipc.count("set_setting")).toBe(1);
+  });
+
+  it("shows a stored weekday outside the option list as its raw value", async () => {
+    const ipc = setupIpc({ get_settings: () => ({ ...settings, "schedule.weekly_day": "funday" }), set_setting: () => undefined });
+    render(<ScheduleTab status={status} />);
+    expect(await screen.findByLabelText("週次要約の曜日")).toHaveValue("funday");
+    expect(screen.getByRole("option", { name: "funday" })).toHaveProperty("selected", true);
+    expect(ipc.count("set_setting")).toBe(0);
+  });
+
+  it("shows the next collection as a time today, with the date on another day, and as running while collecting", async () => {
+    setupIpc({ get_settings: () => settings });
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const clock = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const now = new Date();
+    const later = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 4, 5);
+    const view = render(<ScheduleTab status={{ ...status, next_collect_at: now.toISOString() }} />);
+    await screen.findByLabelText("収集間隔");
+    expect(screen.getByTestId("next-collect")).toHaveTextContent(new RegExp(`^${clock(now)}$`));
+
+    view.rerender(<ScheduleTab status={{ ...status, next_collect_at: later.toISOString() }} />);
+    expect(screen.getByTestId("next-collect")).toHaveTextContent(new RegExp(`^${later.getMonth() + 1}/${later.getDate()} 04:05$`));
+
+    view.rerender(<ScheduleTab status={{ ...status, collecting: true, next_collect_at: later.toISOString() }} />);
+    expect(screen.getByTestId("next-collect")).toHaveTextContent(/^収集中…$/);
+
+    view.rerender(<ScheduleTab status={{ ...status, next_collect_at: null }} />);
+    expect(screen.getByTestId("next-collect")).toHaveTextContent(/^—$/);
   });
 
   it("shows a load error from get_settings", async () => {

@@ -5,6 +5,19 @@ import { errorMessage, type ProbeResult, type Settings } from "../../types";
 
 const PROVIDERS = [{ id: "ollama", label: "Ollama" }, { id: "claude", label: "Claude (claude CLI)" }];
 
+export interface SelectOption { id: string; label: string }
+/** 操作の結果。error は失敗したときのバックエンドの文言 (多重実行で見送ったときは ok: false, error: null)。 */
+export interface ActionResult { ok: boolean; error: string | null }
+
+/**
+ * 保存済みの値が選択肢に無いとき、その値を選択肢の末尾に足す。
+ * こうしないと select は先頭の選択肢を表示し、保存されていない値を保存済みのように見せてしまう。
+ */
+export function withStoredOption(options: SelectOption[], stored: string, labelFor: (v: string) => string = (v) => v): SelectOption[] {
+  if (options.some((o) => o.id === stored)) return options;
+  return [...options, { id: stored, label: stored === "" ? "未設定" : labelFor(stored) }];
+}
+
 /**
  * 設定タブ共通の状態。loadError (get_settings の失敗) と actionError (保存や操作の失敗) は別々に持つ。
  * actionError は次の操作が成功したときだけ消え、再取得の成否では変わらない。
@@ -22,18 +35,19 @@ export function useSettingsState() {
   );
   useEffect(() => { void load(); }, [load]);
 
-  /** name ごとに同時実行を1件に制限する。成功したら actionError を消して設定を再取得し、成否を返す。 */
-  const act = useCallback((name: string, fn: () => Promise<unknown>) => {
-    if (inFlight.current.has(name)) return Promise.resolve(false);
+  /** name ごとに同時実行を1件に制限する。成功したら actionError を消して設定を再取得し、結果を返す。 */
+  const attempt = useCallback((name: string, fn: () => Promise<unknown>): Promise<ActionResult> => {
+    if (inFlight.current.has(name)) return Promise.resolve({ ok: false, error: null });
     inFlight.current.add(name);
     setBusy(new Set(inFlight.current));
     return fn()
-      .then(() => { setActionError(null); return load().then(() => true); })
-      .catch((e) => { setActionError(errorMessage(e)); return false; })
+      .then(() => { setActionError(null); return load().then(() => ({ ok: true, error: null })); })
+      .catch((e) => { const error = errorMessage(e); setActionError(error); return { ok: false, error }; })
       .finally(() => { inFlight.current.delete(name); setBusy(new Set(inFlight.current)); });
   }, [load]);
 
-  const save = useCallback((key: string, value: string) => act(`set:${key}`, () => api.setSetting(key, value)), [act]);
+  const act = useCallback((name: string, fn: () => Promise<unknown>) => attempt(name, fn).then((r) => r.ok), [attempt]);
+  const save = useCallback((key: string, value: string) => attempt(`set:${key}`, () => api.setSetting(key, value)), [attempt]);
   return { settings, loadError, actionError, busy, act, save };
 }
 
@@ -41,34 +55,47 @@ export function useSettingsState() {
  * blur または Enter で保存するテキスト欄。
  * validate が文言を返したら保存せず欄の横に表示する。normalize は保存前の整形。
  * 保存に失敗しても入力値は残す (value が変わったときだけ draft を差し替える)。
+ * 保存の失敗は欄の横にも出し、この欄の保存が成功するか入力値を保存済みの値に戻すまで残す
+ * (上部の actionError は別の操作の成功で消えるため、それだけでは失敗した欄が分からなくなる)。
  */
 export function SettingField({ id, label, value, onSave, hint, type = "text", width = 260, validate, normalize }: {
-  id: string; label: string; value: string; onSave: (v: string) => Promise<boolean> | void; hint?: string; type?: string; width?: number;
+  id: string; label: string; value: string; onSave: (v: string) => Promise<ActionResult>; hint?: string; type?: string; width?: number;
   validate?: (v: string) => string | null; normalize?: (v: string) => string;
 }) {
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const sent = useRef<string | null>(null);
-  useEffect(() => { setDraft(value); setInvalid(null); sent.current = null; }, [value]);
+  useEffect(() => { setDraft(value); setInvalid(null); setFailed(null); sent.current = null; }, [value]);
   const commit = () => {
-    if (draft === value) { setInvalid(null); return; }
+    if (draft === value) { setInvalid(null); setFailed(null); return; }
     const problem = validate?.(draft) ?? null;
     if (problem) { setInvalid(problem); return; }
     setInvalid(null);
     const next = normalize ? normalize(draft) : draft;
     setDraft(next);
-    // Enter の直後に blur でも commit が走るため、保存済みまたは送信中の同じ値は再送しない。失敗したら再試行できるよう戻す
-    if (next === value || next === sent.current) return;
+    if (next === value) { setFailed(null); return; }
+    // Enter の直後に blur でも commit が走るため、送信中または送信済みの同じ値は再送しない。失敗したら再試行できるよう戻す
+    if (next === sent.current) return;
     sent.current = next;
-    void Promise.resolve(onSave(next)).then((ok) => { if (ok === false && sent.current === next) sent.current = null; });
+    void onSave(next).then((r) => {
+      if (sent.current !== next) return; // 送信後に入力が変わった。結果はその新しい入力のものではない
+      if (r.ok) { setFailed(null); return; }
+      sent.current = null;
+      if (r.error !== null) setFailed(r.error);
+    });
   };
+  const errorId = `${id}-error`;
   return (
     <div className="setting-row">
       <div className="label"><label htmlFor={id}>{label}</label>{hint && <span className="hint">{hint}</span>}</div>
       {invalid && <span className="cell-status error" role="alert">{invalid}</span>}
-      <input id={id} type={type} className="field" style={{ width }} value={draft} aria-invalid={invalid ? true : undefined}
-        onChange={(e) => { setDraft(e.target.value); sent.current = null; }} onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") commit(); }} />
+      {/* 保存の失敗は上部の ErrorLine が読み上げるので、ここは role="alert" にせず欄の説明として結び付ける */}
+      {!invalid && failed && <span id={errorId} className="cell-status error">{failed}</span>}
+      <input id={id} type={type} className="field" style={{ width }} value={draft} aria-invalid={invalid || failed ? true : undefined}
+        aria-describedby={!invalid && failed ? errorId : undefined}
+        onChange={(e) => { setDraft(e.target.value); sent.current = null; if (e.target.value === value) setFailed(null); }} onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) commit(); }} />
     </div>
   );
 }
@@ -78,18 +105,20 @@ function ProviderRow({ id, label, hint, value, onChange }: { id: string; label: 
     <div className="setting-row">
       <div className="label"><label htmlFor={id}>{label}</label><span className="hint">{hint}</span></div>
       <select id={id} className="field" style={{ width: 180 }} value={value} onChange={(e) => onChange(e.target.value)}>
-        {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        {withStoredOption(PROVIDERS, value).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
       </select>
     </div>
   );
 }
 
+/** millis が null なのはコマンド自体が失敗したとき (計測値が無いので所要時間は出さない)。 */
 function Probe({ label, run }: { label: string; run: () => Promise<ProbeResult> }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ProbeResult | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; millis: number | null } | null>(null);
   const start = () => {
     setBusy(true);
-    run().then(setResult).catch((e) => setResult({ ok: false, message: errorMessage(e), millis: 0 })).finally(() => setBusy(false));
+    setResult(null);
+    run().then(setResult).catch((e) => setResult({ ok: false, message: errorMessage(e), millis: null })).finally(() => setBusy(false));
   };
   return (
     <div className="setting-row">
@@ -97,7 +126,7 @@ function Probe({ label, run }: { label: string; run: () => Promise<ProbeResult> 
       {result && (
         <span className={`cell-status ${result.ok ? "" : "error"}`}>
           <i className={`dot ${result.ok ? "dot-success" : "dot-danger"}`} />
-          {result.message} · {(result.millis / 1000).toFixed(1)}秒
+          {result.millis === null ? result.message : `${result.message} · ${(result.millis / 1000).toFixed(1)}秒`}
         </span>
       )}
       <button className="btn" disabled={busy} onClick={start}>
