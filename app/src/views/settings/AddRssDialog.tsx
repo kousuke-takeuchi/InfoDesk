@@ -1,7 +1,11 @@
 import { CircleAlert, Loader } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { api } from "../../api";
 import { CATEGORIES, errorMessage, type Category, type Source } from "../../types";
+import { isImeEnter } from "./LlmTab";
+
+// IME の変換を確定する Enter でフォームを送信しない (WKWebView は確定の Enter でも暗黙の送信をする)
+const blockImeEnter = (e: ReactKeyboardEvent) => { if (e.key === "Enter" && isImeEnter(e)) e.preventDefault(); };
 
 export function AddRssDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (s: Source) => void }) {
   const [url, setUrl] = useState("");
@@ -36,11 +40,11 @@ export function AddRssDialog({ onClose, onAdded }: { onClose: () => void; onAdde
         <h2>RSSフィードを追加</h2>
         <div className="row">
           <label htmlFor="rss-url">フィードURL</label>
-          <input id="rss-url" autoFocus className={`field ${error ? "field-error" : ""}`} value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://" />
+          <input id="rss-url" autoFocus className={`field ${error ? "field-error" : ""}`} value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} onKeyDown={blockImeEnter} placeholder="https://" />
         </div>
         <div className="row">
           <label htmlFor="rss-name">表示名 (任意)</label>
-          <input id="rss-name" className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="空欄の場合はフィードのタイトルを使います" />
+          <input id="rss-name" className="field" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={blockImeEnter} placeholder="空欄の場合はフィードのタイトルを使います" />
         </div>
         <div className="row">
           <label htmlFor="rss-category">カテゴリー</label>

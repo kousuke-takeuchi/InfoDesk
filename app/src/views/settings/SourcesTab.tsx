@@ -10,7 +10,7 @@ import { AddRssDialog } from "./AddRssDialog";
 
 function statusCell(s: Source, count: number) {
   if (!s.enabled) return <span className="cell-status"><i className="dot dot-muted" />無効</span>;
-  if (s.last_error) return <span className="cell-status error" title={s.last_error}><i className="dot dot-danger" /><span className="truncate">{s.last_error}</span></span>;
+  if (s.last_error) return <span className="cell-status error multiline" title={s.last_error}><i className="dot dot-danger" /><span className="clamp-3">{s.last_error}</span></span>;
   if (s.last_fetched_at) return <span className="cell-status"><i className="dot dot-success" />{count}件</span>;
   return <span className="cell-status"><i className="dot dot-muted" />未取得</span>;
 }

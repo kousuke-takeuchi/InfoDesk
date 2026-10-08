@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../../api";
 import { ErrorLine } from "../../components/ErrorLine";
 import { errorMessage, type ProbeResult, type Settings } from "../../types";
@@ -52,6 +52,14 @@ export function useSettingsState() {
 }
 
 /**
+ * IME の変換を確定する Enter かどうか。WKWebView では確定の Enter が isComposing === false,
+ * keyCode === 229 で届くことがあるので両方を見る。
+ */
+export function isImeEnter(e: KeyboardEvent): boolean {
+  return e.nativeEvent.isComposing || e.keyCode === 229;
+}
+
+/**
  * blur または Enter で保存するテキスト欄。
  * validate が文言を返したら保存せず欄の横に表示する。normalize は保存前の整形。
  * 保存に失敗しても入力値は残す (value が変わったときだけ draft を差し替える)。
@@ -66,7 +74,17 @@ export function SettingField({ id, label, value, onSave, hint, type = "text", wi
   const [invalid, setInvalid] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const sent = useRef<string | null>(null);
-  useEffect(() => { setDraft(value); setInvalid(null); setFailed(null); sent.current = null; }, [value]);
+  // 保存済みの値が変わったときだけ、レンダー中に draft を差し替える。
+  // effect で差し替えると、マウント直後の入力のあとに effect が走って入力を上書きすることがある。
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setDraft(value);
+    setInvalid(null);
+    setFailed(null);
+  }
+  // ref はレンダー中に書けないので layout effect で消す。コミット内で同期に走るので、入力のあとに回ることはない
+  useLayoutEffect(() => { sent.current = null; }, [value]);
   const commit = () => {
     if (draft === value) { setInvalid(null); setFailed(null); return; }
     const problem = validate?.(draft) ?? null;
@@ -95,7 +113,7 @@ export function SettingField({ id, label, value, onSave, hint, type = "text", wi
       <input id={id} type={type} className="field" style={{ width }} value={draft} aria-invalid={invalid || failed ? true : undefined}
         aria-describedby={!invalid && failed ? errorId : undefined}
         onChange={(e) => { setDraft(e.target.value); sent.current = null; if (e.target.value === value) setFailed(null); }} onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) commit(); }} />
+        onKeyDown={(e) => { if (e.key === "Enter" && !isImeEnter(e)) commit(); }} />
     </div>
   );
 }

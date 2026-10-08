@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SourcesTab } from "./SourcesTab";
 import { setupIpc } from "../../test/ipc";
@@ -258,6 +258,10 @@ describe("SourcesTab", () => {
 
     const failed = rowOf("Zenn");
     expect(failed.getByText("http: timeout")).toBeInTheDocument();
+    // エラー文は折り返して見せ (1行に切り詰めない)、全文は title にも持つ
+    expect(failed.getByText("http: timeout")).toHaveClass("clamp-3");
+    expect(failed.getByText("http: timeout")).not.toHaveClass("truncate");
+    expect(failed.getByTitle("http: timeout")).toHaveClass("cell-status", "error");
     expect(failed.queryByText("40件")).not.toBeInTheDocument();
 
     const disabled = rowOf("The Verge");
@@ -310,6 +314,25 @@ describe("SourcesTab", () => {
     await act(async () => { finish(); });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("GIGAZINE")).toBeInTheDocument();
+  });
+
+  it("blocks the Enter that confirms an IME composition in the dialog's text fields", async () => {
+    const ipc = setupIpc({ list_sources: () => sources, source_item_counts: () => ({}) });
+    render(<SourcesTab />);
+    await screen.findByText("Zenn");
+    await userEvent.click(screen.getByRole("button", { name: "RSSを追加" }));
+    // fireEvent は既定の動作が止められたとき false を返す
+    for (const label of ["フィードURL", "表示名 (任意)"]) {
+      const field = screen.getByLabelText(label);
+      fireEvent.change(field, { target: { value: "https://example.com/ふぃーど" } });
+      expect(fireEvent.keyDown(field, { key: "Enter", isComposing: true })).toBe(false);
+      // WKWebView は変換を確定する Enter を isComposing: false, keyCode: 229 で届けることがある
+      expect(fireEvent.keyDown(field, { key: "Enter", keyCode: 229 })).toBe(false);
+      expect(fireEvent.keyDown(field, { key: "Enter", keyCode: 13 })).toBe(true);
+      expect(fireEvent.keyDown(field, { key: "a", keyCode: 229 })).toBe(true);
+    }
+    expect(ipc.count("add_rss_source")).toBe(0);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("focuses the URL field, submits on Enter, and closes on Escape or overlay click when idle", async () => {

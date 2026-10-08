@@ -119,6 +119,39 @@ describe("TopicsTab", () => {
     expect(screen.getByText(HINT)).toBeInTheDocument();
   });
 
+  it("renders the edit card immediately after the topic being edited and the add card after the list", async () => {
+    const list: Topic[] = [
+      { id: 1, name: "認知症", keywords: ["dementia"] },
+      { id: 2, name: "介護", keywords: ["caregiving"] },
+      { id: 3, name: "創薬", keywords: ["drug discovery"] },
+    ];
+    setupIpc({ list_topics: () => list, sidebar_counts: () => COUNTS });
+    render(<TopicsTab />);
+    await screen.findByText("認知症");
+    const rowEl = (name: string) => screen.getByText(name).closest(".table-row") as HTMLElement;
+    const editCard = () => screen.getByText("トピックを編集").closest(".card");
+
+    await userEvent.click(screen.getByRole("button", { name: "認知症 を編集" }));
+    expect(rowEl("認知症").nextElementSibling).toBe(editCard());
+    expect(editCard()?.nextElementSibling).toBe(rowEl("介護"));
+
+    await userEvent.click(screen.getByRole("button", { name: "介護 を編集" }));
+    expect(screen.getAllByText("トピックを編集")).toHaveLength(1);
+    expect(rowEl("介護").nextElementSibling).toBe(editCard());
+    expect(editCard()?.nextElementSibling).toBe(rowEl("創薬"));
+    expect(screen.getByLabelText("名前")).toHaveValue("介護");
+
+    // 新規追加のカードは行の間ではなく一覧の末尾 (最後の行の直後) に出る
+    await userEvent.click(screen.getByRole("button", { name: "トピックを追加" }));
+    expect(screen.queryByText("トピックを編集")).not.toBeInTheDocument();
+    const addCard = screen.getByRole("heading", { name: "トピックを追加" }).closest(".card");
+    expect(addCard).toBeVisible();
+    expect(rowEl("創薬").nextElementSibling).toBe(addCard);
+    expect(addCard?.nextElementSibling).toBeNull();
+    expect(rowEl("認知症").nextElementSibling).toBe(rowEl("介護"));
+    expect(screen.getByLabelText("名前")).toHaveValue("");
+  });
+
   it("sends one request when 保存 is clicked twice", async () => {
     let finish: () => void = () => {};
     const ipc = setupIpc({

@@ -58,6 +58,26 @@ describe("LlmTab", () => {
     expect(screen.getByLabelText("claude コマンドのパス")).toHaveValue("/nope/claude");
   });
 
+  it("keeps an edit made right after the field appears, before its mount effects have run", async () => {
+    setupIpc({ get_settings: () => settings, set_setting: () => undefined });
+    const { container } = render(<LlmTab />);
+    // 欄が DOM に現れた直後 (コミット後、passive effect が走る前) に同期で入力する
+    const typed = new Promise<void>((resolve) => {
+      const mo = new MutationObserver(() => {
+        const input = container.querySelector<HTMLInputElement>("#claude-bin");
+        if (!input) return;
+        mo.disconnect();
+        fireEvent.change(input, { target: { value: "/nope/claude" } });
+        resolve();
+      });
+      mo.observe(container, { childList: true, subtree: true });
+    });
+    await screen.findByLabelText("claude コマンドのパス");
+    await typed;
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(screen.getByLabelText("claude コマンドのパス")).toHaveValue("/nope/claude");
+  });
+
   it("keeps a failed field's inline error and typed value after an unrelated action succeeds", async () => {
     setupIpc({
       get_settings: () => settings,
@@ -115,6 +135,9 @@ describe("LlmTab", () => {
     const model = await screen.findByLabelText("モデル");
     fireEvent.change(model, { target: { value: "がんま" } });
     fireEvent.keyDown(model, { key: "Enter", isComposing: true });
+    expect(ipc.count("set_setting")).toBe(0);
+    // WKWebView は変換を確定する Enter を isComposing: false, keyCode: 229 で届けることがある
+    fireEvent.keyDown(model, { key: "Enter", keyCode: 229 });
     expect(ipc.count("set_setting")).toBe(0);
     fireEvent.keyDown(model, { key: "Enter" });
     await waitFor(() => expect(ipc.last("set_setting")).toEqual({ key: "ollama.model", value: "がんま" }));
