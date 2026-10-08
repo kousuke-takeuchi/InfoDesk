@@ -32,6 +32,8 @@ cd app && npm install && npm run tauri dev
 
 アプリのDBは `~/Library/Application Support/jp.infodesk.app/infodesk.db`。CLIで同じDBを見るには `--db` で指定する。
 
+画面は `app/src` (React)。テストは `cd app && npm test`。デザインは `design.pen` と `design/exports/`。
+
 ## 設定
 
 `infodesk config set <key> <value>` で変更する。
