@@ -95,7 +95,6 @@ a { color: var(--accent); text-decoration: none; }
 .dot-success { background: var(--success); }
 .dot-danger { background: var(--danger); }
 .dot-muted { background: var(--text-tertiary); }
-.dot-accent { background: var(--accent); }
 
 .error-line { display: flex; gap: 8px; align-items: center; color: var(--danger); font-size: 12px; }
 

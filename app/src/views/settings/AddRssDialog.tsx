@@ -2,7 +2,7 @@ import { CircleAlert, Loader } from "lucide-react";
 import { useEffect, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { api } from "../../api";
 import { CATEGORIES, errorMessage, type Category, type Source } from "../../types";
-import { isImeEnter } from "./LlmTab";
+import { isImeEnter } from "./shared";
 
 // IME の変換を確定する Enter でフォームを送信しない (WKWebView は確定の Enter でも暗黙の送信をする)
 const blockImeEnter = (e: ReactKeyboardEvent) => { if (e.key === "Enter" && isImeEnter(e)) e.preventDefault(); };

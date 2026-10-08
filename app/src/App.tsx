@@ -8,8 +8,6 @@ import { SettingsView } from "./views/SettingsView";
 import { useTauriEvent } from "./hooks/useTauriEvent";
 import { errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
 
-export type { View };
-
 const EMPTY_COUNTS: SidebarCounts = { total_unread: 0, categories: {}, topics: {} };
 const IDLE_STATUS: AppStatus = {
   collecting: false, summarizing: false, digesting: false,

@@ -3,7 +3,7 @@ import { ErrorLine } from "../../components/ErrorLine";
 import { Toggle } from "../../components/Toggle";
 import { formatClock, localDateString } from "../../lib/dates";
 import type { AppStatus } from "../../types";
-import { SettingField, useSettingsState, withStoredOption } from "./LlmTab";
+import { SettingField, useSettingsState, withStoredOption } from "./shared";
 
 const intervalLabel = (h: string) => `${h}時間おき`;
 const INTERVALS = ["1", "3", "6", "12"].map((h) => ({ id: h, label: intervalLabel(h) }));

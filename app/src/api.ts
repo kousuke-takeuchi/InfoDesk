@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  AppStatus, Category, Digest, DigestScope, DigestView, Item, ItemFilter, Period,
+  AppStatus, Category, DigestScope, DigestView, Item, ItemFilter, Period,
   ProbeResult, Settings, SidebarCounts, Source, Topic,
 } from "./types";
 
@@ -48,9 +48,6 @@ export const api = {
   testClaude: () => invoke<ProbeResult>("test_claude"),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };
-
-export type Api = typeof api;
-export type { Digest };
 
 export function onEvent(name: string, handler: () => void): Promise<UnlistenFn> {
   return listen(name, () => handler());

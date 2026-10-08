@@ -11,8 +11,8 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "sources", label: "ソース" }, { id: "topics", label: "トピック" }, { id: "llm", label: "LLM" }, { id: "schedule", label: "スケジュール" },
 ];
 
-export function SettingsView({ status, initialTab = "sources" }: { status: AppStatus; initialTab?: SettingsTab }) {
-  const [tab, setTab] = useState<SettingsTab>(initialTab);
+export function SettingsView({ status }: { status: AppStatus }) {
+  const [tab, setTab] = useState<SettingsTab>("sources");
   return (
     <>
       <div className="toolbar">
