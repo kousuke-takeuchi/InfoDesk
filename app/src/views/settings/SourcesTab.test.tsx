@@ -94,6 +94,23 @@ describe("SourcesTab", () => {
     expect(await screen.findByText("Zenn トレンド")).toBeInTheDocument();
   });
 
+  it("renders the edit card immediately after the row being edited", async () => {
+    setupIpc({ list_sources: () => sources, source_item_counts: () => ({}) });
+    render(<SourcesTab />);
+    await screen.findByText("Zenn");
+    const rowEl = (name: string) => screen.getByText(name).closest(".table-row") as HTMLElement;
+    const card = () => screen.getByText("ソースを編集").closest(".card");
+
+    await userEvent.click(screen.getByRole("button", { name: "GitHub Trending (日) を編集" }));
+    expect(rowEl("GitHub Trending (日)").nextElementSibling).toBe(card());
+    expect(card()?.nextElementSibling).toBe(rowEl("Zenn"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Zenn を編集" }));
+    expect(screen.getAllByText("ソースを編集")).toHaveLength(1);
+    expect(rowEl("Zenn").nextElementSibling).toBe(card());
+    expect(card()?.nextElementSibling).toBe(rowEl("The Verge"));
+  });
+
   it("shows the editor of the row clicked last and saves that row", async () => {
     // F1: 編集カードを開いたまま別の行の鉛筆を押す
     let list = [...sources];

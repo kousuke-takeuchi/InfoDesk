@@ -1,7 +1,8 @@
 import { Hash, Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { ErrorLine } from "../../components/ErrorLine";
+import { RevealCard } from "../../components/RevealCard";
 import { errorMessage, type SidebarCounts, type Topic } from "../../types";
 
 type Draft = { id: number | null; name: string; keywords: string };
@@ -45,37 +46,9 @@ export function TopicsTab() {
       .finally(() => setSaving(false));
   };
 
-  return (
-    <div className="section">
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>トピック</h2>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-primary" onClick={() => setDraft({ id: null, name: "", keywords: "" })}><Plus size={14} /> トピックを追加</button>
-      </div>
-      <p className="desc">キーワードのいずれかを含む記事がトピックに属します。日本語と英語を併記すると両方の記事が集まります。英数字だけの語は単語単位で照合します。</p>
-      <ErrorLine message={error} />
-      <div className="table-head topics-grid"><span>トピック</span><span>キーワード</span><span>未読</span><span /></div>
-      {topics.map((t) => (
-        <div key={t.id} className={`table-row topics-grid ${confirmingId === t.id ? "confirming" : ""}`}>
-          <span style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 500 }}><Hash size={14} className="text-secondary" />{t.name}</span>
-          <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{t.keywords.map((k) => <span key={k} className="chip">{k}</span>)}</span>
-          <span className="small text-secondary">{counts?.topics[String(t.id)] ?? 0}</span>
-          {confirmingId === t.id ? (
-            <div className="cell-confirm">
-              <span>削除しますか? このトピックの要約も削除されます。</span>
-              <button className="btn btn-danger" onClick={() => remove(t.id)}>削除する</button>
-              <button className="btn" onClick={() => setConfirmingId(null)}>キャンセル</button>
-            </div>
-          ) : (
-            <div className="cell-actions">
-              <button aria-label={`${t.name} を編集`} onClick={() => setDraft({ id: t.id, name: t.name, keywords: t.keywords.join(", ") })}><Pencil size={14} /></button>
-              <button aria-label={`${t.name} を削除`} onClick={() => setConfirmingId(t.id)}><Trash2 size={14} /></button>
-            </div>
-          )}
-        </div>
-      ))}
-      {draft && (
-        <div className="card">
+  // 既存トピックの編集はその行の直下に、新規追加は一覧の末尾に出す
+  const editor = draft && (
+        <RevealCard key={draft.id ?? "new"}>
           <h2 style={{ fontSize: 13 }}>{draft.id === null ? "トピックを追加" : "トピックを編集"}</h2>
           <div className="row"><label htmlFor="topic-name">名前</label><input id="topic-name" className="field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
           <div className="row" style={{ alignItems: "flex-start" }}>
@@ -90,8 +63,44 @@ export function TopicsTab() {
             <button className="btn" onClick={() => setDraft(null)}>キャンセル</button>
             <button className="btn btn-primary" disabled={!canSave} onClick={save}>保存</button>
           </div>
+        </RevealCard>
+  );
+
+  return (
+    <div className="section">
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <h2>トピック</h2>
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-primary" onClick={() => setDraft({ id: null, name: "", keywords: "" })}><Plus size={14} /> トピックを追加</button>
+      </div>
+      <p className="desc">キーワードのいずれかを含む記事がトピックに属します。日本語と英語を併記すると両方の記事が集まります。英数字だけの語は単語単位で照合します。</p>
+      <ErrorLine message={error} />
+      <div className="table-head topics-grid"><span>トピック</span><span>キーワード</span><span>未読</span><span /></div>
+      {topics.map((t) => (
+        <Fragment key={t.id}>
+        <div className={`table-row topics-grid ${confirmingId === t.id ? "confirming" : ""}`}>
+          <span className="cell-topic" title={t.name}><Hash size={14} className="text-secondary" /><span className="truncate">{t.name}</span></span>
+          <span className="cell-keywords">{t.keywords.map((k) => <span key={k} className="chip" title={k}>{k}</span>)}</span>
+          <span className="small text-secondary">{counts?.topics[String(t.id)] ?? 0}</span>
+          {/* 確認中も列の幅は変えない。操作列は空にし、確認は行の下に全幅で出す */}
+          {confirmingId === t.id ? <span /> : (
+            <div className="cell-actions">
+              <button aria-label={`${t.name} を編集`} onClick={() => setDraft({ id: t.id, name: t.name, keywords: t.keywords.join(", ") })}><Pencil size={14} /></button>
+              <button aria-label={`${t.name} を削除`} onClick={() => setConfirmingId(t.id)}><Trash2 size={14} /></button>
+            </div>
+          )}
+          {confirmingId === t.id && (
+            <div className="cell-confirm">
+              <span>削除しますか? このトピックの要約も削除されます。</span>
+              <button className="btn btn-danger" onClick={() => remove(t.id)}>削除する</button>
+              <button className="btn" onClick={() => setConfirmingId(null)}>キャンセル</button>
+            </div>
+          )}
         </div>
-      )}
+        {draft?.id === t.id && editor}
+        </Fragment>
+      ))}
+      {draft?.id === null && editor}
     </div>
   );
 }

@@ -59,13 +59,14 @@ a { color: var(--accent); text-decoration: none; }
 .text-secondary { color: var(--text-secondary); }
 .text-tertiary { color: var(--text-tertiary); }
 .small { font-size: 12px; }
+.truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tiny { font-size: 11px; }
 
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 12px; border-radius: var(--radius-md);
   border: 1px solid var(--border); background: var(--bg-window);
-  font-size: 12px; font-weight: 600;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn-primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
@@ -81,7 +82,7 @@ a { color: var(--accent); text-decoration: none; }
 .field-error { border-color: var(--danger); }
 
 .segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--bg-subtle); border: 1px solid var(--border); }
-.segmented button { padding: 4px 14px; border-radius: var(--radius-sm); font-size: 12px; border: 1px solid transparent; }
+.segmented button { white-space: nowrap; flex-shrink: 0; padding: 4px 14px; border-radius: var(--radius-sm); font-size: 12px; border: 1px solid transparent; }
 .segmented button[aria-pressed="true"] { background: var(--seg-selected); border-color: var(--border); font-weight: 600; }
 
 .toggle { position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--toggle-off); transition: background .15s; }

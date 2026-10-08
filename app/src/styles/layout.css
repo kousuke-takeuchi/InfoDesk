@@ -23,9 +23,12 @@
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .shell-errors { display: flex; flex-direction: column; gap: 4px; padding: 8px 24px 0; }
-.toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
+/* 幅が足りないときはツールバーごと折り返す。ボタンやラベルの文字は折り返さない */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
 .toolbar .spacer { flex: 1; }
-.search { display: flex; align-items: center; gap: 6px; width: 200px; padding: 5px 10px; border-radius: var(--radius-md); background: var(--bg-subtle); }
+.toolbar .btn, .toolbar .segmented { flex-shrink: 0; }
+.toolbar select.field { flex: 0 0 auto; width: 160px; min-width: 140px; text-overflow: ellipsis; }
+.search { display: flex; align-items: center; gap: 6px; flex: 1 1 140px; min-width: 140px; padding: 5px 10px; border-radius: var(--radius-md); background: var(--bg-subtle); }
 .search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 12px; }
 .search svg { color: var(--text-secondary); }
 
@@ -68,17 +71,23 @@
 .setting-row .label .hint { font-size: 11px; color: var(--text-tertiary); }
 .table-head, .table-row { display: grid; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .table-head { font-size: 11px; font-weight: 600; color: var(--text-tertiary); padding: 8px 0; }
-.sources-grid { grid-template-columns: 44px 1fr 110px 90px 230px 56px; }
-.topics-grid { grid-template-columns: 200px 1fr 60px 56px; }
-.cell-name { display: flex; flex-direction: column; gap: 2px; }
+/* 行ごとに別のグリッドなので、列幅は内容に依存させない (minmax(0, fr) と固定幅だけ) */
+.sources-grid { grid-template-columns: 44px minmax(0, 1.6fr) 100px 72px minmax(0, 1fr) 56px; }
+.topics-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 60px 56px; }
+.cell-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cell-name .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-name .url { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cell-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.cell-topic { display: flex; gap: 8px; align-items: center; font-weight: 500; min-width: 0; }
+.cell-topic svg { flex: none; }
+.cell-keywords { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.cell-keywords .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.cell-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
+.cell-status .dot { flex: none; }
 .cell-status.error { color: var(--danger); }
 .cell-actions { display: flex; gap: 6px; color: var(--text-secondary); }
-/* 削除の確認中は操作列を内容の幅まで広げ、伸縮する列を縮める */
-.sources-grid.confirming { grid-template-columns: 44px minmax(0, 1fr) 110px 90px 230px auto; }
-.topics-grid.confirming { grid-template-columns: 200px minmax(0, 1fr) 60px auto; }
-.cell-confirm { display: flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }
+/* 削除の確認は行の列を変えず、行の下に全幅で出す */
+.cell-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; }
+.cell-confirm .btn { flex-shrink: 0; white-space: nowrap; }
 .cell-confirm .btn-danger { color: var(--danger); }
 .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: var(--bg-subtle); max-width: 560px; }
 .card .row { display: flex; align-items: center; gap: 12px; }
