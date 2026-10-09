@@ -355,4 +355,24 @@ describe("FeedView", () => {
     await screen.findByText("認知症の新薬");
     expect(document.querySelector(".item-row img")).toBeNull();
   });
+
+  it("opens the article when the thumbnail is clicked", async () => {
+    const ipc = renderFeed([item({ image_url: "https://img.example.com/a.jpg" })]);
+    await screen.findByText("認知症の新薬");
+    await userEvent.click(document.querySelector("img.thumb") as HTMLImageElement);
+    expect(ipc.last("open_item")).toEqual({ id: 1 });
+  });
+
+  it("places the thumbnail between the content and the row actions", async () => {
+    renderFeed([item({ image_url: "https://img.example.com/a.jpg" })]);
+    await screen.findByText("認知症の新薬");
+    const row = document.querySelector(".item-row") as HTMLElement;
+    const kids = Array.from(row.children);
+    const idx = (el: Element | null) => kids.indexOf(el as Element);
+    const thumb = idx(row.querySelector("img.thumb"));
+    expect(thumb).toBeGreaterThan(idx(row.querySelector(".content")));
+    expect(thumb).toBeLessThan(idx(row.querySelector(".row-actions")));
+    expect(thumb).toBeLessThan(idx(row.querySelector(".star")));
+    expect(row.querySelector("img.thumb")).not.toHaveAttribute("tabindex");
+  });
 });
