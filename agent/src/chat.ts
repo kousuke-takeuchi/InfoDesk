@@ -1,5 +1,8 @@
 import type { ServerResponse } from "node:http";
-import { convertToModelMessages, isStepCount, streamText, ToolLoopAgent, pipeAgentUIStreamToResponse, type UIMessage } from "ai";
+import {
+  convertToModelMessages, createAgentUIStream, createUIMessageStream, isStepCount, pipeUIMessageStreamToResponse,
+  streamText, ToolLoopAgent, type UIMessage, type UIMessageChunk,
+} from "ai";
 import { createAiSdkMcpServer } from "ai-sdk-provider-claude-code";
 import type { CliRunner } from "./cli";
 import type { ChatContext } from "./context";
@@ -22,10 +25,52 @@ export interface ChatDeps {
 }
 
 const MAX_STEPS = 12;
+const FINISHED_TOOL_STATES = new Set(["output-available", "output-error", "output-denied"]);
 
-export async function streamChat(req: ChatRequest, res: ServerResponse, deps: ChatDeps, signal: AbortSignal): Promise<void> {
-  const settings = await deps.loadSettings();
+/**
+ * 途中で止めた回の会話には、結果のないツール呼び出しが残る。そのままだと以後の回がすべて失敗するので、
+ * 終わっていないツール部分を落とし、空になったアシスタントのメッセージも落とす。
+ */
+export function dropIncompleteToolParts(messages: UIMessage[]): UIMessage[] {
+  return messages.flatMap((m) => {
+    if (!Array.isArray(m.parts)) return [m];
+    const parts = m.parts.filter((p) => {
+      const type = (p as { type?: unknown }).type;
+      const isTool = typeof type === "string" && (type.startsWith("tool-") || type === "dynamic-tool");
+      return !isTool || FINISHED_TOOL_STATES.has(String((p as { state?: unknown }).state));
+    });
+    if (m.role === "assistant" && parts.length === 0) return [];
+    return [{ ...m, parts }];
+  });
+}
+
+/**
+ * 接続が切れたとき、ai の UI ストリームを理由付きで cancel すると Node の pipeTo 内部で未処理の reject が出る。
+ * 中断は abort シグナルで伝わるので、cancel は伝えずに残りを読み捨てる (シグナルの中断ですぐ終わる)。
+ */
+function drainOnCancel(inner: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
+  const reader = inner.getReader();
+  return new ReadableStream<UIMessageChunk>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel() {
+      void (async () => {
+        try {
+          while (!(await reader.read()).done);
+        } catch {
+          // 読み捨てるだけなので無視する
+        }
+      })();
+    },
+  });
+}
+
+async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, signal: AbortSignal): Promise<ReadableStream<UIMessageChunk>> {
   const onError = (e: unknown) => describeError(e, req.provider, settings);
+  const messages = dropIncompleteToolParts(req.messages);
   if (req.provider === "ollama") {
     const tools = createInfodeskTools(deps.run, { webSearchKey: settings["ollama.web_search_api_key"] || undefined });
     const agent = new ToolLoopAgent({
@@ -34,8 +79,7 @@ export async function streamChat(req: ChatRequest, res: ServerResponse, deps: Ch
       tools,
       stopWhen: isStepCount(MAX_STEPS),
     });
-    await pipeAgentUIStreamToResponse({ response: res, agent, uiMessages: req.messages, abortSignal: signal, onError });
-    return;
+    return createAgentUIStream({ agent, uiMessages: messages, abortSignal: signal, onError }) as Promise<ReadableStream<UIMessageChunk>>;
   }
   // Claude: Claude Code CLI が自分でツールを実行するので、ツールは MCP で渡す。Web検索は組み込みの WebSearch。
   const tools = createInfodeskTools(deps.run, {});
@@ -48,8 +92,32 @@ export async function streamChat(req: ChatRequest, res: ServerResponse, deps: Ch
   });
   const result = streamText({
     model,
-    messages: await convertToModelMessages(req.messages, { ignoreIncompleteToolCalls: true }),
+    messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
     abortSignal: signal,
   });
-  await result.pipeUIMessageStreamToResponse(res, { onError });
+  return result.toUIMessageStream({ onError });
+}
+
+/** ストリームを始める前の失敗 (設定の読み込み、モデルの用意、メッセージの検証) も、UI には error チャンクで返す。 */
+async function sendErrorStream(res: ServerResponse, errorText: string): Promise<void> {
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      writer.write({ type: "start" });
+      writer.write({ type: "error", errorText });
+    },
+  });
+  await pipeUIMessageStreamToResponse({ response: res, stream });
+}
+
+export async function streamChat(req: ChatRequest, res: ServerResponse, deps: ChatDeps, signal: AbortSignal): Promise<void> {
+  let settings: Settings | undefined;
+  let stream: ReadableStream<UIMessageChunk>;
+  try {
+    settings = await deps.loadSettings();
+    stream = await openStream(req, deps, settings, signal);
+  } catch (e) {
+    await sendErrorStream(res, describeError(e, req.provider, settings ?? {}));
+    return;
+  }
+  await pipeUIMessageStreamToResponse({ response: res, stream: drainOnCancel(stream) });
 }

@@ -1,5 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import type { ChatRequest } from "./chat";
+import type { ChatContext } from "./context";
 
 const MAX_BODY = 5 * 1024 * 1024;
 const PROVIDERS = new Set(["ollama", "claude"]);
@@ -10,9 +12,12 @@ export interface AgentServerOptions {
   chat: (req: ChatRequest, res: ServerResponse, signal: AbortSignal) => Promise<void>;
 }
 
-function send(res: ServerResponse, status: number, body?: unknown) {
+function send(res: ServerResponse, status: number, body?: unknown): void {
   res.statusCode = status;
-  if (body === undefined) return res.end();
+  if (body === undefined) {
+    res.end();
+    return;
+  }
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(body));
 }
@@ -28,11 +33,26 @@ async function readBody(req: IncomingMessage): Promise<string | null> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+function tokenMatches(header: string | undefined, token: string): boolean {
+  if (header === undefined) return false;
+  const got = Buffer.from(header);
+  const want = Buffer.from(`Bearer ${token}`);
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
+/** 画面の文脈は形が合わなければ無いものとして扱う (指示文を作るときに落ちないように)。 */
+function parseContext(v: unknown): ChatContext | null {
+  if (!v || typeof v !== "object") return null;
+  const c = v as { scope?: unknown; attachments?: unknown };
+  if (!c.scope || typeof c.scope !== "object" || !Array.isArray(c.attachments)) return null;
+  return v as ChatContext;
+}
+
 function parseChat(raw: string): ChatRequest | null {
   try {
     const v = JSON.parse(raw);
     if (!v || !Array.isArray(v.messages) || !PROVIDERS.has(v.provider)) return null;
-    return { messages: v.messages, provider: v.provider, context: v.context ?? null };
+    return { messages: v.messages, provider: v.provider, context: parseContext(v.context) };
   } catch {
     return null;
   }
@@ -40,33 +60,41 @@ function parseChat(raw: string): ChatRequest | null {
 
 export function createAgentServer(opts: AgentServerOptions): http.Server {
   return http.createServer(async (req, res) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      if (!opts.allowedOrigins.includes(origin)) return send(res, 403);
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-    }
-    if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
-      res.setHeader("Access-Control-Max-Age", "600");
-      return send(res, 204);
-    }
-    if (req.headers.authorization !== `Bearer ${opts.token}`) return send(res, 401, { error: "unauthorized" });
-    const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    if (req.method === "GET" && url.pathname === "/health") return send(res, 200, { ok: true });
-    if (req.method !== "POST" || url.pathname !== "/chat") return send(res, 404, { error: "not found" });
-    const raw = await readBody(req);
-    if (raw === null) return send(res, 413, { error: "request too large" });
-    const chat = parseChat(raw);
-    if (!chat) return send(res, 400, { error: "invalid chat request" });
-    const ac = new AbortController();
-    res.on("close", () => { if (!res.writableFinished) ac.abort(); });
     try {
-      await opts.chat(chat, res, ac.signal);
+      await handle(opts, req, res);
     } catch (e) {
-      if (!res.headersSent) send(res, 500, { error: e instanceof Error ? e.message : String(e) });
-      else res.end();
+      // 送信中に切れた接続 (アップロード途中の中断など) は、もう返す相手がいない。
+      if (res.destroyed || res.headersSent) {
+        if (!res.destroyed) res.end();
+        return;
+      }
+      send(res, 500, { error: e instanceof Error ? e.message : String(e) });
     }
   });
+}
+
+async function handle(opts: AgentServerOptions, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const origin = req.headers.origin;
+  if (origin) {
+    if (!opts.allowedOrigins.includes(origin)) return send(res, 403);
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+    res.setHeader("Access-Control-Max-Age", "600");
+    return send(res, 204);
+  }
+  if (!tokenMatches(req.headers.authorization, opts.token)) return send(res, 401, { error: "unauthorized" });
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (req.method === "GET" && url.pathname === "/health") return send(res, 200, { ok: true });
+  if (req.method !== "POST" || url.pathname !== "/chat") return send(res, 404, { error: "not found" });
+  const raw = await readBody(req);
+  if (raw === null) return send(res, 413, { error: "request too large" });
+  const chat = parseChat(raw);
+  if (!chat) return send(res, 400, { error: "invalid chat request" });
+  const ac = new AbortController();
+  res.on("close", () => { if (!res.writableFinished) ac.abort(); });
+  await opts.chat(chat, res, ac.signal);
 }

@@ -1,3 +1,4 @@
+import "./stdout-guard";
 import { createCliRunner } from "./cli";
 import { streamChat } from "./chat";
 import { readEnv } from "./env";
@@ -29,6 +30,11 @@ async function main() {
   process.stdin.resume();
   process.on("SIGTERM", () => server.close(() => process.exit(0)));
 }
+
+// 取りこぼした reject でサイドカーごと落ちないようにする (本来は各所で処理する。これは保険)。
+process.on("unhandledRejection", (reason) => {
+  process.stderr.write(`unhandled rejection: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}\n`);
+});
 
 main().catch((e) => {
   process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);

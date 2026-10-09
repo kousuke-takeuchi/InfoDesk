@@ -1,11 +1,11 @@
 import type { ServerResponse } from "node:http";
-import type { AddressInfo } from "node:net";
+import net, { type AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { createCliRunner } from "../src/cli";
-import { streamChat, type ChatDeps } from "../src/chat";
+import { CliError, createCliRunner } from "../src/cli";
+import { streamChat, type ChatDeps, type ChatRequest } from "../src/chat";
 import { createAgentServer } from "../src/server";
 
 const FAKE = fileURLToPath(new URL("./fake-infodesk.mjs", import.meta.url));
@@ -40,6 +40,8 @@ describe("createAgentServer", () => {
     const { base, chat } = await start();
     expect((await fetch(`${base}/health`)).status).toBe(401);
     expect((await fetch(`${base}/chat`, { method: "POST", body: body(), headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
+    expect((await fetch(`${base}/health`, { headers: { Authorization: "Bearer t0kem" } })).status).toBe(401);
+    expect((await fetch(`${base}/health`, { headers: { Authorization: `Bearer ${TOKEN}x` } })).status).toBe(401);
     expect(chat).not.toHaveBeenCalled();
     const ok = await fetch(`${base}/health`, { headers: { Authorization: `Bearer ${TOKEN}` } });
     expect(await ok.json()).toEqual({ ok: true });
@@ -63,6 +65,41 @@ describe("createAgentServer", () => {
     expect((await fetch(`${base}/chat`, { method: "POST", headers: h, body: JSON.stringify({ provider: "ollama" }) })).status).toBe(400);
     expect((await fetch(`${base}/nope`, { headers: h })).status).toBe(404);
     expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body over the limit with 413", async () => {
+    const { base, chat } = await start();
+    const big = JSON.stringify({ messages: [{ id: "u", role: "user", parts: [{ type: "text", text: "a".repeat(6 * 1024 * 1024) }] }], provider: "ollama" });
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: big });
+    expect(res.status).toBe(413);
+    expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("treats a malformed context as no context", async () => {
+    const { base, chat } = await start();
+    const h = { Authorization: `Bearer ${TOKEN}` };
+    for (const context of ["x", { scope: { kind: "all" } }, { attachments: [] }, { scope: { kind: "all" }, attachments: "no" }]) {
+      const res = await fetch(`${base}/chat`, { method: "POST", headers: h, body: body({ context }) });
+      expect(res.status).toBe(200);
+    }
+    const good = { scope: { kind: "all" }, period: null, attachments: [] };
+    await fetch(`${base}/chat`, { method: "POST", headers: h, body: body({ context: good }) });
+    const contexts = (chat as any).mock.calls.map((c: [ChatRequest]) => c[0].context);
+    expect(contexts).toEqual([null, null, null, null, good]);
+  });
+
+  it("survives a client that aborts during the upload", async () => {
+    const { base } = await start();
+    const port = Number(new URL(base).port);
+    await new Promise<void>((resolve) => {
+      const sock = net.connect(port, "127.0.0.1", () => {
+        sock.write(`POST /chat HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ${TOKEN}\r\nContent-Length: 1000\r\n\r\n{"messages":`);
+        setTimeout(() => { sock.destroy(); resolve(); }, 50);
+      });
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    const ok = await fetch(`${base}/health`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    expect(await ok.json()).toEqual({ ok: true });
   });
 });
 
@@ -147,6 +184,88 @@ describe("streamChat (Ollama)", () => {
     const toolErr = chunks.find((c) => c.type === "tool-output-error");
     expect(toolErr.errorText).toContain("item 404 not found");
     expect(chunks.some((c) => c.type === "text-delta")).toBe(true);
+  });
+
+  const textModel = (text: string) => new MockLanguageModelV4({
+    doStream: async () => ({
+      stream: simulateReadableStream({ chunks: [
+        { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: text }, { type: "text-end", id: "t" },
+        { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+      ] as never }),
+    }),
+  });
+
+  it("streams a CLI failure before streaming as a structured tool error", async () => {
+    const d: ChatDeps = { ...deps(textModel("x")), loadSettings: async () => { throw new CliError("infodesk CLI not found: /nope"); } };
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const chunks = sseChunks(await res.text());
+    expect(chunks.map((c) => c.type)).toEqual(["start", "error"]);
+    expect(JSON.parse(chunks[1].errorText)).toEqual({
+      kind: "tool", provider: "ollama", message: "infodesk CLI を実行できません: infodesk CLI not found: /nope",
+    });
+  });
+
+  it("streams a model factory failure as a structured error", async () => {
+    const d: ChatDeps = { ...deps(textModel("x")), models: { ollama: () => { throw new Error("bad base url"); }, claude: () => { throw new Error("no"); } } };
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
+    expect(res.status).toBe(200);
+    const err = sseChunks(await res.text()).find((c) => c.type === "error");
+    expect(JSON.parse(err.errorText)).toEqual({ kind: "other", provider: "ollama", message: "bad base url" });
+  });
+
+  it("answers after a previous turn was aborted mid tool call", async () => {
+    const model = textModel("続きです。");
+    const d = deps(model);
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const messages = [
+      userMessage,
+      { id: "a1", role: "assistant", parts: [
+        { type: "step-start" },
+        { type: "tool-search_articles", toolCallId: "c0", state: "input-available", input: { query: "認知症" } },
+      ] },
+      { id: "a2", role: "assistant", parts: [
+        { type: "text", text: "途中まで", state: "done" },
+        { type: "dynamic-tool", toolName: "x", toolCallId: "c9", state: "input-streaming", input: undefined },
+      ] },
+      { id: "u2", role: "user", parts: [{ type: "text", text: "続けて" }] },
+    ];
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ messages, provider: "ollama", context: null }) });
+    const chunks = sseChunks(await res.text());
+    expect(chunks.find((c) => c.type === "error")).toBeUndefined();
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("続きです。");
+    const prompt = JSON.stringify((model.doStreamCalls[0] as any).prompt);
+    expect(prompt).not.toContain("c0");
+    expect(prompt).toContain("途中まで");
+  });
+
+  it("aborts the chat when the client disconnects mid-stream", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          initialDelayInMs: 0,
+          chunkDelayInMs: 200,
+          chunks: [
+            { type: "text-start", id: "t" },
+            ...Array.from({ length: 20 }, () => ({ type: "text-delta", id: "t", delta: "あ" })),
+            { type: "text-end", id: "t" },
+            { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+          ] as never,
+        }),
+      }),
+    });
+    const d = deps(model);
+    let seen: AbortSignal | undefined;
+    const { base } = await start((req, res, signal) => { seen = signal; return streamChat(req, res, d, signal); });
+    const ac = new AbortController();
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body(), signal: ac.signal });
+    const reader = res.body!.getReader();
+    await reader.read();
+    ac.abort();
+    await vi.waitFor(() => expect(seen?.aborted).toBe(true), { timeout: 2000 });
   });
 });
 

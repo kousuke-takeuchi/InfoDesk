@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CliError } from "../src/cli";
 import { describeError } from "../src/errors";
 
 const S = { "ollama.base_url": "http://localhost:11434", "ollama.model": "gemma4:26b" };
@@ -21,6 +22,22 @@ describe("describeError", () => {
   it("recognizes a Claude login problem", () => {
     const e = new Error("Authentication failed: please run claude login");
     expect(parse(describeError(e, "claude", S))).toMatchObject({ kind: "auth", provider: "claude" });
+  });
+
+  it("recognizes other Claude auth wordings but not a bare 401", () => {
+    expect(parse(describeError(new Error("401 Unauthorized"), "claude", S))).toMatchObject({ kind: "auth" });
+    expect(parse(describeError(new Error("Please log in again"), "claude", S))).toMatchObject({ kind: "auth" });
+    expect(parse(describeError(new Error("request 4012 failed"), "claude", S))).toMatchObject({ kind: "other" });
+    expect(parse(describeError(new Error("HTTP 401"), "claude", S))).toMatchObject({ kind: "other" });
+    expect(parse(describeError(new Error("blogin catalog"), "claude", S))).toMatchObject({ kind: "other" });
+  });
+
+  it("names a CLI failure as a tool error", () => {
+    for (const provider of ["ollama", "claude"] as const) {
+      expect(parse(describeError(new CliError("infodesk CLI timed out"), provider, S))).toEqual({
+        kind: "tool", provider, message: "infodesk CLI を実行できません: infodesk CLI timed out",
+      });
+    }
   });
 
   it("passes other errors through", () => {

@@ -1,4 +1,5 @@
 import { isAuthenticationError } from "ai-sdk-provider-claude-code";
+import { CliError } from "./cli";
 import type { ProviderId, Settings } from "./models";
 
 export interface ChatErrorInfo {
@@ -20,6 +21,9 @@ function causeCode(e: unknown): string | undefined {
 export function describeError(error: unknown, provider: ProviderId, settings: Settings): string {
   const message = error instanceof Error ? error.message : String(error);
   const info = ((): ChatErrorInfo => {
+    if (error instanceof CliError) {
+      return { kind: "tool", provider, message: `infodesk CLI を実行できません: ${message}` };
+    }
     if (provider === "ollama") {
       const code = causeCode(error);
       if (code === "ECONNREFUSED" || code === "ENOTFOUND" || /fetch failed|ECONNREFUSED/.test(message)) {
@@ -31,7 +35,7 @@ export function describeError(error: unknown, provider: ProviderId, settings: Se
         return { kind: "model_missing", provider, message: `モデル ${model} が Ollama にありません。ollama pull ${model} を実行するか、設定でモデル名を直してください。` };
       }
     }
-    if (provider === "claude" && (isAuthenticationError(error) || /authentication|log ?in|401/i.test(message))) {
+    if (provider === "claude" && (isAuthenticationError(error) || /\bauthentication\b|\blog ?in\b|\bunauthorized\b/i.test(message))) {
       return { kind: "auth", provider, message: "Claude にログインしていません。ターミナルで claude を実行してログインしてください。" };
     }
     return { kind: "other", provider, message };
