@@ -34,6 +34,8 @@ cd app && npm install && npm run tauri dev
 
 画面は `app/src` (React)。テストは `cd app && npm test`。デザインは `design.pen` と `design/exports/`。
 
+フィードの記事には、収集のときに見つけた画像を表示する (フィードの画像、なければ記事ページの og:image)。画像は表示のたびに元のサイトから読み込む。
+
 ## 設定
 
 `infodesk config set <key> <value>` で変更する。
@@ -52,6 +54,8 @@ cd app && npm install && npm run tauri dev
 ## チャット
 
 右のパネルで、収集した記事と要約についてエージェントに質問できる。エージェントは Node のサイドカー (`agent/`) で動き、アプリが起動する。
+
+回答中はエージェントの作業計画、思考、ツールの実行と経過時間を表示し、回答の後は1行にまとめる。
 
 - Node 22 以上が必要。場所は設定の LLM タブ「Node のパス」で指定する (既定 `node`。`/opt/homebrew/bin` と `/usr/local/bin` も探す)。
 - LLM はパネル下のモデル選択で Ollama と Claude を切り替える。Claude は `claude` CLI (設定「claude コマンドのパス」) を使い、モデルは `sonnet`。
