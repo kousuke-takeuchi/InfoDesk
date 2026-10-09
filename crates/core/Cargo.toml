@@ -7,6 +7,7 @@ rust-version = "1.89"
 [dependencies]
 async-trait = "0.1.92"
 chrono = { version = "0.4.45", features = ["serde"] }
+encoding_rs = "0.8.42"
 feed-rs = "3.0.0"
 reqwest = { version = "0.13.5", features = ["json"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
@@ -14,7 +15,7 @@ scraper = "0.27.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
-tokio = { version = "1.53.2", features = ["process", "io-util", "time"] }
+tokio = { version = "1.53.2", features = ["process", "io-util", "time", "net"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

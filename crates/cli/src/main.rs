@@ -398,7 +398,7 @@ fn digests(
 }
 
 async fn page(url: &str, max_chars: usize, json: bool) -> Result<()> {
-    let p = infodesk_core::page::fetch_page(&collector::http_client()?, url, max_chars).await?;
+    let p = infodesk_core::page::fetch_page(url, max_chars).await?;
     if json {
         return print_json(&json::page_json(&p));
     }
