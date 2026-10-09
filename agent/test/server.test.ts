@@ -163,7 +163,28 @@ describe("streamChat (Ollama)", () => {
     const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
     const chunks = sseChunks(await res.text());
     expect(chunks.find((c) => c.type === "start").messageMetadata).toEqual({ startedAt: NOW_ISO });
-    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO });
+    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO, finishReason: "stop" });
+  });
+
+  it("reports a run stopped by the step cap as not a normal finish", async () => {
+    let call = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        call += 1;
+        return { stream: simulateReadableStream({ chunks: [
+          { type: "tool-call", toolCallId: `c${call}`, toolName: "search_articles", input: JSON.stringify({ query: `q${call}` }) },
+          { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
+        ] as never }) };
+      },
+    });
+    const d: ChatDeps = { ...deps(model), maxSteps: 2 };
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
+    const chunks = sseChunks(await res.text());
+    expect(model.doStreamCalls.length).toBe(2);
+    const meta = chunks.find((c) => c.type === "finish").messageMetadata;
+    expect(meta).toEqual({ finishedAt: NOW_ISO, finishReason: "tool-calls" });
+    expect(meta.finishReason).not.toBe("stop");
   });
 
   it("answers after plan updates sent alongside the tool calls, within the step budget", async () => {
@@ -371,6 +392,6 @@ describe("streamChat (Claude)", () => {
     const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body({ provider: "claude" }) });
     const chunks = sseChunks(await res.text());
     expect(chunks.find((c) => c.type === "start").messageMetadata).toEqual({ startedAt: NOW_ISO });
-    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO });
+    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO, finishReason: "stop" });
   });
 });

@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
 import {
   convertToModelMessages, createAgentUIStream, createUIMessageStream, isStepCount, pipeUIMessageStreamToResponse,
-  streamText, ToolLoopAgent, type UIMessage, type UIMessageChunk,
+  streamText, ToolLoopAgent, type TextStreamPart, type ToolSet, type UIMessage, type UIMessageChunk,
 } from "ai";
 import { createAiSdkMcpServer } from "ai-sdk-provider-claude-code";
 import type { CliRunner } from "./cli";
@@ -22,6 +22,8 @@ export interface ChatDeps {
   loadSettings(): Promise<Settings>;
   models: ModelFactory;
   now(): Date;
+  /** Ollama の1回の回答のステップ数の上限。省略時は MAX_STEPS。 */
+  maxSteps?: number;
 }
 
 /** Ollama の1回の回答で使えるステップ数の上限。作業計画の更新の分も見込む。 */
@@ -99,10 +101,14 @@ function drainOnCancel(inner: ReadableStream<UIMessageChunk>): ReadableStream<UI
   });
 }
 
+/**
+ * 回答の開始と終了の時刻を UI に送る。終了には理由も付ける。ステップ数の上限で止まった回は
+ * "tool-calls"、途中のエラーは "error" になり、"stop" だけが回答を書き終えた回。
+ */
 function metadataFor(deps: ChatDeps) {
-  return ({ part }: { part: { type: string } }) =>
+  return ({ part }: { part: TextStreamPart<ToolSet> }) =>
     part.type === "start" ? { startedAt: deps.now().toISOString() }
-    : part.type === "finish" ? { finishedAt: deps.now().toISOString() }
+    : part.type === "finish" ? { finishedAt: deps.now().toISOString(), finishReason: part.finishReason }
     : undefined;
 }
 
@@ -118,7 +124,7 @@ async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, 
       model: deps.models.ollama(settings),
       instructions: buildInstructions(req.context, deps.now(), Object.keys(tools)),
       tools,
-      stopWhen: isStepCount(MAX_STEPS),
+      stopWhen: isStepCount(deps.maxSteps ?? MAX_STEPS),
     });
     return createAgentUIStream({ agent, uiMessages: truncateOlderToolOutputs(messages), abortSignal: signal, onError, messageMetadata: metadataFor(deps), sendReasoning: true }) as Promise<ReadableStream<UIMessageChunk>>;
   }
