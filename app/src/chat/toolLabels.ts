@@ -9,6 +9,7 @@ const LABELS: Record<string, string> = {
   fetch_page: "本文取得",
   web_search: "Web検索",
   WebSearch: "Web検索",
+  update_plan: "計画の更新",
 };
 
 type Obj = Record<string, any>;

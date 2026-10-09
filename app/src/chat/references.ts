@@ -1,18 +1,6 @@
 import type { UIMessage } from "ai";
 
-type Obj = Record<string, any>;
-
-function unwrap(output: unknown): Obj | null {
-  let v: unknown = output;
-  if (v && typeof v === "object" && Array.isArray((v as Obj).content)) {
-    const text = (v as Obj).content.find((c: Obj) => c?.type === "text")?.text;
-    v = typeof text === "string" ? text : null;
-  }
-  if (typeof v === "string") {
-    try { v = JSON.parse(v); } catch { return null; }
-  }
-  return v && typeof v === "object" ? (v as Obj) : null;
-}
+import { unwrap, type Obj } from "./unwrap";
 
 export function referencedItems(message: UIMessage, max = 8): { id: number; title: string }[] {
   const seen = new Map<number, string>();
