@@ -1,3 +1,5 @@
+mod json;
+
 use std::path::PathBuf;
 
 use chrono::{FixedOffset, Local, NaiveDate, Utc};
@@ -53,6 +55,38 @@ enum Command {
         text: Option<String>,
         #[arg(long, default_value_t = 30)]
         limit: u32,
+        /// この日 (YYYY-MM-DD、ローカル) の0時以降
+        #[arg(long)]
+        from: Option<String>,
+        /// この日 (YYYY-MM-DD、ローカル) の終わりまで
+        #[arg(long)]
+        to: Option<String>,
+        /// JSONで出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// 記事を1件表示する
+    Item {
+        id: i64,
+        /// JSONで出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// 保存済みの期間要約を表示する (生成はしない)
+    Digests {
+        /// day | week | month
+        period: String,
+        /// 対象日 (YYYY-MM-DD)。既定は今日
+        #[arg(long)]
+        date: Option<String>,
+        #[arg(long)]
+        category: Option<String>,
+        /// トピック名
+        #[arg(long)]
+        topic: Option<String>,
+        /// JSONで出力する
+        #[arg(long)]
+        json: bool,
     },
     Source {
         #[command(subcommand)]
@@ -107,8 +141,18 @@ enum TopicCommand {
 
 #[derive(Subcommand)]
 enum ConfigCommand {
-    Get { key: String },
-    Set { key: String, value: String },
+    List {
+        /// JSONで出力する
+        #[arg(long)]
+        json: bool,
+    },
+    Get {
+        key: String,
+    },
+    Set {
+        key: String,
+        value: String,
+    },
 }
 
 fn default_db_path() -> Result<PathBuf> {
@@ -122,6 +166,17 @@ fn local_tz() -> FixedOffset {
 
 fn today() -> NaiveDate {
     Local::now().date_naive()
+}
+
+fn parse_date(s: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map_err(|_| Error::Invalid(format!("invalid date '{s}'")))
+}
+
+fn print_json(v: &serde_json::Value) -> Result<()> {
+    let s = serde_json::to_string(v).map_err(|e| Error::Invalid(e.to_string()))?;
+    println!("{s}");
+    Ok(())
 }
 
 fn parse_category(s: &str) -> Result<Category> {
@@ -178,8 +233,7 @@ async fn digest(
     let period = Period::parse(period)
         .ok_or_else(|| Error::Invalid(format!("unknown period '{period}'")))?;
     let date = match date {
-        Some(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d")
-            .map_err(|_| Error::Invalid(format!("invalid date '{s}'")))?,
+        Some(s) => parse_date(&s)?,
         None => today(),
     };
     let scopes: Vec<DigestScope> = match topic {
@@ -231,14 +285,40 @@ async fn digest(
     Ok(())
 }
 
-fn items(
-    store: &Store,
+struct ItemsOpts {
     category: Option<String>,
     topic: Option<String>,
     days: Option<i64>,
     text: Option<String>,
     limit: u32,
-) -> Result<()> {
+    from: Option<String>,
+    to: Option<String>,
+    json: bool,
+}
+
+fn items(store: &Store, o: ItemsOpts) -> Result<()> {
+    let ItemsOpts {
+        category,
+        topic,
+        days,
+        text,
+        limit,
+        from,
+        to,
+        json,
+    } = o;
+    if json {
+        let args = json::ItemsArgs {
+            category: category.as_deref().map(parse_category).transpose()?,
+            topic_id: topic.as_deref().map(|n| topic_id(store, n)).transpose()?,
+            days,
+            from: from.as_deref().map(parse_date).transpose()?,
+            to: to.as_deref().map(parse_date).transpose()?,
+            text,
+            limit,
+        };
+        return print_json(&json::items_json(store, &args, local_tz())?);
+    }
     let filter = ItemFilter {
         category: category.as_deref().map(parse_category).transpose()?,
         topic_id: topic.as_deref().map(|n| topic_id(store, n)).transpose()?,
@@ -255,6 +335,54 @@ fn items(
         if let Some(summary) = &item.ai_summary {
             println!("  {summary}");
         }
+    }
+    Ok(())
+}
+
+fn item(store: &Store, id: i64, json: bool) -> Result<()> {
+    if json {
+        return print_json(&json::item_json(store, id)?);
+    }
+    let item = store
+        .get_item(id)?
+        .ok_or_else(|| Error::Invalid(format!("item {id} not found")))?;
+    println!("{}", item.title);
+    println!("{}", item.url);
+    let summary = item
+        .ai_summary
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(item.excerpt);
+    println!("{summary}");
+    Ok(())
+}
+
+fn digests(
+    store: &Store,
+    period: &str,
+    date: Option<String>,
+    category: Option<String>,
+    topic: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let period = Period::parse(period)
+        .ok_or_else(|| Error::Invalid(format!("unknown period '{period}'")))?;
+    let date = match date {
+        Some(s) => parse_date(&s)?,
+        None => today(),
+    };
+    let category = category.as_deref().map(parse_category).transpose()?;
+    let topic_id = topic.as_deref().map(|n| topic_id(store, n)).transpose()?;
+    let v = json::digests_json(store, period, date, category, topic_id)?;
+    if json {
+        return print_json(&v);
+    }
+    for d in v["digests"].as_array().into_iter().flatten() {
+        println!(
+            "## {} [{}]\n{}\n",
+            d["label"].as_str().unwrap_or_default(),
+            d["status"].as_str().unwrap_or_default(),
+            d["body"].as_str().unwrap_or_default()
+        );
     }
     Ok(())
 }
@@ -316,6 +444,15 @@ fn topic(store: &Store, command: TopicCommand) -> Result<()> {
 
 fn config(store: &Store, command: ConfigCommand) -> Result<()> {
     match command {
+        ConfigCommand::List { json } => {
+            if json {
+                print_json(&json::config_json(store)?)?;
+            } else {
+                for (k, v) in store.list_settings()? {
+                    println!("{k} = {v}");
+                }
+            }
+        }
         ConfigCommand::Get { key } => match store.get_setting(&key)? {
             Some(v) => println!("{v}"),
             None => println!("(unset)"),
@@ -347,7 +484,30 @@ async fn run(cli: Cli) -> Result<()> {
             days,
             text,
             limit,
-        } => items(&store, category, topic, days, text, limit),
+            from,
+            to,
+            json,
+        } => items(
+            &store,
+            ItemsOpts {
+                category,
+                topic,
+                days,
+                text,
+                limit,
+                from,
+                to,
+                json,
+            },
+        ),
+        Command::Item { id, json } => item(&store, id, json),
+        Command::Digests {
+            period,
+            date,
+            category,
+            topic,
+            json,
+        } => digests(&store, &period, date, category, topic, json),
         Command::Source { command } => source(&store, command).await,
         Command::Topic { command: c } => topic(&store, c),
         Command::Config { command: c } => config(&store, c),
@@ -357,7 +517,11 @@ async fn run(cli: Cli) -> Result<()> {
 #[tokio::main]
 async fn main() {
     if let Err(e) = run(Cli::parse()).await {
-        eprintln!("error: {e}");
+        // サイドカーが読む契約は `error: <理由>`。Invalid は接頭辞なしで出す。
+        match e {
+            Error::Invalid(reason) => eprintln!("error: {reason}"),
+            e => eprintln!("error: {e}"),
+        }
         std::process::exit(1);
     }
 }

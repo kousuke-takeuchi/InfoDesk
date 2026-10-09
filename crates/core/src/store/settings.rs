@@ -29,4 +29,32 @@ impl Store {
         )?;
         Ok(())
     }
+
+    /// 全ての設定をキー順に返す。
+    pub fn list_settings(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT key, value FROM settings ORDER BY key")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::store::Store;
+
+    #[test]
+    fn list_settings_returns_all_pairs_sorted_by_key() {
+        let store = Store::open_in_memory().unwrap();
+        store.set_setting("b.key", "2").unwrap();
+        store.set_setting("a.key", "1").unwrap();
+        assert_eq!(
+            store.list_settings().unwrap(),
+            vec![
+                ("a.key".to_string(), "1".to_string()),
+                ("b.key".to_string(), "2".to_string())
+            ]
+        );
+    }
 }
