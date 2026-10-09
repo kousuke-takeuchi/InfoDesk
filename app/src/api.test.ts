@@ -42,7 +42,7 @@ describe("api", () => {
   });
 
   it("sends camelCase thread ids for chat messages", async () => {
-    const m = { id: "m1", role: "user", parts: [] };
+    const m = { id: "m1", role: "user" as const, parts: [] };
     const ipc = setupIpc({ get_chat_messages: () => [m], save_chat_messages: () => undefined });
     expect(await api.getChatMessages(3)).toEqual([m]);
     expect(ipc.last("get_chat_messages")).toEqual({ threadId: 3 });

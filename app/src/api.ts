@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
@@ -50,8 +51,8 @@ export const api = {
   createChatThread: (title: string) => invoke<ChatThread>("create_chat_thread", { title }),
   renameChatThread: (id: number, title: string) => invoke<void>("rename_chat_thread", { id, title }),
   deleteChatThread: (id: number) => invoke<void>("delete_chat_thread", { id }),
-  getChatMessages: (threadId: number) => invoke<unknown[]>("get_chat_messages", { threadId }),
-  saveChatMessages: (threadId: number, messages: unknown[]) =>
+  getChatMessages: (threadId: number) => invoke<UIMessage[]>("get_chat_messages", { threadId }),
+  saveChatMessages: (threadId: number, messages: UIMessage[]) =>
     invoke<void>("save_chat_messages", { threadId, messages }),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };

@@ -11,8 +11,13 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@ai-sdk/react": "4.0.139",
+    "@assistant-ui/react": "0.15.25",
+    "@assistant-ui/react-ai-sdk": "1.4.16",
+    "@assistant-ui/react-markdown": "0.14.19",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "ai": "7.0.136",
     "lucide-react": "^1.52.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
