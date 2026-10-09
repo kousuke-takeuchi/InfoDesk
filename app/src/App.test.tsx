@@ -177,7 +177,7 @@ describe("App", () => {
     const ITEM = {
       id: 12, source_id: 1, source_name: "s", category: "medcare", url: "https://e.com/12", title: "認知症の新薬",
       excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
-      score: null, ai_summary: null, read: false, starred: false,
+      score: null, ai_summary: null, read: false, starred: false, image_url: null,
     };
     const feedHandlers = (over: IpcHandlers = {}) => handlers({
       list_items: () => [ITEM], count_items: () => 1, list_sources: () => [], source_item_counts: () => ({}), ...over,

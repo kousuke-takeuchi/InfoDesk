@@ -17,7 +17,7 @@ const views: DV[] = [
   { scope: { category: "medcare" }, label: "医療介護", digest: digest({ id: 3, scope: { category: "medcare" }, status: "failed", attempts: 3, last_error: "ollama 404: model not found", body: "" }), item_count: 5 },
   { scope: { category: "huggingface" }, label: "Hugging Face", digest: null, item_count: 0 },
 ];
-const item = (a: { id: number }) => ({ id: a.id, title: `記事${a.id}`, url: "https://e.com", source_name: "s", category: "github", excerpt: "", author: null, published_at: null, fetched_at: "2026-10-06T00:00:00Z", score: null, ai_summary: null, read: false, starred: false, source_id: 1 });
+const item = (a: { id: number }) => ({ id: a.id, title: `記事${a.id}`, url: "https://e.com", source_name: "s", category: "github", excerpt: "", author: null, published_at: null, fetched_at: "2026-10-06T00:00:00Z", score: null, ai_summary: null, read: false, starred: false, image_url: null, source_id: 1 });
 /** バックエンドと同じく、呼び出しごとに新しいオブジェクトを返す。 */
 const fresh = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const section = (name: string) => within(screen.getByRole("heading", { name }).closest("section")!);

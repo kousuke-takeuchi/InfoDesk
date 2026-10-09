@@ -34,6 +34,15 @@ function selectionTitle(selection: Selection, topics: Topic[]): string {
   return topics.find((t) => t.id === selection.topicId)?.name ?? "トピック";
 }
 
+function Thumbnail({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !/^https:\/\//i.test(src)) return null;
+  return (
+    <img className="thumb" src={src} alt="" loading="lazy" decoding="async"
+      referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+  );
+}
+
 export function FeedView({ selection, topics, status, view, onSwitchView, onOpenSources, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
   const [range, setRange] = useState<FeedRange>("week");
   const [sourceId, setSourceId] = useState<number | null>(null);
@@ -197,6 +206,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
               </div>
               {it.ai_summary && <div className="summary">{it.ai_summary}</div>}
             </div>
+            {it.image_url && <Thumbnail key={it.image_url} src={it.image_url} />}
             <button className="row-actions" aria-label={`${it.title} についてチャットで質問`}
               onClick={(e) => { e.stopPropagation(); onAskChat({ type: "item", id: it.id, title: it.title }); }}>
               <MessageSquarePlus size={16} />

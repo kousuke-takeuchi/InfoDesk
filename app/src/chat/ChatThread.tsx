@@ -45,7 +45,12 @@ function AnswerLink({ node: _node, href, children, ...rest }: ComponentPropsWith
   );
 }
 
-const MARKDOWN_COMPONENTS = { a: AnswerLink };
+/** 回答の中の画像は読み込まない (CSP が https の画像を許すため、表示だけで外部へ要求が出てしまう)。代替テキストだけを出す。 */
+function AnswerImage({ alt }: ComponentPropsWithoutRef<"img"> & { node?: unknown }) {
+  return alt ? <span className="chat-img-alt">{alt}</span> : null;
+}
+
+const MARKDOWN_COMPONENTS = { a: AnswerLink, img: AnswerImage };
 
 function MarkdownText() {
   return <MarkdownTextPrimitive className="chat-markdown" components={MARKDOWN_COMPONENTS} />;

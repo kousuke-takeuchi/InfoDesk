@@ -9,7 +9,7 @@ const status: AppStatus = { collecting: false, summarizing: false, digesting: fa
 const item = (over: Partial<Item>): Item => ({
   id: 1, source_id: 1, source_name: "Google News: 認知症", category: "medcare", url: "https://e.com/1",
   title: "認知症の新薬", excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
-  score: null, ai_summary: "要約文。", read: false, starred: false, ...over,
+  score: null, ai_summary: "要約文。", read: false, starred: false, image_url: null, ...over,
 });
 const CHAT = { chatOpen: false, onToggleChat: () => {}, onAskChat: () => {}, onPeriodChange: () => {} };
 const UNREAD_COUNT = /未読\s*\d+件/;
@@ -331,5 +331,28 @@ describe("FeedView", () => {
     await userEvent.click(screen.getByRole("button", { name: "3日" }));
     expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "feed", range: "3d" });
     expect(onPeriodChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a thumbnail for articles with an https image and hides it when it fails to load", async () => {
+    renderFeed([
+      item({ image_url: "https://img.example.com/a.jpg" }),
+      item({ id: 2, title: "画像なし", image_url: null }),
+    ]);
+    await screen.findByText("認知症の新薬");
+    const img = document.querySelector("img.thumb") as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute("src", "https://img.example.com/a.jpg");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(img).toHaveAttribute("referrerpolicy", "no-referrer");
+    expect(img).toHaveAttribute("alt", "");
+    expect(document.querySelectorAll(".item-row img")).toHaveLength(1);
+    fireEvent.error(img);
+    expect(document.querySelector(".item-row img")).toBeNull();
+  });
+
+  it("does not render non-https image URLs", async () => {
+    renderFeed([item({ image_url: "http://img.example.com/a.jpg" })]);
+    await screen.findByText("認知症の新薬");
+    expect(document.querySelector(".item-row img")).toBeNull();
   });
 });

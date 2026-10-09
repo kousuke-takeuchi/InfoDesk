@@ -37,6 +37,7 @@ export interface Item {
   ai_summary: string | null;
   read: boolean;
   starred: boolean;
+  image_url: string | null;
 }
 
 export interface ItemFilter {
