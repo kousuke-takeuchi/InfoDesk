@@ -25,22 +25,37 @@ describe("createInfodeskTools", () => {
       query: "認知症", category: "medcare", topic: "介護", from: "2026-10-01", to: "2026-10-07", limit: 5,
     });
     expect(out).toEqual({
-      argv: ["--db", "/tmp/x.db", "items", "--json", "--text", "認知症", "--category", "medcare",
-        "--topic", "介護", "--from", "2026-10-01", "--to", "2026-10-07", "--limit", "5"],
+      argv: ["--db", "/tmp/x.db", "items", "--json", "--text=認知症", "--category=medcare",
+        "--topic=介護", "--from=2026-10-01", "--to=2026-10-07", "--limit=5"],
     });
     const plain = await exec(createInfodeskTools(run, {}), "search_articles", {});
-    expect(plain).toEqual({ argv: ["--db", "/tmp/x.db", "items", "--json", "--limit", "20"] });
+    expect(plain).toEqual({ argv: ["--db", "/tmp/x.db", "items", "--json", "--limit=20"] });
   });
 
   it("maps the other tools to their commands", async () => {
     const tools = createInfodeskTools(run, {});
     expect(await exec(tools, "get_article", { id: 12 })).toEqual({ argv: ["--db", "/tmp/x.db", "item", "12", "--json"] });
     expect(await exec(tools, "read_digests", { period: "week", date: "2026-10-07", topic: "認知症" })).toEqual({
-      argv: ["--db", "/tmp/x.db", "digests", "week", "--json", "--date", "2026-10-07", "--topic", "認知症"],
+      argv: ["--db", "/tmp/x.db", "digests", "week", "--json", "--date=2026-10-07", "--topic=認知症"],
     });
     expect(await exec(tools, "fetch_page", { url: "https://example.com/a" })).toEqual({
-      argv: ["--db", "/tmp/x.db", "page", "https://example.com/a", "--json", "--max-chars", "20000"],
+      argv: ["--db", "/tmp/x.db", "page", "https://example.com/a", "--json", "--max-chars=20000"],
     });
+  });
+
+  it("passes values that start with a dash as part of the flag", async () => {
+    const out = await exec(createInfodeskTools(run, {}), "search_articles", { query: "--json" });
+    expect(out.argv).toContain("--text=--json");
+  });
+
+  it("accepts only http and https URLs for fetch_page", () => {
+    const schema = createInfodeskTools(run, {}).fetch_page.inputSchema as unknown as {
+      safeParse(v: unknown): { success: boolean };
+    };
+    expect(schema.safeParse({ url: "file:///etc/passwd" }).success).toBe(false);
+    expect(schema.safeParse({ url: "ftp://example.com/a" }).success).toBe(false);
+    expect(schema.safeParse({ url: "https://example.com/a" }).success).toBe(true);
+    expect(schema.safeParse({ url: "http://example.com/a" }).success).toBe(true);
   });
 
   it("returns a tool failure as an error the model can read", async () => {

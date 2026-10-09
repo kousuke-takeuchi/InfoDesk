@@ -9,6 +9,18 @@ if (argv.includes("bad-json")) {
   process.stdout.write("not json");
   process.exit(0);
 }
+if (argv.includes("huge")) {
+  process.stdout.write(JSON.stringify({ data: "x".repeat(100_000) }));
+  process.exit(0);
+}
+if (argv.includes("noisy")) {
+  process.stderr.write("warn: something\nerror: first\nerror: the real problem\n  caused by: x\n");
+  process.exit(1);
+}
+if (argv.includes("plain-long")) {
+  process.stderr.write("y".repeat(900) + "\n");
+  process.exit(1);
+}
 if (argv.includes("sleep")) {
   setTimeout(() => process.stdout.write("{}"), 5000);
 } else {

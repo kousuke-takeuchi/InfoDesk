@@ -10,7 +10,7 @@ const WEB_SEARCH_URL = "https://ollama.com/api/web_search";
 const WEB_SNIPPET_CHARS = 1000;
 
 function flag(args: string[], name: string, value: string | number | undefined) {
-  if (value !== undefined && value !== "") args.push(name, String(value));
+  if (value !== undefined && value !== "") args.push(`${name}=${String(value)}`);
 }
 
 export function createInfodeskTools(
@@ -67,11 +67,11 @@ export function createInfodeskTools(
     fetch_page: tool({
       description: "記事の URL を取得して本文のテキストを返す。長い本文は切り詰める。保存はしない。",
       inputSchema: z.object({
-        url: z.string().url(),
+        url: z.url({ protocol: /^https?$/ }),
         max_chars: z.number().int().min(1000).max(20000).optional(),
       }),
       execute: async ({ url, max_chars }, { abortSignal }) =>
-        run(["page", url, "--json", "--max-chars", String(max_chars ?? 20000)], abortSignal),
+        run(["page", url, "--json", `--max-chars=${max_chars ?? 20000}`], abortSignal),
     }),
   };
   if (opts.webSearchKey) {

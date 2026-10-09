@@ -24,11 +24,29 @@ describe("createCliRunner", () => {
 
   it("times out and can be aborted", async () => {
     const run = createCliRunner([FAKE], "/tmp/x.db", 200);
-    await expect(run(["sleep"])).rejects.toThrow(CliError);
+    const timeout = (await run(["sleep"]).catch((e) => e)) as Error;
+    expect(timeout).toBeInstanceOf(CliError);
+    expect(timeout.message).toContain("timed out");
     const ac = new AbortController();
     const p = createCliRunner([FAKE], "/tmp/x.db")(["sleep"], ac.signal);
     ac.abort();
-    await expect(p).rejects.toThrow(CliError);
+    const aborted = (await p.catch((e) => e)) as Error;
+    expect(aborted).toBeInstanceOf(CliError);
+    expect(aborted.message).toContain("was aborted");
+  });
+
+  it("reports output beyond maxBuffer as too large", async () => {
+    const run = createCliRunner([FAKE], "/tmp/x.db", 60_000, 1024);
+    const err = (await run(["huge"]).catch((e) => e)) as Error;
+    expect(err).toBeInstanceOf(CliError);
+    expect(err.message).toBe("infodesk CLI output was too large");
+  });
+
+  it("uses only the last error: line of stderr, capped at 500 characters", async () => {
+    const run = createCliRunner([FAKE], "/tmp/x.db");
+    expect(((await run(["noisy"]).catch((e) => e)) as Error).message).toBe("the real problem");
+    const long = (await run(["plain-long"]).catch((e) => e)) as Error;
+    expect(long.message).toHaveLength(500);
   });
 
   it("reports a missing binary clearly", async () => {
