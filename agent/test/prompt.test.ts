@@ -34,7 +34,7 @@ describe("buildInstructions", () => {
     expect(s).toContain("トピック「認知症」");
     expect(s).toContain("週次 (2026-10-09 を含む週)");
     expect(s).toContain("記事 id 12「認知症の新薬、国内での適用拡大へ」");
-    expect(s).toContain("医療介護の日次要約 (2026-10-09)");
+    expect(s).toContain("医療介護の日次要約 (2026-10-09、scope category:medcare)");
   });
 
   it("describes a feed range and the whole collection", () => {

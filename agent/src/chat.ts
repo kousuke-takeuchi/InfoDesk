@@ -26,6 +26,15 @@ export interface ChatDeps {
 
 const MAX_STEPS = 12;
 const FINISHED_TOOL_STATES = new Set(["output-available", "output-error", "output-denied"]);
+/** Ollama では fetch_page の既定の長さを抑える (文脈長に収めるため)。入力の上限は Claude と同じ。 */
+export const OLLAMA_PAGE_MAX_CHARS = 6000;
+/** Ollama に送る履歴で、最新より前のアシスタントのツール結果を JSON でこの文字数までに縮める。 */
+export const OLDER_TOOL_OUTPUT_CHARS = 2000;
+
+function isToolPart(p: unknown): boolean {
+  const type = (p as { type?: unknown }).type;
+  return typeof type === "string" && (type.startsWith("tool-") || type === "dynamic-tool");
+}
 
 /**
  * 途中で止めた回の会話には、結果のないツール呼び出しが残る。そのままだと以後の回がすべて失敗するので、
@@ -34,13 +43,34 @@ const FINISHED_TOOL_STATES = new Set(["output-available", "output-error", "outpu
 export function dropIncompleteToolParts(messages: UIMessage[]): UIMessage[] {
   return messages.flatMap((m) => {
     if (!Array.isArray(m.parts)) return [m];
-    const parts = m.parts.filter((p) => {
-      const type = (p as { type?: unknown }).type;
-      const isTool = typeof type === "string" && (type.startsWith("tool-") || type === "dynamic-tool");
-      return !isTool || FINISHED_TOOL_STATES.has(String((p as { state?: unknown }).state));
-    });
+    const parts = m.parts.filter(
+      (p) => !isToolPart(p) || FINISHED_TOOL_STATES.has(String((p as { state?: unknown }).state)),
+    );
     if (m.role === "assistant" && parts.length === 0) return [];
     return [{ ...m, parts }];
+  });
+}
+
+/**
+ * Ollama の文脈長に収めるため、最新のアシスタントのメッセージより前のツール結果のうち、
+ * JSON が長いものを先頭だけの要約に置き換える。最新の回はそのまま残す。入力は変更しない。
+ */
+export function truncateOlderToolOutputs(messages: UIMessage[], maxChars = OLDER_TOOL_OUTPUT_CHARS): UIMessage[] {
+  let latest = -1;
+  messages.forEach((m, i) => {
+    if (m.role === "assistant") latest = i;
+  });
+  return messages.map((m, i) => {
+    if (m.role !== "assistant" || i === latest || !Array.isArray(m.parts)) return m;
+    let changed = false;
+    const parts = m.parts.map((p) => {
+      if (!isToolPart(p) || !("output" in p)) return p;
+      const json = JSON.stringify((p as { output?: unknown }).output) ?? "";
+      if (json.length <= maxChars) return p;
+      changed = true;
+      return { ...p, output: { truncated: true, preview: json.slice(0, maxChars) } };
+    });
+    return changed ? ({ ...m, parts } as UIMessage) : m;
   });
 }
 
@@ -72,14 +102,17 @@ async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, 
   const onError = (e: unknown) => describeError(e, req.provider, settings);
   const messages = dropIncompleteToolParts(req.messages);
   if (req.provider === "ollama") {
-    const tools = createInfodeskTools(deps.run, { webSearchKey: settings["ollama.web_search_api_key"] || undefined });
+    const tools = createInfodeskTools(deps.run, {
+      webSearchKey: settings["ollama.web_search_api_key"] || undefined,
+      pageMaxChars: OLLAMA_PAGE_MAX_CHARS,
+    });
     const agent = new ToolLoopAgent({
       model: deps.models.ollama(settings),
       instructions: buildInstructions(req.context, deps.now(), Object.keys(tools)),
       tools,
       stopWhen: isStepCount(MAX_STEPS),
     });
-    return createAgentUIStream({ agent, uiMessages: messages, abortSignal: signal, onError }) as Promise<ReadableStream<UIMessageChunk>>;
+    return createAgentUIStream({ agent, uiMessages: truncateOlderToolOutputs(messages), abortSignal: signal, onError }) as Promise<ReadableStream<UIMessageChunk>>;
   }
   // Claude: Claude Code CLI が自分でツールを実行するので、ツールは MCP で渡す。Web検索は組み込みの WebSearch。
   const tools = createInfodeskTools(deps.run, {});

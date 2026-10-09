@@ -43,6 +43,34 @@ describe("createInfodeskTools", () => {
     });
   });
 
+  it("uses the page size default it is given for fetch_page", async () => {
+    expect(await exec(createInfodeskTools(run, { pageMaxChars: 6000 }), "fetch_page", { url: "https://example.com/a" })).toEqual({
+      argv: ["--db", "/tmp/x.db", "page", "https://example.com/a", "--json", "--max-chars=6000"],
+    });
+    expect(await exec(createInfodeskTools(run, { pageMaxChars: 6000 }), "fetch_page", { url: "https://example.com/a", max_chars: 20000 })).toEqual({
+      argv: ["--db", "/tmp/x.db", "page", "https://example.com/a", "--json", "--max-chars=20000"],
+    });
+  });
+
+  it("rejects read_digests with both category and topic", () => {
+    const tool = createInfodeskTools(run, {}).read_digests;
+    const schema = tool.inputSchema as unknown as {
+      safeParse(v: unknown): { success: boolean; error?: { issues: Array<{ message: string }> } };
+    };
+    const both = schema.safeParse({ period: "day", category: "medcare", topic: "認知症" });
+    expect(both.success).toBe(false);
+    expect(both.error?.issues[0].message).toBe("category と topic はどちらか一方だけ指定する");
+    expect(schema.safeParse({ period: "day", category: "medcare" }).success).toBe(true);
+    expect(schema.safeParse({ period: "day", topic: "認知症" }).success).toBe(true);
+    expect(tool.description).toContain("category と topic はどちらか一方だけ");
+  });
+
+  it("also rejects both in execute, since the Claude MCP bridge keeps only the object shape", async () => {
+    await expect(
+      exec(createInfodeskTools(run, {}), "read_digests", { period: "day", category: "medcare", topic: "認知症" }),
+    ).rejects.toThrow("category と topic はどちらか一方だけ指定する");
+  });
+
   it("passes values that start with a dash as part of the flag", async () => {
     const out = await exec(createInfodeskTools(run, {}), "search_articles", { query: "--json" });
     expect(out.argv).toContain("--text=--json");

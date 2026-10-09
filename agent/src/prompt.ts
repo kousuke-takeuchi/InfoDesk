@@ -48,7 +48,7 @@ export function buildInstructions(context: ChatContext | null, now: Date, tools:
     if (context.period) lines.push(`- ${periodText(context.period)}`);
     for (const a of context.attachments) {
       if (a.type === "item") lines.push(`- 質問に添えた記事 id ${a.id}「${a.title}」 (get_article で読める)`);
-      else lines.push(`- 質問に添えた要約: ${a.label}の${PERIOD_LABEL[a.period]}要約 (${a.date})`);
+      else lines.push(`- 質問に添えた要約: ${a.label}の${PERIOD_LABEL[a.period]}要約 (${a.date}、scope ${a.scope})`);
     }
   }
   return lines.join("\n");

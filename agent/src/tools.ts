@@ -8,6 +8,8 @@ const CATEGORIES = ["github", "arxiv", "huggingface", "hackernews", "tech_jp", "
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
 const WEB_SEARCH_URL = "https://ollama.com/api/web_search";
 const WEB_SNIPPET_CHARS = 1000;
+const PAGE_MAX_CHARS = 20000;
+const ONE_SCOPE = "category と topic はどちらか一方だけ指定する";
 
 function flag(args: string[], name: string, value: string | number | undefined) {
   if (value !== undefined && value !== "") args.push(`${name}=${String(value)}`);
@@ -15,8 +17,9 @@ function flag(args: string[], name: string, value: string | number | undefined) 
 
 export function createInfodeskTools(
   run: CliRunner,
-  opts: { webSearchKey?: string; fetchImpl?: typeof fetch },
+  opts: { webSearchKey?: string; fetchImpl?: typeof fetch; pageMaxChars?: number },
 ): Record<string, Tool> {
+  const pageMaxChars = opts.pageMaxChars ?? PAGE_MAX_CHARS;
   const tools: Record<string, Tool> = {
     search_articles: tool({
       description:
@@ -49,14 +52,18 @@ export function createInfodeskTools(
     }),
     read_digests: tool({
       description:
-        "生成済みの期間要約 (日次、週次、月次) を読む。生成はしない。category か topic を省くと全カテゴリー。",
-      inputSchema: z.object({
-        period: z.enum(["day", "week", "month"]),
-        date: DATE.optional().describe("期間に含まれる日。省くと今日"),
-        category: z.enum(CATEGORIES).optional(),
-        topic: z.string().min(1).optional(),
-      }),
+        "生成済みの期間要約 (日次、週次、月次) を読む。生成はしない。category と topic はどちらか一方だけ指定する。両方省くと全カテゴリー。",
+      inputSchema: z
+        .object({
+          period: z.enum(["day", "week", "month"]),
+          date: DATE.optional().describe("期間に含まれる日。省くと今日"),
+          category: z.enum(CATEGORIES).optional(),
+          topic: z.string().min(1).optional(),
+        })
+        .refine((v) => v.category === undefined || v.topic === undefined, { message: ONE_SCOPE }),
       execute: async (input, { abortSignal }) => {
+        // Claude の MCP 経路はスキーマの shape だけを使い refine が効かないので、ここでも確かめる
+        if (input.category !== undefined && input.topic !== undefined) throw new Error(ONE_SCOPE);
         const args = ["digests", input.period, "--json"];
         flag(args, "--date", input.date);
         flag(args, "--category", input.category);
@@ -68,10 +75,10 @@ export function createInfodeskTools(
       description: "記事の URL を取得して本文のテキストを返す。長い本文は切り詰める。保存はしない。",
       inputSchema: z.object({
         url: z.url({ protocol: /^https?$/ }),
-        max_chars: z.number().int().min(1000).max(20000).optional(),
+        max_chars: z.number().int().min(1000).max(PAGE_MAX_CHARS).optional(),
       }),
       execute: async ({ url, max_chars }, { abortSignal }) =>
-        run(["page", url, "--json", `--max-chars=${max_chars ?? 20000}`], abortSignal),
+        run(["page", url, "--json", `--max-chars=${max_chars ?? pageMaxChars}`], abortSignal),
     }),
   };
   if (opts.webSearchKey) {
