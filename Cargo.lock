@@ -2094,7 +2094,6 @@ dependencies = [
  "chrono",
  "clap",
  "infodesk-core",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",

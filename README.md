@@ -45,6 +45,8 @@ cd app && npm install && npm run tauri dev
 | `ollama.base_url` | `http://localhost:11434` | OllamaのURL |
 | `ollama.model` | `gemma4:26b` | Ollamaのモデル |
 | `claude.bin` | `claude` | claude CLIのパス |
+| `node.bin` | `node` | Node のパス (チャットのエージェントに使う) |
+| `ollama.web_search_api_key` | (空) | ollama.com の API キー。空なら Ollama の Web検索は無効 |
 | `summary.top_n` | `20` | カテゴリーごとに要約を付ける記事数 |
 
 ## チャット
@@ -56,6 +58,7 @@ cd app && npm install && npm run tauri dev
 - Ollama で Web検索を使うには、設定に ollama.com の API キーを入れる。
 - 開発時は `cd agent && npm install && npm run build` のあと `cd app && npm run tauri dev`。バンドルは `cd app && npm run bundle`。
 - サイドカーのツールは、アプリ本体を `--cli` 付きで起動して `infodesk` CLI として使う。例: `InfoDesk.app/Contents/MacOS/infodesk-app --cli --db <DB> items --json`。
+- エージェントは外部の文章 (フィードの記事、取得したページ) を読む。その中に指示が隠れていると、会話や収集した記事から取った語で URL を取得したり Web検索したりすることがありうる。エージェントは何も書き込まず、設定や API キーにも手が届かないが、気になる場合は機密情報をチャットに書かない。
 
 ## テスト
 
