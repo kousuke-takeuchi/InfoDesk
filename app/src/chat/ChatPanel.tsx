@@ -57,6 +57,10 @@ export function ChatPanel(props: Props) {
   }, []);
   // 表示中のスレッドの key → 保存先のスレッド id。新しいスレッドは作成中の Promise を持ち、二重に作らない。
   const threadIds = useRef(new Map<string, Promise<number>>());
+  // 解決済みの key → id と、削除したスレッド。削除後に届いた保存で会話を作り直したり、消えた id へ保存したりしない。
+  const resolvedIds = useRef(new Map<string, number>());
+  const deletedKeys = useRef(new Set<string>());
+  const deletedIds = useRef(new Set<number>());
   const newCount = useRef(0);
   const openSeq = useRef(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,15 +71,21 @@ export function ChatPanel(props: Props) {
   const loadThreads = useCallback(() => {
     api.listChatThreads().then(setThreads).catch((e) => setError(errorMessage(e)));
   }, []);
+  useEffect(loadThreads, [loadThreads]);
+  // 設定画面から戻ったとき (隠れていた → 表示) にも読み直し、変えた LLM とモデルをすぐ使う。
+  const hidden = props.hidden ?? false;
   useEffect(() => {
-    loadThreads();
+    if (hidden) return;
+    let live = true;
     api.getSettings()
       .then((s) => {
+        if (!live) return;
         setProvider(s["llm.chat_provider"] === "claude" ? "claude" : "ollama");
         setModel(s["ollama.model"] ?? "");
       })
-      .catch((e) => setError(errorMessage(e)));
-  }, [loadThreads]);
+      .catch((e) => { if (live) setError(errorMessage(e)); });
+    return () => { live = false; };
+  }, [hidden]);
 
   const newThread = () => {
     setMenuOpen(false);
@@ -92,6 +102,7 @@ export function ChatPanel(props: Props) {
         if (seq !== openSeq.current) return;
         const key = `thread-${id}`;
         threadIds.current.set(key, Promise.resolve(id));
+        resolvedIds.current.set(key, id);
         setCurrent({ id, key, messages });
       })
       .catch((e) => { if (seq === openSeq.current) setError(errorMessage(e)); });
@@ -99,7 +110,13 @@ export function ChatPanel(props: Props) {
   const deleteThread = (id: number) => {
     api.deleteChatThread(id)
       .then(() => {
-        threadIds.current.delete(`thread-${id}`);
+        deletedIds.current.add(id);
+        const keys = [`thread-${id}`, ...[...resolvedIds.current].filter(([, v]) => v === id).map(([k]) => k)];
+        for (const k of keys) {
+          deletedKeys.current.add(k);
+          threadIds.current.delete(k);
+          resolvedIds.current.delete(k);
+        }
         if (currentRef.current.id === id) newThread();
         loadThreads();
       })
@@ -110,6 +127,7 @@ export function ChatPanel(props: Props) {
   // スレッドは最初の回答を保存するときに作る。空のスレッドを残さないため。
   const persist = useCallback(async (key: string, messages: UIMessage[]) => {
     try {
+      if (deletedKeys.current.has(key)) return;
       let pending = threadIds.current.get(key);
       if (!pending) {
         const title = firstUserText(messages).slice(0, TITLE_CHARS) || "新しいスレッド";
@@ -118,6 +136,9 @@ export function ChatPanel(props: Props) {
         pending.catch(() => threadIds.current.delete(key));
       }
       const id = await pending;
+      resolvedIds.current.set(key, id);
+      // 作成を待つあいだや保存の直前に削除されたスレッドには保存しない。
+      if (deletedIds.current.has(id)) { deletedKeys.current.add(key); return; }
       await api.saveChatMessages(id, messages);
       // 保存した内容を覚えておく。エージェントの再起動などで作り直したときに、保存済みの会話から再開するため。
       // key は変わらないので作り直しは起きない。

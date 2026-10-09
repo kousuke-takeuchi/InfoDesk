@@ -230,4 +230,63 @@ describe("ChatPanel", () => {
     await act(async () => { resolvers[2]([{ id: "u", role: "user", parts: [] }]); });
     expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|0|");
   });
+
+  it("re-reads the chat settings when the panel is shown again", async () => {
+    let settings: Record<string, string> = SETTINGS;
+    base({ get_settings: () => settings });
+    const props = {
+      scope: { kind: "all" } as const, period: null, attachments: [],
+      onRemoveAttachment: vi.fn(), onClose: vi.fn(), onOpenSettings: vi.fn(),
+    };
+    const { rerender } = render(<ChatPanel {...(props as any)} hidden={false} />);
+    await waitFor(() => expect(lastThreadProps?.modelLabel).toBe("Ollama · gemma4:26b"));
+    settings = { "llm.chat_provider": "claude", "ollama.model": "qwen3:8b" };
+    rerender(<ChatPanel {...(props as any)} hidden />);
+    rerender(<ChatPanel {...(props as any)} hidden={false} />);
+    await waitFor(() => expect(lastThreadProps.modelLabel).toBe("Ollama · qwen3:8b"));
+    expect(lastThreadProps.provider).toBe("claude");
+    expect(screen.getByTestId("thread")).toHaveTextContent("|claude");
+  });
+
+  it("drops a late save for a thread opened from history and then deleted", async () => {
+    const ipc = base({ delete_chat_thread: () => null, save_chat_messages: () => null, create_chat_thread: () => ({ id: 99, title: "x", created_at: "x", updated_at: "x" }) });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "認知症の今週の動き" }));
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-2|"));
+    const persistA = lastThreadProps.onPersist;
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "認知症の今週の動き を削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("new-"));
+    await act(async () => { await persistA([{ id: "a", role: "assistant", parts: [] }]); });
+    expect(ipc.count("save_chat_messages")).toBe(0);
+    expect(ipc.count("create_chat_thread")).toBe(0);
+  });
+
+  it("drops a late save for a new thread that was deleted after it was created", async () => {
+    let threads = [...THREADS];
+    const ipc = base({
+      list_chat_threads: () => threads,
+      create_chat_thread: (a) => { const t = { id: 9, title: a.title, created_at: "x", updated_at: "x" }; threads = [t, ...threads]; return t; },
+      save_chat_messages: () => null,
+      delete_chat_thread: () => null,
+    });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const persistNew = lastThreadProps.onPersist;
+    const msgs = [{ id: "u", role: "user", parts: [{ type: "text", text: "新しい質問" }] }];
+    await act(async () => { await persistNew(msgs); });
+    expect(ipc.count("save_chat_messages")).toBe(1);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(await screen.findByRole("button", { name: "新しい質問 を削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(ipc.last("delete_chat_thread")).toEqual({ id: 9 }));
+    await act(async () => { await persistNew(msgs); });
+    expect(ipc.count("save_chat_messages")).toBe(1);
+    expect(ipc.count("create_chat_thread")).toBe(1);
+  });
 });
