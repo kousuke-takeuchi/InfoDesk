@@ -3,3 +3,5 @@ target/
 .superpowers/
 app/node_modules/
 app/dist/
+agent/node_modules/
+agent/dist/
