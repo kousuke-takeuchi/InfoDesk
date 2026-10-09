@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use infodesk_core::Store;
-use infodesk_core::collector::{apply_outcomes, fetch_all};
+use infodesk_core::collector::{apply_outcomes, fetch_all, images};
 use infodesk_core::llm::LlmRole;
 use infodesk_core::model::{Category, Digest, DigestScope, DigestStatus, Period};
 use infodesk_core::period::{period_start, utc_range};
@@ -209,7 +209,15 @@ pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
 
 async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
     let sources = state.with_store(|s| s.list_sources())?;
-    let outcomes = fetch_all(&state.http, &sources).await;
+    let mut outcomes = fetch_all(&state.http, &sources).await;
+    let urls: Vec<String> = outcomes
+        .iter()
+        .filter_map(|o| o.result.as_ref().ok())
+        .flatten()
+        .map(|i| i.url.clone())
+        .collect();
+    let known = state.with_store(|s| s.existing_urls(&urls))?;
+    images::fill_page_images(&mut outcomes, &known).await;
     let now = now_utc();
     let reports = state.with_store(|s| apply_outcomes(s, &outcomes, &now))?;
     let summary = CollectSummary {

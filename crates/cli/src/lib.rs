@@ -202,7 +202,15 @@ fn topic_id(store: &Store, name: &str) -> Result<i64> {
 
 async fn collect(store: &Store) -> Result<()> {
     let http = collector::http_client()?;
-    let outcomes = collector::fetch_all(&http, &store.list_sources()?).await;
+    let mut outcomes = collector::fetch_all(&http, &store.list_sources()?).await;
+    let urls: Vec<String> = outcomes
+        .iter()
+        .filter_map(|o| o.result.as_ref().ok())
+        .flatten()
+        .map(|i| i.url.clone())
+        .collect();
+    let known = store.existing_urls(&urls)?;
+    collector::images::fill_page_images(&mut outcomes, &known).await;
     for r in collector::apply_outcomes(store, &outcomes, &Utc::now())? {
         match r.error {
             None => println!("ok    {:>4} new  {}", r.new_items, r.name),

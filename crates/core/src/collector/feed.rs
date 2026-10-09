@@ -111,10 +111,13 @@ fn entry_image(e: &feed_rs::model::Entry) -> Option<String> {
 }
 
 const MRSS_NS: &str = "http://search.yahoo.com/mrss/";
+const ATOM_NS: &str = "http://www.w3.org/2005/Atom";
 
 /// 読み取り中の `<item>` / `<entry>`。
 #[derive(Default)]
 struct ScanItem {
+    /// RSS の `<item>` なら true (Atom の `<entry>` は false)。
+    rss: bool,
     /// `<item>` / `<entry>` からの深さ (直下の子が 1)。
     depth: usize,
     /// rel が alternate または省略されたリンク。
@@ -162,6 +165,11 @@ fn attr(e: &BytesStart, name: &str) -> Option<String> {
         .map(|v| v.into_owned())
 }
 
+/// feed-rs が `link.href` に入れる形 (URL として解釈して直した文字列)。解釈できなければそのまま。
+fn normalize_link(raw: &str) -> String {
+    reqwest::Url::parse(raw).map_or_else(|_| raw.trim().to_string(), |u| u.to_string())
+}
+
 /// `<media:thumbnail url="...">` を、それを含む `<item>` / `<entry>` のリンクごとに集める。
 /// feed-rs 3.0.0 は `<media:content>` の無いエントリーのサムネイルを捨てるので、ここで拾う。
 /// サムネイルは名前空間 `http://search.yahoo.com/mrss/` に解決される `thumbnail` 要素だけ
@@ -177,6 +185,7 @@ fn media_thumbnails(bytes: &[u8]) -> HashMap<String, Vec<String>> {
             break;
         };
         let is_mrss = matches!(ns, ResolveResult::Bound(n) if n.as_ref() == MRSS_NS);
+        let is_atom = matches!(ns, ResolveResult::Bound(n) if n.as_ref() == ATOM_NS);
         match event {
             Event::Eof => break,
             Event::Decl(d) => {
@@ -190,7 +199,10 @@ fn media_thumbnails(bytes: &[u8]) -> HashMap<String, Vec<String>> {
                 let local = local.as_ref();
                 let Some(it) = item.as_mut() else {
                     if !empty && (local == "item" || local == "entry") {
-                        item = Some(ScanItem::default());
+                        item = Some(ScanItem {
+                            rss: local == "item",
+                            ..ScanItem::default()
+                        });
                     }
                     continue;
                 };
@@ -208,7 +220,10 @@ fn media_thumbnails(bytes: &[u8]) -> HashMap<String, Vec<String>> {
                     continue;
                 }
                 match local {
-                    "link" => match attr(e, "href") {
+                    // href を読むのは Atom の `<entry>` の中の Atom 名前空間の link だけ。
+                    // RSS の `<item>` では feed-rs が `<link>` の中身だけを読む
+                    // (`<atom:link href>` は無視する)ので、こちらも合わせる。
+                    "link" => match attr(e, "href").filter(|_| is_atom && !it.rss) {
                         Some(href) => it.add_link(&href, attr(e, "rel").as_deref()),
                         None if !empty => it.field = Some("link"),
                         None => {}
@@ -243,7 +258,7 @@ fn media_thumbnails(bytes: &[u8]) -> HashMap<String, Vec<String>> {
                 let Some(it) = item.as_mut() else { continue };
                 if it.depth == 0 {
                     if let Some((link, thumbs)) = item.take().and_then(ScanItem::key) {
-                        out.entry(link).or_default().extend(thumbs);
+                        out.entry(normalize_link(&link)).or_default().extend(thumbs);
                     }
                     continue;
                 }
@@ -598,6 +613,41 @@ mod tests {
                 None,
                 None,
             ]
+        );
+    }
+
+    #[test]
+    fn thumbnail_keys_match_the_serialized_link() {
+        let xml = r#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>kanji</title><link>https://e.com/記事</link><media:thumbnail url="https://img.e.com/k.jpg"/></item>
+<item><title>bare</title><link>https://e.com</link><media:thumbnail url="https://img.e.com/b.jpg"/></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![
+                (
+                    "https://e.com/%E8%A8%98%E4%BA%8B".into(),
+                    Some("https://img.e.com/k.jpg".into())
+                ),
+                (
+                    "https://e.com/".into(),
+                    Some("https://img.e.com/b.jpg".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn rss_item_ignores_atom_link_href_for_its_key() {
+        let xml = r#"<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>t</title><atom:link href="https://e.com/self"/><link>https://e.com/y</link><media:thumbnail url="https://img.e.com/y.jpg"/></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![(
+                "https://e.com/y".into(),
+                Some("https://img.e.com/y.jpg".into())
+            )]
         );
     }
 }

@@ -66,37 +66,8 @@ pub(crate) async fn fetch_with(
     max_chars: usize,
     allow_loopback: bool,
 ) -> Result<PageText> {
-    let parsed = Url::parse(url)
-        .ok()
-        .filter(|u| matches!(u.scheme(), "http" | "https"))
-        .ok_or_else(|| Error::Invalid(format!("only http and https URLs can be fetched: {url}")))?;
-    check_host(&parsed, allow_loopback).map_err(Error::Invalid)?;
-    let mut resp = http.get(parsed).send().await.map_err(http_error)?;
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(Error::Invalid(format!(
-            "fetch failed: HTTP {}",
-            status.as_u16()
-        )));
-    }
-    let content_type_header = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("text/html")
-        .to_string();
-    let content_type = content_type_header
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
+    let (mut resp, content_type_header, content_type) = open(http, url, allow_loopback).await?;
     let is_html = content_type == "text/html" || content_type == "application/xhtml+xml";
-    if !is_html && content_type != "text/plain" {
-        return Err(Error::Invalid(format!(
-            "unsupported content type: {content_type}"
-        )));
-    }
     let final_url = resp.url().to_string();
     let mut bytes: Vec<u8> = Vec::new();
     let mut cut = false;
@@ -128,6 +99,72 @@ pub(crate) async fn fetch_with(
         text,
         truncated: cut || truncated_by_chars,
     })
+}
+
+/// URL を検査して送り、状態コードと Content-Type を確かめる。
+/// 戻り値は (応答, Content-Type ヘッダーの全文, 小文字にした MIME 型)。
+async fn open(
+    http: &reqwest::Client,
+    url: &str,
+    allow_loopback: bool,
+) -> Result<(reqwest::Response, String, String)> {
+    let parsed = Url::parse(url)
+        .ok()
+        .filter(|u| matches!(u.scheme(), "http" | "https"))
+        .ok_or_else(|| Error::Invalid(format!("only http and https URLs can be fetched: {url}")))?;
+    check_host(&parsed, allow_loopback).map_err(Error::Invalid)?;
+    let resp = http.get(parsed).send().await.map_err(http_error)?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(Error::Invalid(format!(
+            "fetch failed: HTTP {}",
+            status.as_u16()
+        )));
+    }
+    let content_type_header = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("text/html")
+        .to_string();
+    let content_type = content_type_header
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let is_html = content_type == "text/html" || content_type == "application/xhtml+xml";
+    if !is_html && content_type != "text/plain" {
+        return Err(Error::Invalid(format!(
+            "unsupported content type: {content_type}"
+        )));
+    }
+    Ok((resp, content_type_header, content_type))
+}
+
+/// 記事ページの先頭 `max_bytes` を文字コードに従って読む。HTML 以外は `Error::Invalid`。
+/// 戻り値は (最終 URL, HTML)。
+pub(crate) async fn fetch_html_head(
+    http: &reqwest::Client,
+    url: &str,
+    max_bytes: usize,
+    allow_loopback: bool,
+) -> Result<(Url, String)> {
+    let (mut resp, content_type_header, content_type) = open(http, url, allow_loopback).await?;
+    if content_type != "text/html" && content_type != "application/xhtml+xml" {
+        return Err(Error::Invalid("not html".into()));
+    }
+    let final_url = resp.url().clone();
+    let mut bytes: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(http_error)? {
+        let room = max_bytes - bytes.len();
+        if chunk.len() >= room {
+            bytes.extend_from_slice(&chunk[..room]);
+            break;
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok((final_url, decode(&bytes, &content_type_header, true)))
 }
 
 /// reqwest のエラーの原因をたどり、アドレスを拒んだものなら分かる文にする。
@@ -642,5 +679,27 @@ mod tests {
                 "{bad}: {err}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn html_head_reads_only_the_first_bytes() {
+        let body = format!(
+            "<html><head><title>t</title></head><body>{}</body></html>",
+            "a".repeat(10_000)
+        );
+        let server = serve(&body, "text/html").await;
+        let http = page_client(true).unwrap();
+        let (url, html) = fetch_html_head(&http, &format!("{}/a", server.uri()), 100, true)
+            .await
+            .unwrap();
+        assert!(url.as_str().ends_with("/a"));
+        assert!(html.len() <= 100, "{}", html.len());
+        assert!(html.starts_with("<html><head><title>t"));
+        let pdf = serve("%PDF", "application/pdf").await;
+        assert!(
+            fetch_html_head(&http, &format!("{}/a", pdf.uri()), 100, true)
+                .await
+                .is_err()
+        );
     }
 }
