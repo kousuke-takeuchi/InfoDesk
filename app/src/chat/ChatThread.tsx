@@ -4,12 +4,14 @@ import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { AlertCircle, ArrowUp, ChevronDown, CornerDownRight, Settings, Sparkles } from "lucide-react";
-import { createContext, useContext, useMemo, useRef, type ComponentPropsWithoutRef } from "react";
+import { createContext, useContext, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import { api } from "../api";
 import type { ChatContext, ProviderId } from "./context";
 import { parseChatError } from "./errors";
 import { referencedItems } from "./references";
+import { Reasoning } from "./Reasoning";
 import { ToolCall } from "./ToolCall";
+import { WorkCollapsedContext, WorkSummary } from "./WorkSummary";
 
 export interface ChatThreadProps {
   endpoint: { url: string; token: string };
@@ -80,11 +82,16 @@ function AssistantMessage() {
   const empty = useAuiState((s) => s.message.content.length === 0);
   const running = useAuiState((s) => s.message.status?.type === "running");
   const original = useContext(ChatMessagesContext).find((m) => m.id === id);
+  const [expanded, setExpanded] = useState(false);
   // 内容が何も届かないまま失敗した回答 (start の直後の error) は空の吹き出しを出さない。
   if (empty) return null;
+  const collapsed = !running && !expanded;
   return (
     <MessagePrimitive.Root className="chat-msg assistant">
-      <MessagePrimitive.Parts components={{ Text: MarkdownText, tools: { Fallback: ToolCall } }} />
+      {original && <WorkSummary message={original} running={running} collapsed={collapsed} onToggle={() => setExpanded((v) => !v)} />}
+      <WorkCollapsedContext.Provider value={collapsed}>
+        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCall } }} />
+      </WorkCollapsedContext.Provider>
       {original && !running && <References message={original} />}
     </MessagePrimitive.Root>
   );

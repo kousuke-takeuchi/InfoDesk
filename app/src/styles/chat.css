@@ -5,7 +5,7 @@
 .chat-markdown h1, .chat-markdown h2, .chat-markdown h3 { font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
 .chat-markdown ul { padding-left: 18px; margin: 4px 0; }
 .chat-markdown p { margin: 4px 0; }
-.tool-call { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); padding: 2px 0; min-width: 0; }
+.tool-call { width: 100%; background: none; border: 0; text-align: left; cursor: pointer; font-family: inherit; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); padding: 2px 0; min-width: 0; }
 .tool-call .tool-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .tool-call .tool-state { margin-left: auto; color: var(--text-tertiary); flex-shrink: 0; }
 .tool-call .tool-state.running { color: var(--accent); }
@@ -56,3 +56,17 @@
 @media (max-width: 1139px) {
   .chat-panel { position: absolute; right: 0; top: 0; bottom: 0; z-index: 20; box-shadow: -6px 0 24px rgba(0, 0, 0, 0.18); }
 }
+
+.chat-img-alt { color: var(--text-tertiary); font-style: italic; }
+.work-summary { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.work-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: none; border: 0; padding: 0; align-self: flex-start; }
+.work-status .open, .reasoning-head .open { transform: rotate(90deg); }
+.work-plan { list-style: none; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-window); display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.work-plan li { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.work-plan li[data-status="done"] { color: var(--text-tertiary); text-decoration: line-through; }
+.work-plan li[data-status="in_progress"] { color: var(--text-primary); font-weight: 600; }
+.reasoning-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: none; border: 0; padding: 0; }
+.reasoning-body { font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; border-left: 2px solid var(--border); padding-left: 10px; margin: 4px 0; }
+.tool-details { margin: 2px 0 6px 19px; font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; color: var(--text-secondary); }
+.tool-details dt { color: var(--text-tertiary); }
+.tool-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

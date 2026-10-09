@@ -52,6 +52,7 @@ describe("ChatThread", () => {
     ] as never)));
     renderThread();
     await ask("まとめて");
+    await userEvent.setup().click(await screen.findByRole("button", { name: /^1ステップ/ }));
     expect(await screen.findByText("記事検索")).toBeInTheDocument();
     expect(screen.getByText("認知症 · 直近7日 · 14件")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "新薬" })).toBeInTheDocument();
@@ -215,5 +216,32 @@ describe("ChatThread", () => {
     expect(await screen.findByText(/結果/)).toBeInTheDocument();
     expect(document.querySelector(".chat-markdown img")).toBeNull();
     expect(screen.getByText("図")).toBeInTheDocument();
+  });
+
+  it("shows the plan and work while answering, then folds the work into one line", async () => {
+    setupIpc({ open_item: () => null });
+    mockFetch(() => streamResponse([
+      { type: "start", messageMetadata: { startedAt: new Date(Date.now() - 3000).toISOString() } },
+      { type: "reasoning-start", id: "r" }, { type: "reasoning-delta", id: "r", delta: "まず検索する" }, { type: "reasoning-end", id: "r" },
+      { type: "tool-input-available", toolCallId: "p", toolName: "update_plan", input: { items: [{ title: "検索", status: "done" }, { title: "まとめる", status: "done" }] } },
+      { type: "tool-output-available", toolCallId: "p", output: { ok: true, count: 2 } },
+      { type: "tool-input-available", toolCallId: "s", toolName: "search_articles", input: { query: "認知症" } },
+      { type: "tool-output-available", toolCallId: "s", output: { items: [{ id: 1, title: "記事A" }], total: 1 } },
+      { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "答えです" }, { type: "text-end", id: "t" },
+      { type: "finish", messageMetadata: { finishedAt: new Date().toISOString() } },
+    ] as never));
+    renderThread();
+    await ask("質問");
+    expect(await screen.findByText("答えです")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "作業計画" })).toHaveTextContent("まとめる");
+    const summary = screen.getByRole("button", { name: /^2ステップ · \d+秒$/ });
+    expect(summary).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("記事検索")).toBeNull();
+    expect(screen.queryByText("update_plan")).toBeNull();
+    await userEvent.setup().click(summary);
+    expect(screen.getByText("記事検索")).toBeInTheDocument();
+    expect(screen.queryByText("update_plan")).toBeNull();
+    expect(screen.getByRole("button", { name: "考えた内容" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "記事A" })).toBeInTheDocument();
   });
 });
