@@ -1,12 +1,14 @@
-import { Newspaper, Search, Star } from "lucide-react";
+import { MessageSquarePlus, Newspaper, Search, Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, EVENTS } from "../api";
+import { ChatToggle } from "../components/ChatToggle";
 import { ErrorLine } from "../components/ErrorLine";
 import { Segmented, ViewSwitch } from "../components/Segmented";
 import type { Selection, View } from "../components/Sidebar";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import { relativeTime } from "../lib/dates";
 import { buildItemFilter, FEED_RANGES, type FeedRange, type FeedState } from "../lib/filters";
+import type { ChatAttachment, ChatPeriod } from "../chat/context";
 import { categoryLabel, errorMessage, type AppStatus, type Item, type Source, type Topic } from "../types";
 
 interface Props {
@@ -17,6 +19,10 @@ interface Props {
   onSwitchView: (v: View) => void;
   /** 設定のソース一覧を開く。 */
   onOpenSources: () => void;
+  chatOpen: boolean;
+  onToggleChat: () => void;
+  onAskChat: (a: ChatAttachment) => void;
+  onPeriodChange: (p: ChatPeriod) => void;
 }
 
 const PAGE_SIZE = 100;
@@ -28,7 +34,7 @@ function selectionTitle(selection: Selection, topics: Topic[]): string {
   return topics.find((t) => t.id === selection.topicId)?.name ?? "トピック";
 }
 
-export function FeedView({ selection, topics, status, view, onSwitchView, onOpenSources }: Props) {
+export function FeedView({ selection, topics, status, view, onSwitchView, onOpenSources, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
   const [range, setRange] = useState<FeedRange>("week");
   const [sourceId, setSourceId] = useState<number | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -45,6 +51,10 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
   const [sources, setSources] = useState<Source[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // 親が毎回新しい関数を渡しても、期間が変わったときだけ通知する。
+  const periodChange = useRef(onPeriodChange);
+  periodChange.current = onPeriodChange;
+  useEffect(() => { periodChange.current({ view: "feed", range }); }, [range]);
   const composing = useRef(false);
   const requestSeq = useRef(0);
 
@@ -146,6 +156,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
             }}
           />
         </label>
+        <ChatToggle open={chatOpen} onToggle={onToggleChat} />
       </div>
       <div className="view feed">
         <ErrorLine message={loadError} />
@@ -186,6 +197,10 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
               </div>
               {it.ai_summary && <div className="summary">{it.ai_summary}</div>}
             </div>
+            <button className="row-actions" aria-label={`${it.title} についてチャットで質問`}
+              onClick={(e) => { e.stopPropagation(); onAskChat({ type: "item", id: it.id, title: it.title }); }}>
+              <MessageSquarePlus size={16} />
+            </button>
             <button className="star" aria-pressed={it.starred} aria-label={it.starred ? "スターを外す" : "スターを付ける"}
               onClick={() => run(api.setStarred(it.id, !it.starred))}>
               <Star size={16} fill={it.starred ? "currentColor" : "none"} />

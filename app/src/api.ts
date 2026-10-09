@@ -2,7 +2,7 @@ import type { UIMessage } from "ai";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  AppStatus, Category, ChatThread, DigestScope, DigestView, Item, ItemFilter, Period,
+  AppStatus, Category, ChatEndpoint, ChatThread, DigestScope, DigestView, Item, ItemFilter, Period,
   ProbeResult, Settings, SidebarCounts, Source, Topic,
 } from "./types";
 
@@ -11,6 +11,7 @@ export const EVENTS = {
   items: "items-changed",
   digests: "digests-changed",
   openSettings: "open-settings",
+  chat: "chat-endpoint-changed",
 } as const;
 
 export const api = {
@@ -55,6 +56,8 @@ export const api = {
   getChatMessages: (threadId: number) => invoke<UIMessage[]>("get_chat_messages", { threadId }),
   saveChatMessages: (threadId: number, messages: UIMessage[]) =>
     invoke<void>("save_chat_messages", { threadId, messages }),
+  chatEndpoint: () => invoke<ChatEndpoint>("chat_endpoint"),
+  restartChat: () => invoke<void>("restart_chat"),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };
 

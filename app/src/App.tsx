@@ -4,9 +4,16 @@ import { Sidebar, type Selection, type View } from "./components/Sidebar";
 import { ErrorLine } from "./components/ErrorLine";
 import { DigestView } from "./views/DigestView";
 import { FeedView } from "./views/FeedView";
-import { SettingsView } from "./views/SettingsView";
+import { SettingsView, type SettingsTab } from "./views/SettingsView";
+import { ChatPanel } from "./chat/ChatPanel";
+import type { ChatAttachment, ChatPeriod, ChatScope } from "./chat/context";
 import { useTauriEvent } from "./hooks/useTauriEvent";
-import { errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
+import { categoryLabel, errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
+
+function sameAttachment(a: ChatAttachment, b: ChatAttachment): boolean {
+  if (a.type === "item") return b.type === "item" && a.id === b.id;
+  return b.type === "digest" && a.period === b.period && a.date === b.date && a.scope === b.scope;
+}
 
 const EMPTY_COUNTS: SidebarCounts = { total_unread: 0, categories: {}, topics: {} };
 const IDLE_STATUS: AppStatus = {
@@ -27,6 +34,16 @@ export default function App() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPeriod, setChatPeriod] = useState<ChatPeriod | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  // 選択が変わったら添付は引き継がない (トピックの削除による選択の巻き戻しも含む)。
+  const selectionId = JSON.stringify(selection);
+  const [attachedFor, setAttachedFor] = useState(selectionId);
+  if (attachedFor !== selectionId) {
+    setAttachedFor(selectionId);
+    setAttachments([]);
+  }
 
   const refreshStatus = useCallback(() => {
     api.getStatus()
@@ -47,13 +64,22 @@ export default function App() {
   useTauriEvent(EVENTS.status, refreshStatus);
   useTauriEvent(EVENTS.items, refreshCounts);
   useTauriEvent(EVENTS.digests, refreshCounts);
-  const openSettings = useCallback(() => setInSettings(true), []);
+  // 設定を開くたびに key を増やし、initialTab を取り直す。
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("sources");
+  const [settingsKey, setSettingsKey] = useState(0);
+  const openSettingsAt = useCallback((tab: SettingsTab) => {
+    setSettingsTab(tab);
+    setSettingsKey((k) => k + 1);
+    setInSettings(true);
+  }, []);
+  const openSettings = useCallback(() => openSettingsAt("sources"), [openSettingsAt]);
+  const openLlmSettings = useCallback(() => openSettingsAt("llm"), [openSettingsAt]);
   useTauriEvent(EVENTS.openSettings, openSettings);
   const switchView = useCallback((v: View) => {
-    if (v === "settings") { setInSettings(true); return; }
+    if (v === "settings") { openSettings(); return; }
     setContentView(v);
     setInSettings(false);
-  }, []);
+  }, [openSettings]);
 
   const collectNow = useCallback(() => {
     api.collectNow()
@@ -66,6 +92,19 @@ export default function App() {
     setInSettings(false);
   };
 
+  const toggleChat = useCallback(() => setChatOpen((o) => !o), []);
+  const askChat = useCallback((a: ChatAttachment) => {
+    setAttachments((cur) => (cur.some((x) => sameAttachment(x, a)) ? cur : [...cur, a]));
+    setChatOpen(true);
+  }, []);
+  const removeAttachment = useCallback((i: number) => setAttachments((cur) => cur.filter((_, j) => j !== i)), []);
+
+  const scope: ChatScope = selection.kind === "all"
+    ? { kind: "all" }
+    : selection.kind === "category"
+      ? { kind: "category", category: selection.category, label: categoryLabel(selection.category) }
+      : { kind: "topic", topicId: selection.topicId, label: topics.find((t) => t.id === selection.topicId)?.name ?? "トピック" };
+
   const hasError = statusError !== null || countsError !== null || actionError !== null;
 
   return (
@@ -74,21 +113,29 @@ export default function App() {
         onSelect={select} onOpenSettings={openSettings}
         onCollectNow={collectNow} />
       <main className="main">
-        {hasError && (
-          <div className="shell-errors">
-            <ErrorLine message={statusError} />
-            <ErrorLine message={countsError} />
-            <ErrorLine message={actionError} />
-          </div>
+        <div className="content">
+          {hasError && (
+            <div className="shell-errors">
+              <ErrorLine message={statusError} />
+              <ErrorLine message={countsError} />
+              <ErrorLine message={actionError} />
+            </div>
+          )}
+          {view === "digest" && (
+            <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
+              chatOpen={chatOpen} onToggleChat={toggleChat} onAskChat={askChat} onPeriodChange={setChatPeriod} />
+          )}
+          {view === "feed" && (
+            <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
+              onOpenSources={openSettings}
+              chatOpen={chatOpen} onToggleChat={toggleChat} onAskChat={askChat} onPeriodChange={setChatPeriod} />
+          )}
+          {view === "settings" && <SettingsView key={settingsKey} status={status} initialTab={settingsTab} />}
+        </div>
+        {view !== "settings" && chatOpen && (
+          <ChatPanel scope={scope} period={chatPeriod} attachments={attachments}
+            onRemoveAttachment={removeAttachment} onClose={() => setChatOpen(false)} onOpenSettings={openLlmSettings} />
         )}
-        {view === "digest" && (
-          <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView} />
-        )}
-        {view === "feed" && (
-          <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
-            onOpenSources={openSettings} />
-        )}
-        {view === "settings" && <SettingsView status={status} />}
       </main>
     </div>
   );

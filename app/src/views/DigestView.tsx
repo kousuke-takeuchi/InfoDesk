@@ -1,10 +1,12 @@
-import { CircleAlert, Hourglass, Inbox, Loader, RotateCw } from "lucide-react";
+import { CircleAlert, Hourglass, Inbox, Loader, MessageSquarePlus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, EVENTS } from "../api";
+import { ChatToggle } from "../components/ChatToggle";
 import { ErrorLine } from "../components/ErrorLine";
 import { Segmented, ViewSwitch } from "../components/Segmented";
 import type { Selection, View } from "../components/Sidebar";
 import { useTauriEvent } from "../hooks/useTauriEvent";
+import type { ChatAttachment, ChatPeriod } from "../chat/context";
 import { localDateString, periodHeading } from "../lib/dates";
 import { digestDisplay, parseDigestBody } from "../lib/digest";
 import { errorMessage, type AppStatus, type DigestScope, type DigestView as DV, type Item, type Period, type Topic } from "../types";
@@ -21,6 +23,10 @@ interface Props {
   status: AppStatus;
   view: View;
   onSwitchView: (v: View) => void;
+  chatOpen: boolean;
+  onToggleChat: () => void;
+  onAskChat: (a: ChatAttachment) => void;
+  onPeriodChange: (p: ChatPeriod) => void;
 }
 
 function sameScope(a: DigestScope, b: Selection): boolean {
@@ -60,7 +66,7 @@ function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => vo
   );
 }
 
-export function DigestView({ selection, topics, status, view, onSwitchView }: Props) {
+export function DigestView({ selection, topics, status, view, onSwitchView, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
   const [period, setPeriod] = useState<Period>("day");
   // 取得結果と依頼中の scope は、どの条件のものかを一緒に持つ。条件が変わった描画では
   // 即座に無効になるので、前の期間のセクションが新しい見出しの下に残らない。
@@ -73,6 +79,10 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
   const today = new Date();
   const date = localDateString(today);
   const topicId = selection.kind === "topic" ? selection.topicId : null;
+  // 親が毎回新しい関数を渡しても、期間か日付が変わったときだけ通知する。
+  const periodChange = useRef(onPeriodChange);
+  periodChange.current = onPeriodChange;
+  useEffect(() => { periodChange.current({ view: "digest", period, date }); }, [period, date]);
   const loadKey = `${period}|${date}|${topicId ?? ""}`;
   const context = `${loadKey}|${selectionKey(selection)}`;
   const views = loaded && loaded.key === loadKey ? loaded.views : null;
@@ -138,6 +148,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
         <ViewSwitch view={view} onChange={onSwitchView} />
         <div className="spacer" />
         <Segmented options={PERIODS} value={period} onChange={setPeriod} ariaLabel="期間" />
+        <ChatToggle open={chatOpen} onToggle={onToggleChat} />
       </div>
       <div className="view">
         <ErrorLine message={error} />
@@ -165,6 +176,12 @@ export function DigestView({ selection, topics, status, view, onSwitchView }: Pr
                   <span className="text-tertiary tiny">{display.digest.provider} · 記事{display.digest.item_ids.length}件</span>
                 )}
                 {display.kind === "done" && display.regenerating && <span className="text-tertiary tiny">再生成中…</span>}
+                {display.kind === "done" && (
+                  <button className="row-actions-btn" aria-label={`${v.label}の要約についてチャットで質問`}
+                    onClick={() => onAskChat({ type: "digest", period, date, scope: "category" in v.scope ? `category:${v.scope.category}` : `topic:${v.scope.topic}`, label: v.label })}>
+                    <MessageSquarePlus size={14} />
+                  </button>
+                )}
               </div>
               {display.kind === "done" && (() => {
                 const { bullets, paragraphs } = parseDigestBody(display.digest.body);

@@ -21,7 +21,8 @@
 .sidebar-status svg { flex: none; }
 .sidebar-error { padding: 4px 8px; font-size: 11px; color: var(--danger); line-height: 1.4; overflow-wrap: anywhere; }
 
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: row; position: relative; }
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .shell-errors { display: flex; flex-direction: column; gap: 4px; padding: 8px 24px 0; }
 /* 幅が足りないときはツールバーごと折り返す。ボタンやラベルの文字は折り返さない */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
@@ -59,6 +60,12 @@
 .item-row .summary { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 .item-row .star { color: var(--text-tertiary); align-self: flex-start; }
 .item-row .star[aria-pressed="true"] { color: var(--star); }
+.item-row .row-actions { color: var(--text-tertiary); align-self: flex-start; opacity: 0; }
+.item-row:hover .row-actions, .item-row:focus-within .row-actions { opacity: 1; }
+.row-actions-btn { color: var(--text-tertiary); display: inline-grid; place-items: center; }
+.row-actions-btn:hover { color: var(--accent); }
+.toolbar .icon-toggle { padding: 6px 8px; }
+.toolbar .icon-toggle[aria-pressed="true"] { background: var(--selection); color: var(--accent); }
 .feed-footer { display: flex; align-items: center; gap: 12px; padding: 16px 0 24px; font-size: 12px; }
 
 /* 設定 */
@@ -92,7 +99,7 @@
 /* 削除の確認は行の列を変えず、行の下に全幅で出す */
 .cell-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; }
 .cell-confirm .btn { flex-shrink: 0; white-space: nowrap; }
-.cell-confirm .btn-danger { color: var(--danger); }
+.btn-danger { color: var(--danger); }
 .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: var(--bg-subtle); max-width: 560px; }
 .card .row { display: flex; align-items: center; gap: 12px; }
 .card .row > label { width: 90px; font-size: 12px; }

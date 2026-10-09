@@ -21,8 +21,9 @@ const item = (a: { id: number }) => ({ id: a.id, title: `記事${a.id}`, url: "h
 /** バックエンドと同じく、呼び出しごとに新しいオブジェクトを返す。 */
 const fresh = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const section = (name: string) => within(screen.getByRole("heading", { name }).closest("section")!);
-const renderAll = (s: AppStatus = status) =>
-  render(<DigestView selection={{ kind: "all" }} topics={[]} status={s} view="digest" onSwitchView={() => {}} />);
+const CHAT = { chatOpen: false, onToggleChat: () => {}, onAskChat: () => {}, onPeriodChange: () => {} };
+const renderAll = (s: AppStatus = status, chat: Partial<typeof CHAT> = {}) =>
+  render(<DigestView selection={{ kind: "all" }} topics={[]} status={s} view="digest" onSwitchView={() => {}} {...CHAT} {...chat} />);
 /** 保留中の IPC 応答と、それに続く state 更新を流し切る。 */
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
@@ -58,7 +59,7 @@ describe("DigestView", () => {
   it("switches period and scope and shows generating", async () => {
     const ipc = setupIpc({ get_digests: () => [{ scope: { topic: 2 }, label: "介護", digest: null, item_count: 3 }], get_item: () => null });
     render(<DigestView selection={{ kind: "topic", topicId: 2 }} topics={[{ id: 2, name: "介護", keywords: [] }]}
-      status={{ ...status, digesting: true }} view="digest" onSwitchView={() => {}} />);
+      status={{ ...status, digesting: true }} view="digest" onSwitchView={() => {}} {...CHAT} />);
     expect(await screen.findByText("要約を生成中…")).toBeInTheDocument();
     expect(ipc.last("get_digests")).toEqual({ period: "day", date: "2026-10-06", topicId: 2 });
 
@@ -70,7 +71,7 @@ describe("DigestView", () => {
 
   it("filters to one category when a category is selected and reports errors", async () => {
     setupIpc({ get_digests: () => views, get_item: () => null });
-    render(<DigestView selection={{ kind: "category", category: "medcare" }} topics={[]} status={status} view="digest" onSwitchView={() => {}} />);
+    render(<DigestView selection={{ kind: "category", category: "medcare" }} topics={[]} status={status} view="digest" onSwitchView={() => {}} {...CHAT} />);
     expect(await screen.findByRole("heading", { name: "医療介護" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "GitHub" })).not.toBeInTheDocument();
@@ -122,7 +123,7 @@ describe("DigestView", () => {
 
   it("limits the scope to the selected category when regenerating", async () => {
     const ipc = setupIpc({ get_digests: () => fresh(views), get_item: () => null, regenerate_digest: () => undefined });
-    render(<DigestView selection={{ kind: "category", category: "github" }} topics={[]} status={status} view="digest" onSwitchView={() => {}} />);
+    render(<DigestView selection={{ kind: "category", category: "github" }} topics={[]} status={status} view="digest" onSwitchView={() => {}} {...CHAT} />);
     expect(await screen.findByText("一つ目。")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "再生成" }));
     expect(ipc.last("regenerate_digest")).toEqual({ period: "day", date: "2026-10-06", scopes: [{ category: "github" }] });
@@ -253,7 +254,7 @@ describe("DigestView", () => {
     expect(await screen.findByRole("button", { name: "記事11" })).toBeInTheDocument();
     expect(ipc.count("get_digests")).toBe(1);
 
-    rerender(<DigestView selection={{ kind: "all" }} topics={[]} status={{ ...status, digesting: true }} view="digest" onSwitchView={() => {}} />);
+    rerender(<DigestView selection={{ kind: "all" }} topics={[]} status={{ ...status, digesting: true }} view="digest" onSwitchView={() => {}} {...CHAT} />);
     await emitEvent(EVENTS.status);
     await settle();
     expect(ipc.count("get_digests")).toBe(1);
@@ -359,5 +360,54 @@ describe("DigestView", () => {
     await settle();
     expect(button).toBeEnabled();
     expect(screen.queryByText("再生成中…")).not.toBeInTheDocument();
+  });
+
+  it("has a chat toggle that reflects and flips the panel state", async () => {
+    setupIpc({ get_digests: () => fresh(views), get_item: item });
+    const onToggleChat = vi.fn();
+    renderAll(status, { onToggleChat });
+    await screen.findByText("一つ目。");
+    const open = screen.getByRole("button", { name: "チャットを開く" });
+    expect(open).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(open);
+    expect(onToggleChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the toggle as pressed while the chat is open", async () => {
+    setupIpc({ get_digests: () => fresh(views), get_item: item });
+    renderAll(status, { chatOpen: true });
+    await screen.findByText("一つ目。");
+    expect(screen.getByRole("button", { name: "チャットを閉じる" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("asks about a finished section in chat, only for sections with a summary", async () => {
+    setupIpc({ get_digests: () => fresh(views), get_item: item });
+    const onAskChat = vi.fn();
+    renderAll(status, { onAskChat });
+    await screen.findByText("一つ目。");
+    expect(screen.getAllByRole("button", { name: /についてチャットで質問/ })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "GitHubの要約についてチャットで質問" }));
+    expect(onAskChat).toHaveBeenCalledWith({ type: "digest", period: "day", date: "2026-10-06", scope: "category:github", label: "GitHub" });
+  });
+
+  it("uses a topic scope for a topic section", async () => {
+    setupIpc({ get_digests: () => [{ scope: { topic: 2 }, label: "介護", digest: digest({ scope: { topic: 2 } }), item_count: 3 }], get_item: item });
+    const onAskChat = vi.fn();
+    render(<DigestView selection={{ kind: "topic", topicId: 2 }} topics={[{ id: 2, name: "介護", keywords: [] }]}
+      status={status} view="digest" onSwitchView={() => {}} {...CHAT} onAskChat={onAskChat} />);
+    await userEvent.click(await screen.findByRole("button", { name: "介護の要約についてチャットで質問" }));
+    expect(onAskChat).toHaveBeenCalledWith({ type: "digest", period: "day", date: "2026-10-06", scope: "topic:2", label: "介護" });
+  });
+
+  it("reports the period on mount and when it changes", async () => {
+    setupIpc({ get_digests: () => fresh(views), get_item: item });
+    const onPeriodChange = vi.fn();
+    renderAll(status, { onPeriodChange });
+    await screen.findByText("一つ目。");
+    expect(onPeriodChange).toHaveBeenCalledTimes(1);
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "day", date: "2026-10-06" });
+    await userEvent.click(screen.getByRole("button", { name: "週" }));
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "week", date: "2026-10-06" });
+    expect(onPeriodChange).toHaveBeenCalledTimes(2);
   });
 });

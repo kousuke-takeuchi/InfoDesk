@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FeedView } from "./FeedView";
@@ -11,10 +11,11 @@ const item = (over: Partial<Item>): Item => ({
   title: "認知症の新薬", excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
   score: null, ai_summary: "要約文。", read: false, starred: false, ...over,
 });
+const CHAT = { chatOpen: false, onToggleChat: () => {}, onAskChat: () => {}, onPeriodChange: () => {} };
 const UNREAD_COUNT = /未読\s*\d+件/;
 const tick = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
-function renderFeed(items: Item[], extra: Record<string, (a: any) => unknown> = {}, st: AppStatus = status) {
+function renderFeed(items: Item[], extra: Record<string, (a: any) => unknown> = {}, st: AppStatus = status, chat: Partial<typeof CHAT> = {}) {
   const ipc = setupIpc({
     list_items: () => items,
     count_items: (a) => items.filter((i) => !a.filter.unread_only || !i.read).length,
@@ -25,7 +26,7 @@ function renderFeed(items: Item[], extra: Record<string, (a: any) => unknown> = 
   });
   render(
     <FeedView selection={{ kind: "category", category: "medcare" }} topics={[]} status={st}
-      view="feed" onSwitchView={() => {}} onOpenSources={() => {}} />,
+      view="feed" onSwitchView={() => {}} onOpenSources={() => {}} {...CHAT} {...chat} />,
   );
   return ipc;
 }
@@ -75,7 +76,7 @@ describe("FeedView", () => {
     expect(ipc.count("collect_now")).toBe(1);
 
     setupIpc({ list_items: () => { throw { message: "database lock poisoned" }; }, count_items: () => 0, list_sources: () => [] });
-    render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} onOpenSources={() => {}} />);
+    render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} onOpenSources={() => {}} {...CHAT} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("database lock poisoned");
   });
 
@@ -250,7 +251,7 @@ describe("FeedView", () => {
     let opened = 0;
     setupIpc({ list_items: () => [], count_items: () => 0, list_sources: () => [], collect_now: () => undefined });
     render(<FeedView selection={{ kind: "all" }} topics={[]} status={{ ...status, last_collect_at: null }}
-      view="feed" onSwitchView={() => {}} onOpenSources={() => { opened += 1; }} />);
+      view="feed" onSwitchView={() => {}} onOpenSources={() => { opened += 1; }} {...CHAT} />);
     expect(await screen.findByText("まだ記事がありません")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "今すぐ収集" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "ソースを確認" }));
@@ -266,7 +267,7 @@ describe("FeedView", () => {
       count_items: () => 1,
       list_sources: () => [],
     });
-    const props = { topics: [], status, view: "feed" as const, onSwitchView: () => {}, onOpenSources: () => {} };
+    const props = { topics: [], status, view: "feed" as const, onSwitchView: () => {}, onOpenSources: () => {}, ...CHAT };
     const { rerender } = render(<FeedView selection={{ kind: "category", category: "medcare" }} {...props} />);
     expect(await screen.findByText("認知症の新薬")).toBeInTheDocument();
     expect(screen.getByText(UNREAD_COUNT)).toBeInTheDocument();
@@ -294,5 +295,41 @@ describe("FeedView", () => {
     expect(screen.getByText("認知症の新薬")).toBeInTheDocument();
     await act(async () => { resolveSlow([item({ id: 8, title: "未読の記事" })]); });
     expect(await screen.findByText("未読の記事")).toBeInTheDocument();
+  });
+
+  it("has a chat toggle that reflects and flips the panel state", async () => {
+    const onToggleChat = vi.fn();
+    renderFeed([item({})], {}, status, { onToggleChat });
+    await screen.findByText("認知症の新薬");
+    const open = screen.getByRole("button", { name: "チャットを開く" });
+    expect(open).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(open);
+    expect(onToggleChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the toggle as pressed while the chat is open", async () => {
+    renderFeed([item({})], {}, status, { chatOpen: true });
+    await screen.findByText("認知症の新薬");
+    expect(screen.getByRole("button", { name: "チャットを閉じる" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("asks about an item in chat without opening it", async () => {
+    const onAskChat = vi.fn();
+    const ipc = renderFeed([item({})], {}, status, { onAskChat });
+    await screen.findByText("認知症の新薬");
+    await userEvent.click(screen.getByRole("button", { name: "認知症の新薬 についてチャットで質問" }));
+    expect(onAskChat).toHaveBeenCalledWith({ type: "item", id: 1, title: "認知症の新薬" });
+    expect(ipc.count("open_item")).toBe(0);
+  });
+
+  it("reports the period on mount and when it changes", async () => {
+    const onPeriodChange = vi.fn();
+    renderFeed([item({})], {}, status, { onPeriodChange });
+    await screen.findByText("認知症の新薬");
+    expect(onPeriodChange).toHaveBeenCalledTimes(1);
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "feed", range: "week" });
+    await userEvent.click(screen.getByRole("button", { name: "3日" }));
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "feed", range: "3d" });
+    expect(onPeriodChange).toHaveBeenCalledTimes(2);
   });
 });

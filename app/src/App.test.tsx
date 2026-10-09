@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { EVENTS } from "./api";
@@ -24,6 +24,9 @@ function handlers(over: IpcHandlers = {}): IpcHandlers {
     collect_now: () => undefined,
     get_digests: () => [],
     get_item: () => null,
+    chat_endpoint: () => ({ status: "starting" }),
+    list_chat_threads: () => [],
+    get_settings: () => ({}),
     ...over,
   };
 }
@@ -168,5 +171,84 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "設定" }));
     await userEvent.click(allItem());
     expect(screen.getByRole("button", { name: "ダイジェスト" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  describe("chat panel", () => {
+    const ITEM = {
+      id: 12, source_id: 1, source_name: "s", category: "medcare", url: "https://e.com/12", title: "認知症の新薬",
+      excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
+      score: null, ai_summary: null, read: false, starred: false,
+    };
+    const feedHandlers = (over: IpcHandlers = {}) => handlers({
+      list_items: () => [ITEM], count_items: () => 1, list_sources: () => [], source_item_counts: () => ({}), ...over,
+    });
+    const panel = () => screen.queryByRole("complementary", { name: "チャット" });
+
+    it("opens and closes with the toolbar toggle and the close button", async () => {
+      setupIpc(handlers());
+      render(<App />);
+      await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+      expect(panel()).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "チャットを開く" }));
+      expect(panel()).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "チャットを閉じる", pressed: true })).toBeInTheDocument();
+      await userEvent.click(within(panel()!).getByRole("button", { name: "チャットを閉じる" }));
+      expect(panel()).toBeNull();
+    });
+
+    it("opens the panel with an item chip when asking about an item, once per item", async () => {
+      setupIpc(feedHandlers());
+      render(<App />);
+      await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+      await userEvent.click(screen.getByRole("button", { name: "フィード" }));
+      const ask = await screen.findByRole("button", { name: "認知症の新薬 についてチャットで質問" });
+      await userEvent.click(ask);
+      const chips = within(await screen.findByRole("group", { name: "文脈" }));
+      expect(chips.getByText("認知症の新薬")).toBeInTheDocument();
+      await userEvent.click(ask);
+      expect(chips.getAllByText("認知症の新薬")).toHaveLength(1);
+    });
+
+    it("clears the attachments when the selection changes", async () => {
+      setupIpc(feedHandlers());
+      render(<App />);
+      await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+      await userEvent.click(screen.getByRole("button", { name: "フィード" }));
+      await userEvent.click(await screen.findByRole("button", { name: "認知症の新薬 についてチャットで質問" }));
+      const chips = within(await screen.findByRole("group", { name: "文脈" }));
+      expect(chips.getByText("認知症の新薬")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "GitHub" }));
+      expect(within(screen.getByRole("group", { name: "文脈" })).queryByText("認知症の新薬")).toBeNull();
+    });
+
+    it("opens the LLM settings tab from the panel's error state", async () => {
+      setupIpc(handlers({
+        chat_endpoint: () => ({ status: "error", kind: "node_missing", message: "Node が見つかりません (node)。" }),
+        get_settings: () => ({
+          "llm.items_provider": "ollama", "llm.digest_provider": "claude", "llm.chat_provider": "ollama",
+          "ollama.base_url": "http://localhost:11434", "ollama.model": "gemma4:26b", "ollama.web_search_api_key": "",
+          "claude.bin": "claude", "node.bin": "node", "summary.top_n": "20",
+        }),
+      }));
+      render(<App />);
+      await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+      await userEvent.click(screen.getByRole("button", { name: "チャットを開く" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Node のパスを設定" }));
+      expect(await screen.findByLabelText("モデル")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "設定" })).toHaveAttribute("aria-current", "true");
+    });
+
+    it("hides the panel in settings and brings it back afterwards", async () => {
+      setupIpc(handlers({ list_sources: () => [], source_item_counts: () => ({}) }));
+      render(<App />);
+      await waitFor(() => expect(allItem()).toHaveTextContent("7"));
+      await userEvent.click(screen.getByRole("button", { name: "チャットを開く" }));
+      expect(panel()).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "設定" }));
+      expect(await screen.findByRole("button", { name: "RSSを追加" })).toBeInTheDocument();
+      expect(panel()).toBeNull();
+      await userEvent.click(allItem());
+      expect(panel()).toBeInTheDocument();
+    });
   });
 });

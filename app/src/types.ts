@@ -133,3 +133,8 @@ export interface ChatThread {
   created_at: string;
   updated_at: string;
 }
+
+export type ChatEndpoint =
+  | { status: "starting" }
+  | { status: "ready"; url: string; token: string }
+  | { status: "error"; kind: "node_missing" | "node_too_old" | "agent_missing" | "start_failed"; message: string };
