@@ -146,7 +146,7 @@ describe("ChatPanel", () => {
     renderPanel();
     await screen.findByTestId("thread");
     expect(typeof lastThreadProps.onRestartAgent).toBe("function");
-    lastThreadProps.onRestartAgent();
+    act(() => lastThreadProps.onRestartAgent([]));
     await waitFor(() => expect(ipc.count("restart_chat")).toBe(1));
   });
 
@@ -166,7 +166,7 @@ describe("ChatPanel", () => {
     ];
     await act(async () => { await lastThreadProps.onPersist(two); });
     endpoint = { status: "starting" };
-    act(() => lastThreadProps.onRestartAgent());
+    act(() => lastThreadProps.onRestartAgent(lastThreadProps.initialMessages));
     expect(await screen.findByText("エージェントを起動しています…")).toBeInTheDocument();
     endpoint = READY;
     await emitEvent("chat-endpoint-changed");
@@ -176,6 +176,26 @@ describe("ChatPanel", () => {
     await act(async () => { await lastThreadProps.onPersist(three); });
     expect(ipc.count("create_chat_thread")).toBe(1);
     expect(ipc.last("save_chat_messages")).toEqual({ threadId: 9, messages: three });
+  });
+
+  it("keeps the unsent question across an agent restart without saving it", async () => {
+    let endpoint: any = READY;
+    const ipc = base({ chat_endpoint: () => endpoint, restart_chat: () => null });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const key = lastThreadProps.chatKey;
+    const failed = [{ id: "u", role: "user", parts: [{ type: "text", text: "未送信の質問" }] }];
+    endpoint = { status: "starting" };
+    act(() => lastThreadProps.onRestartAgent(failed));
+    expect(await screen.findByText("エージェントを起動しています…")).toBeInTheDocument();
+    await waitFor(() => expect(ipc.count("restart_chat")).toBe(1));
+    endpoint = READY;
+    await emitEvent("chat-endpoint-changed");
+    await screen.findByTestId("thread");
+    expect(lastThreadProps.chatKey).toBe(key);
+    expect(lastThreadProps.initialMessages).toEqual(failed);
+    expect(ipc.count("save_chat_messages")).toBe(0);
+    expect(ipc.count("create_chat_thread")).toBe(0);
   });
 
   it("saves a late answer into the thread it belongs to, not the one now open", async () => {

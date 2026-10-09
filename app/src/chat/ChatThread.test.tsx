@@ -199,7 +199,9 @@ describe("ChatThread", () => {
     expect(screen.queryByRole("button", { name: /で送る/ })).not.toBeInTheDocument();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "エージェントを再起動" }));
-    expect(onRestartAgent).toHaveBeenCalled();
+    expect(onRestartAgent).toHaveBeenCalledTimes(1);
+    const passed = onRestartAgent.mock.calls[0][0] as UIMessage[];
+    expect(passed.some((m) => m.role === "user" && m.parts.some((p) => p.type === "text" && p.text === "質問C"))).toBe(true);
     await user.click(screen.getByRole("button", { name: "再試行" }));
     expect(await screen.findByText("再起動後の答え")).toBeInTheDocument();
     expect(calls).toHaveLength(2);

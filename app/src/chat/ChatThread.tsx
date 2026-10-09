@@ -21,8 +21,8 @@ export interface ChatThreadProps {
   onProviderChange(p: ProviderId): void;
   onPersist(messages: UIMessage[]): Promise<void>;
   onOpenSettings(): void;
-  /** サイドカーに接続できないときの「エージェントを再起動」。 */
-  onRestartAgent?: () => void;
+  /** サイドカーに接続できないときの「エージェントを再起動」。送れなかった質問を含む今の会話を渡す。 */
+  onRestartAgent?: (messages: UIMessage[]) => void;
   suggestions: string[];
 }
 
@@ -143,7 +143,7 @@ export function ChatThread(props: ChatThreadProps) {
                 <div className="chat-error-actions">
                   <button className="btn btn-primary" onClick={retry}>再試行</button>
                   {error.kind === "network" ? (
-                    props.onRestartAgent && <button className="btn" onClick={props.onRestartAgent}>エージェントを再起動</button>
+                    props.onRestartAgent && <button className="btn" onClick={() => props.onRestartAgent?.(chat.messages)}>エージェントを再起動</button>
                   ) : (
                     <button className="btn" onClick={() => switchAndRetry(OTHER[error.provider ?? provider])}>
                       {PROVIDER_NAME[OTHER[error.provider ?? provider]]} で送る

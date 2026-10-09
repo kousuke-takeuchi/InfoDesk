@@ -149,6 +149,12 @@ export function ChatPanel(props: Props) {
     }
   }, [loadThreads, setCurrent]);
 
+  // 再起動すると会話を作り直すので、送れなかった質問を含む今の会話から再開する。保存はしない (回答が完了したときに保存する)。
+  const restartKeeping = (key: string, messages: UIMessage[]) => {
+    setCurrent((c) => (c.key === key ? { ...c, messages } : c));
+    restart();
+  };
+
   const title = threads.find((t) => t.id === current.id)?.title ?? "新しいスレッド";
   const suggestions = SUGGESTIONS[props.scope.kind === "category" ? props.scope.category : "default"] ?? SUGGESTIONS.default;
   const chips = [scopeChip(props.scope), periodChip(props.period)].filter(Boolean) as string[];
@@ -202,7 +208,7 @@ export function ChatPanel(props: Props) {
           onProviderChange={setProvider}
           onPersist={(m: UIMessage[]) => persist(current.key, m)}
           onOpenSettings={() => props.onOpenSettings("llm")}
-          onRestartAgent={restart}
+          onRestartAgent={(messages: UIMessage[]) => restartKeeping(current.key, messages)}
           suggestions={suggestions}
         />
       )}
