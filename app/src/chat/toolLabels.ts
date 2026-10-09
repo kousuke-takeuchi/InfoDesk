@@ -1,5 +1,5 @@
 import { CATEGORIES } from "../types";
-import { obj, stripMcpPrefix } from "./unwrap";
+import { obj, stripMcpPrefix, unwrap } from "./unwrap";
 
 const PERIOD = { day: "日次", week: "週次", month: "月次" } as Record<string, string>;
 const LABELS: Record<string, string> = {
@@ -16,7 +16,8 @@ export function describeTool(toolName: string, args: unknown, result: unknown): 
   const label = LABELS[name];
   if (!label) return { label: toolName, detail: "" };
   const a = obj(args);
-  const r = obj(result);
+  // Claude の MCP ツールの結果は JSON のテキストで届くので、toolDetails と同じく開いて読む。
+  const r = unwrap(result) ?? {};
   const parts: string[] = [];
   switch (name) {
     case "search_articles":

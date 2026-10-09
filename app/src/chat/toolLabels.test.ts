@@ -18,6 +18,16 @@ describe("describeTool", () => {
     expect(describeTool("WebSearch", { query: "x" }, undefined)).toEqual({ label: "Web検索", detail: "x" });
   });
 
+  it("reads MCP text results from Claude", () => {
+    const mcp = (v: unknown) => ({ content: [{ type: "text", text: JSON.stringify(v) }] });
+    expect(describeTool("mcp__infodesk__search_articles", { query: "認知症" }, mcp({ items: [], total: 5 })))
+      .toEqual({ label: "記事検索", detail: "認知症 · 5件" });
+    expect(describeTool("mcp__infodesk__get_article", { id: 3 }, mcp({ item: { id: 3, title: "MCPの記事" } })))
+      .toEqual({ label: "記事を読む", detail: "MCPの記事" });
+    expect(describeTool("mcp__infodesk__fetch_page", { url: "https://a.example/x" }, mcp({ page: { title: "ページ題" } })))
+      .toEqual({ label: "本文取得", detail: "ページ題" });
+  });
+
   it("falls back to the raw name", () => {
     expect(describeTool("mcp__other__thing", {}, undefined)).toEqual({ label: "mcp__other__thing", detail: "" });
   });

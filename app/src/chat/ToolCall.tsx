@@ -27,17 +27,23 @@ export function ToolCall({ toolName, args, result, isError, status }: ToolCallMe
     : "完了";
   // 失敗したツールのエラー文は、assistant-ui が result の { error } に入れて渡す。
   const errorText = isError ? errorMessage(result) : undefined;
-  const rows = open ? toolDetails(toolName, args, result, errorText) : [];
-  return (
+  const rows = toolDetails(toolName, args, result, errorText);
+  const className = `tool-call${state === "失敗" ? " is-error" : ""}`;
+  const content = (
     <>
-    <button className={`tool-call${state === "失敗" ? " is-error" : ""}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
       <Icon size={13} aria-hidden />
       {/* コロンは名前に付けて、flex の gap が前に入らないようにする (「記事検索: 認知症」) */}
       <span className="tool-label">{label}{detail && <span aria-hidden>:</span>}</span>
       {detail && <span className="tool-detail">{detail}</span>}
       <span className={`tool-state${state === "実行中" ? " running" : ""}`}>{state}</span>
-    </button>
-    {rows.length > 0 && (
+    </>
+  );
+  // 開いても何も出ない呼び出しは、押せない行にする。
+  if (rows.length === 0) return <div className={className}>{content}</div>;
+  return (
+    <>
+    <button className={className} aria-expanded={open} onClick={() => setOpen((v) => !v)}>{content}</button>
+    {open && (
       <dl className="tool-details">
         {rows.map((r, i) => (<Fragment key={i}><dt>{r.label}</dt><dd>{r.value}</dd></Fragment>))}
       </dl>

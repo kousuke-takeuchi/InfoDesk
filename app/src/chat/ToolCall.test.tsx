@@ -51,6 +51,15 @@ describe("ToolCall", () => {
     expect(screen.getByText("接続できません")).toBeInTheDocument();
   });
 
+  it("renders a plain row when there are no details to open", () => {
+    render(<ToolCall {...({ toolName: "get_article", args: {}, result: undefined, isError: false, status: { type: "complete" } } as any)} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    const row = screen.getByText("記事を読む").closest(".tool-call");
+    expect(row).not.toBeNull();
+    expect(row).not.toHaveAttribute("aria-expanded");
+    expect(screen.getByText("完了")).toBeInTheDocument();
+  });
+
   it("renders nothing for plan updates", () => {
     const { container } = render(<ToolCall {...({ toolName: "update_plan", args: { items: [] }, result: undefined, isError: false, status: { type: "complete" } } as any)} />);
     expect(container).toBeEmptyDOMElement();
