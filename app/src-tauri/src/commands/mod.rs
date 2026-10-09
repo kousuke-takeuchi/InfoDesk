@@ -1,4 +1,5 @@
 pub mod chat;
+pub mod chat_endpoint;
 pub mod digests;
 pub mod items;
 pub mod settings;

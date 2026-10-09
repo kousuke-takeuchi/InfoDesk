@@ -11,6 +11,7 @@ use crate::error::{AppError, AppResult};
 pub const EVENT_STATUS: &str = "status-changed";
 pub const EVENT_ITEMS: &str = "items-changed";
 pub const EVENT_DIGESTS: &str = "digests-changed";
+pub const EVENT_CHAT: &str = "chat-endpoint-changed";
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct AppStatus {
@@ -35,6 +36,7 @@ pub struct AppState {
     pub tz: FixedOffset,
     pub notify: Notifier,
     pub llm: LlmFactory,
+    pub chat: crate::sidecar::Sidecar,
 }
 
 impl AppState {
@@ -47,6 +49,7 @@ impl AppState {
             tz: *Local::now().offset(),
             notify,
             llm: Arc::new(provider_from_settings),
+            chat: crate::sidecar::Sidecar::default(),
         }
     }
 

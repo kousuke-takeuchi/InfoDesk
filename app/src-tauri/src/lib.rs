@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod jobs;
 mod scheduler;
+mod sidecar;
 mod state;
 mod tray;
 
@@ -42,6 +43,10 @@ pub fn run() {
             }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(scheduler::run_loop(handle));
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                handle.state::<AppState>().chat.restart(&handle).await;
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -82,6 +87,8 @@ pub fn run() {
             commands::chat::delete_chat_thread,
             commands::chat::get_chat_messages,
             commands::chat::save_chat_messages,
+            commands::chat_endpoint::chat_endpoint,
+            commands::chat_endpoint::restart_chat,
             commands::topics::add_topic,
             commands::topics::update_topic,
             commands::topics::delete_topic,
@@ -92,11 +99,14 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, _event| {
+        .run(|app, event| {
             // Dock のアイコンを押したら、隠したウィンドウを表示する。
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _event {
-                tray::show_main_window(_app);
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tray::show_main_window(app);
+            }
+            if let tauri::RunEvent::Exit = event {
+                app.state::<AppState>().chat.stop();
             }
         });
 }

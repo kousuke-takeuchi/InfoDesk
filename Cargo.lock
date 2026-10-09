@@ -2096,6 +2096,7 @@ dependencies = [
  "infodesk-core",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -2105,6 +2106,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "infodesk",
  "infodesk-core",
  "reqwest",
  "serde",
