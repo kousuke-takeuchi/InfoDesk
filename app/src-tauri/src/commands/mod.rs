@@ -1,3 +1,4 @@
+pub mod chat;
 pub mod digests;
 pub mod items;
 pub mod settings;

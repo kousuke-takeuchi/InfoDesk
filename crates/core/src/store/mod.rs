@@ -1,3 +1,4 @@
+mod chat;
 mod digests;
 mod items;
 mod migrate;

@@ -126,3 +126,10 @@ export function errorMessage(e: unknown): string {
   }
   return String(e);
 }
+
+export interface ChatThread {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}

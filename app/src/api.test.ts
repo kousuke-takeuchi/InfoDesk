@@ -41,6 +41,15 @@ describe("api", () => {
     expect(ipc.calls).toEqual([{ cmd: "source_item_counts", args: {} }]);
   });
 
+  it("sends camelCase thread ids for chat messages", async () => {
+    const m = { id: "m1", role: "user", parts: [] };
+    const ipc = setupIpc({ get_chat_messages: () => [m], save_chat_messages: () => undefined });
+    expect(await api.getChatMessages(3)).toEqual([m]);
+    expect(ipc.last("get_chat_messages")).toEqual({ threadId: 3 });
+    await api.saveChatMessages(3, [m]);
+    expect(ipc.last("save_chat_messages")).toEqual({ threadId: 3, messages: [m] });
+  });
+
   it("rejects with the backend message", async () => {
     setupIpc({ collect_now: () => { throw { message: "collect already running" }; } });
     await expect(api.collectNow()).rejects.toMatchObject({ message: "collect already running" });

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  AppStatus, Category, DigestScope, DigestView, Item, ItemFilter, Period,
+  AppStatus, Category, ChatThread, DigestScope, DigestView, Item, ItemFilter, Period,
   ProbeResult, Settings, SidebarCounts, Source, Topic,
 } from "./types";
 
@@ -46,6 +46,13 @@ export const api = {
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   testOllama: () => invoke<ProbeResult>("test_ollama"),
   testClaude: () => invoke<ProbeResult>("test_claude"),
+  listChatThreads: () => invoke<ChatThread[]>("list_chat_threads"),
+  createChatThread: (title: string) => invoke<ChatThread>("create_chat_thread", { title }),
+  renameChatThread: (id: number, title: string) => invoke<void>("rename_chat_thread", { id, title }),
+  deleteChatThread: (id: number) => invoke<void>("delete_chat_thread", { id }),
+  getChatMessages: (threadId: number) => invoke<unknown[]>("get_chat_messages", { threadId }),
+  saveChatMessages: (threadId: number, messages: unknown[]) =>
+    invoke<void>("save_chat_messages", { threadId, messages }),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };
 

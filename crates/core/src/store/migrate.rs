@@ -4,12 +4,30 @@ use super::schema::SCHEMA;
 use crate::error::Result;
 
 /// 現在のスキーマ版。`MIGRATIONS` の最後の版と一致させる。
-pub const SCHEMA_VERSION: i32 = 2;
+pub const SCHEMA_VERSION: i32 = 3;
 
 /// (適用後の版, SQL)。版の順に並べる。版1は Plan 1 のスキーマ全体。
 const MIGRATIONS: &[(i32, &str)] = &[
     (1, SCHEMA),
     (2, "ALTER TABLE digests ADD COLUMN last_error TEXT;"),
+    (
+        3,
+        "CREATE TABLE IF NOT EXISTS chat_threads (
+             id INTEGER PRIMARY KEY,
+             title TEXT NOT NULL,
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS chat_messages (
+             thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+             seq INTEGER NOT NULL,
+             id TEXT NOT NULL,
+             role TEXT NOT NULL,
+             content TEXT NOT NULL,
+             created_at TEXT NOT NULL,
+             PRIMARY KEY (thread_id, seq)
+         );",
+    ),
 ];
 
 fn user_version(conn: &Connection) -> Result<i32> {
@@ -86,6 +104,15 @@ mod tests {
             .query_row("SELECT body FROM digests", [], |r| r.get(0))
             .unwrap();
         assert_eq!(body, "kept");
+    }
+
+    #[test]
+    fn version_3_adds_chat_tables() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(version(&conn), 3);
+        assert!(has_column(&conn, "chat_threads", "updated_at"));
+        assert!(has_column(&conn, "chat_messages", "content"));
     }
 
     #[test]
