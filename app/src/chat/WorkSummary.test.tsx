@@ -30,7 +30,7 @@ describe("WorkSummary", () => {
 
   it("collapses into a summary button after the answer", async () => {
     const onToggle = vi.fn();
-    render(<WorkSummary message={msg([{ type: "reasoning", text: "考え" }, plan, search], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z" })} running={false} collapsed onToggle={onToggle} />);
+    render(<WorkSummary message={msg([{ type: "reasoning", text: "考え" }, plan, search], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z", finishReason: "stop" })} running={false} collapsed onToggle={onToggle} />);
     const btn = screen.getByRole("button", { name: "2ステップ · 18秒" });
     expect(btn).toHaveAttribute("aria-expanded", "false");
     await userEvent.setup().click(btn);
@@ -45,15 +45,47 @@ describe("WorkSummary", () => {
   });
 
   it("marks every item done once the answer finished normally", () => {
-    render(<WorkSummary message={msg([plan], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    render(<WorkSummary message={msg([plan], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z", finishReason: "stop" })} running={false} collapsed onToggle={() => {}} />);
     expect(screen.getByText("まとめる").closest("li")).toHaveAttribute("data-status", "done");
     expect(document.querySelector(".work-plan .spin")).toBeNull();
   });
 
   it("keeps the last state without a spinner when the answer stopped without finishing", () => {
-    render(<WorkSummary message={msg([plan], { startedAt: "2026-10-10T00:00:00.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    render(<WorkSummary message={msg([plan, search], { startedAt: "2026-10-10T00:00:00.000Z" })} running={false} collapsed onToggle={() => {}} />);
     expect(screen.getByText("まとめる").closest("li")).toHaveAttribute("data-status", "in_progress");
     expect(document.querySelector(".work-plan .spin")).toBeNull();
+    expect(screen.getByRole("button", { name: "1ステップ · 途中で停止" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^停止しました · 1ステップ$/);
+  });
+
+  it("marks an answer cut off by the step cap or an error as stopped early", () => {
+    for (const finishReason of ["tool-calls", "error", undefined]) {
+      const { unmount } = render(<WorkSummary message={msg([plan, search], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z", finishReason })} running={false} collapsed onToggle={() => {}} />);
+      expect(screen.getByText("まとめる").closest("li")).toHaveAttribute("data-status", "in_progress");
+      expect(document.querySelector(".work-plan .spin")).toBeNull();
+      expect(screen.getByRole("button", { name: "1ステップ · 18秒 · 途中で停止" })).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(/^停止しました · 1ステップ$/);
+      unmount();
+    }
+  });
+
+  it("keeps old messages without metadata neutral", () => {
+    render(<WorkSummary message={msg([plan, search])} running={false} collapsed onToggle={() => {}} />);
+    expect(screen.getByRole("button", { name: "1ステップ" })).toBeInTheDocument();
+    expect(screen.getByText("まとめる").closest("li")).toHaveAttribute("data-status", "in_progress");
+    expect(screen.queryByText(/途中で停止/)).toBeNull();
+  });
+
+  it("announces the completion of an answer without any work", () => {
+    const meta = { startedAt: "2026-10-10T00:00:00.000Z" };
+    const { rerender } = render(<WorkSummary message={msg([{ type: "text", text: "答えだけ" }], meta)} running collapsed={false} onToggle={() => {}} />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/^調査中$/);
+    rerender(<WorkSummary message={msg([{ type: "text", text: "答えだけ" }], { ...meta, finishedAt: "2026-10-10T00:00:03.000Z", finishReason: "stop" })} running={false} collapsed onToggle={() => {}} />);
+    expect(screen.getByRole("status")).toBe(status);
+    expect(status).toHaveTextContent(/^回答しました$/);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByText(/ステップ/)).toBeNull();
   });
 
   it("announces only when the tool count changes, while the visible line keeps ticking", () => {
@@ -70,13 +102,13 @@ describe("WorkSummary", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/^調査中 · ツール1回$/);
     rerender(<WorkSummary message={msg([plan, search, { ...search, toolCallId: "s2" }], meta)} running collapsed={false} onToggle={() => {}} />);
     expect(screen.getByRole("status")).toHaveTextContent(/^調査中 · ツール2回$/);
-    rerender(<WorkSummary message={msg([plan, search, { ...search, toolCallId: "s2" }], { ...meta, finishedAt: "2026-10-10T00:00:12.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    rerender(<WorkSummary message={msg([plan, search, { ...search, toolCallId: "s2" }], { ...meta, finishedAt: "2026-10-10T00:00:12.000Z", finishReason: "stop" })} running={false} collapsed onToggle={() => {}} />);
     expect(screen.getByRole("status")).toHaveTextContent(/^回答しました · 2ステップ$/);
   });
 
   it("keeps failed tools visible in the folded summary", () => {
     const failed = { type: "tool-search_articles", toolCallId: "e", state: "output-error", input: {}, errorText: "boom" };
-    render(<WorkSummary message={msg([search, failed], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    render(<WorkSummary message={msg([search, failed], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z", finishReason: "stop" })} running={false} collapsed onToggle={() => {}} />);
     expect(screen.getByRole("button", { name: "2ステップ · 18秒 · 失敗1" })).toBeInTheDocument();
   });
 });

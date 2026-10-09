@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { announceLine, answerTimes, displayPlan, formatSeconds, isPlanTool, latestPlan, statusLine, workStats } from "./progress";
+import { announceLine, answerOutcome, answerTimes, displayPlan, formatSeconds, isPlanTool, latestPlan, statusLine, workStats } from "./progress";
 
 const msg = (parts: unknown[], metadata?: unknown): UIMessage => ({ id: "a", role: "assistant", parts, metadata } as UIMessage);
 const plan = (items: unknown, toolCallId = "p") => ({ type: "tool-update_plan", toolCallId, state: "output-available", input: { items }, output: { ok: true } });
@@ -45,9 +45,9 @@ describe("progress", () => {
 
   it("reads times from metadata", () => {
     expect(answerTimes(msg([], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z" })))
-      .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: Date.parse("2026-10-10T00:00:18.000Z") });
-    expect(answerTimes(msg([]))).toEqual({ startedAt: null, finishedAt: null });
-    expect(answerTimes(msg([], { startedAt: "not a date" }))).toEqual({ startedAt: null, finishedAt: null });
+      .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: Date.parse("2026-10-10T00:00:18.000Z"), finishReason: null });
+    expect(answerTimes(msg([]))).toEqual({ startedAt: null, finishedAt: null, finishReason: null });
+    expect(answerTimes(msg([], { startedAt: "not a date" }))).toEqual({ startedAt: null, finishedAt: null, finishReason: null });
   });
 
   it("formats the status line", () => {
@@ -111,7 +111,7 @@ describe("progress fix round 1", () => {
     expect(formatSeconds(59_600)).toBe("1分00秒");
     expect(formatSeconds(-5_000)).toBe("0秒");
     expect(answerTimes(msg([], { startedAt: "2026-10-10T00:00:00.000Z" })))
-      .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: null });
+      .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: null, finishReason: null });
   });
 });
 
@@ -138,5 +138,37 @@ describe("progress failures and announcements", () => {
     expect(announceLine({ running: true, steps: 3, tools: 2, failed: 0 })).toBe("調査中 · ツール2回");
     expect(announceLine({ running: false, steps: 4, tools: 3, failed: 0 })).toBe("回答しました · 4ステップ");
     expect(announceLine({ running: false, steps: 4, tools: 3, failed: 1 })).toBe("回答しました · 4ステップ · 失敗1");
+  });
+});
+
+describe("progress finish reasons", () => {
+  const started = "2026-10-10T00:00:00.000Z";
+  const finished = "2026-10-10T00:00:18.000Z";
+
+  it("reads the finish reason from metadata", () => {
+    expect(answerTimes(msg([], { startedAt: started, finishedAt: finished, finishReason: "tool-calls" })).finishReason).toBe("tool-calls");
+    expect(answerTimes(msg([], { finishedAt: finished, finishReason: 3 })).finishReason).toBeNull();
+  });
+
+  it("treats only a stop finish as answered", () => {
+    expect(answerOutcome(msg([], { startedAt: started, finishedAt: finished, finishReason: "stop" }), false)).toBe("answered");
+    expect(answerOutcome(msg([], { startedAt: started, finishedAt: finished, finishReason: "tool-calls" }), false)).toBe("stopped");
+    expect(answerOutcome(msg([], { startedAt: started, finishedAt: finished, finishReason: "error" }), false)).toBe("stopped");
+    expect(answerOutcome(msg([], { startedAt: started, finishedAt: finished }), false)).toBe("stopped");
+    expect(answerOutcome(msg([], { startedAt: started }), false)).toBe("stopped");
+    expect(answerOutcome(msg([]), false)).toBe("unknown");
+    expect(answerOutcome(msg([], { startedAt: started }), true)).toBe("running");
+  });
+
+  it("marks a stopped answer in the folded line and the announcement", () => {
+    expect(statusLine({ running: false, elapsedMs: 18_000, steps: 20, tools: 20, failed: 1, stopped: true })).toBe("20ステップ · 18秒 · 失敗1 · 途中で停止");
+    expect(statusLine({ running: false, elapsedMs: null, steps: 2, tools: 2, stopped: true })).toBe("2ステップ · 途中で停止");
+    expect(announceLine({ running: false, steps: 20, tools: 20, failed: 0, stopped: true })).toBe("停止しました · 20ステップ");
+    expect(announceLine({ running: false, steps: 2, tools: 2, failed: 1, stopped: true })).toBe("停止しました · 2ステップ · 失敗1");
+  });
+
+  it("announces an answer without work without a step count", () => {
+    expect(announceLine({ running: false, steps: 0, tools: 0, failed: 0 })).toBe("回答しました");
+    expect(announceLine({ running: false, steps: 0, tools: 0, failed: 0, stopped: true })).toBe("停止しました");
   });
 });

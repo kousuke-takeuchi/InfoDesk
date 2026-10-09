@@ -230,7 +230,7 @@ describe("ChatThread", () => {
     ] as never, [
       { type: "reasoning-end", id: "r" },
       { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "答えです" }, { type: "text-end", id: "t" },
-      { type: "finish", messageMetadata: { finishedAt: new Date().toISOString() } },
+      { type: "finish", messageMetadata: { finishedAt: new Date().toISOString(), finishReason: "stop" } },
     ] as never);
     mockFetch(stream.response);
     renderThread();

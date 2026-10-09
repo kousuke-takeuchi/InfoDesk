@@ -66,13 +66,25 @@ export function workStats(message: UIMessage): { steps: number; tools: number; f
   return { steps, tools, failed };
 }
 
-export function answerTimes(message: UIMessage): { startedAt: number | null; finishedAt: number | null } {
+export function answerTimes(message: UIMessage): { startedAt: number | null; finishedAt: number | null; finishReason: string | null } {
   const meta = (message.metadata ?? {}) as Obj;
   const time = (v: unknown) => {
     const t = typeof v === "string" ? Date.parse(v) : NaN;
     return Number.isNaN(t) ? null : t;
   };
-  return { startedAt: time(meta.startedAt), finishedAt: time(meta.finishedAt) };
+  const finishReason = typeof meta.finishReason === "string" ? meta.finishReason : null;
+  return { startedAt: time(meta.startedAt), finishedAt: time(meta.finishedAt), finishReason };
+}
+
+/**
+ * 回答の終わり方。"stop" で終わった回だけが回答を書き終えた回 (answered)。ステップ数の上限、
+ * エラー、中断で終わった回は stopped。時刻のメタデータがない古いメッセージは判断しない (unknown)。
+ */
+export function answerOutcome(message: UIMessage, running: boolean): "running" | "answered" | "stopped" | "unknown" {
+  if (running) return "running";
+  const { startedAt, finishedAt, finishReason } = answerTimes(message);
+  if (finishedAt !== null && finishReason === "stop") return "answered";
+  return finishedAt !== null || startedAt !== null ? "stopped" : "unknown";
 }
 
 export function formatSeconds(ms: number): string {
@@ -81,20 +93,20 @@ export function formatSeconds(ms: number): string {
   return `${Math.floor(total / 60)}分${String(total % 60).padStart(2, "0")}秒`;
 }
 
-export function statusLine(args: { running: boolean; elapsedMs: number | null; steps: number; tools: number; failed?: number }): string {
-  const { running, elapsedMs, steps, tools, failed = 0 } = args;
+export function statusLine(args: { running: boolean; elapsedMs: number | null; steps: number; tools: number; failed?: number; stopped?: boolean }): string {
+  const { running, elapsedMs, steps, tools, failed = 0, stopped = false } = args;
   const time = elapsedMs === null ? null : formatSeconds(elapsedMs);
   const parts = running
     ? ["調査中", time, tools > 0 ? `ツール${tools}回` : null]
-    : [`${steps}ステップ`, time, failed > 0 ? `失敗${failed}` : null];
+    : [`${steps}ステップ`, time, failed > 0 ? `失敗${failed}` : null, stopped ? "途中で停止" : null];
   return parts.filter((p): p is string => p !== null).join(" · ");
 }
 
 /** 読み上げ用の状態。秒数を含めず、ツールの回数が変わるか回答が終わったときだけ変わる。 */
-export function announceLine(args: { running: boolean; steps: number; tools: number; failed: number }): string {
-  const { running, steps, tools, failed } = args;
+export function announceLine(args: { running: boolean; steps: number; tools: number; failed: number; stopped?: boolean }): string {
+  const { running, steps, tools, failed, stopped = false } = args;
   const parts = running
     ? ["調査中", tools > 0 ? `ツール${tools}回` : null]
-    : ["回答しました", `${steps}ステップ`, failed > 0 ? `失敗${failed}` : null];
+    : [stopped ? "停止しました" : "回答しました", steps > 0 ? `${steps}ステップ` : null, failed > 0 ? `失敗${failed}` : null];
   return parts.filter((p): p is string => p !== null).join(" · ");
 }
