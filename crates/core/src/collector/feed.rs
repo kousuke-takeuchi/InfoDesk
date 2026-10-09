@@ -1,4 +1,12 @@
+use std::collections::HashMap;
+
 use feed_rs::model::{Link, Text};
+use quick_xml::NsReader;
+use quick_xml::XmlVersion;
+use quick_xml::encoding::DecodingReader;
+use quick_xml::escape::resolve_predefined_entity;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::ResolveResult;
 
 use super::text::{collapse_ws, strip_html, truncate_chars};
 use crate::error::{Error, Result};
@@ -42,11 +50,9 @@ pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
         .as_ref()
         .map(clean_text)
         .filter(|t| !t.is_empty());
-    // feed-rs は <media:thumbnail> だけのエントリーを media に出さないので、生の XML から拾う。
-    let thumbs = raw_thumbnails(bytes);
-    let thumbs = (thumbs.len() == feed.entries.len()).then_some(thumbs);
+    let thumbs = media_thumbnails(bytes);
     let mut items = Vec::new();
-    for (idx, e) in feed.entries.iter().enumerate() {
+    for e in &feed.entries {
         let url = match entry_link(&e.links) {
             Some(link) => link.href.trim().to_string(),
             None if e.id.starts_with("http") => e.id.clone(),
@@ -67,6 +73,12 @@ pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
                     .map(strip_html)
             })
             .unwrap_or_default();
+        let image_url = entry_image(e).or_else(|| {
+            thumbs
+                .get(&url)?
+                .iter()
+                .find_map(|u| super::images::https_image_url(u, None))
+        });
         items.push(NewItem {
             url,
             title,
@@ -74,12 +86,7 @@ pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
             author: e.authors.first().and_then(|p| p.name.clone()),
             published_at: e.published.or(e.updated),
             score: None,
-            image_url: entry_image(e).or_else(|| {
-                thumbs
-                    .as_ref()
-                    .and_then(|t| t[idx].as_deref())
-                    .and_then(|u| super::images::https_image_url(u, None))
-            }),
+            image_url,
         });
     }
     Ok((feed_title, items))
@@ -103,35 +110,158 @@ fn entry_image(e: &feed_rs::model::Entry) -> Option<String> {
         .find_map(|u| super::images::https_image_url(u, None))
 }
 
-/// `<item>` / `<entry>` ごとの最初の `<media:thumbnail url="...">` を、文書の順に返す。
-fn raw_thumbnails(bytes: &[u8]) -> Vec<Option<String>> {
-    let text = String::from_utf8_lossy(bytes);
-    let mut starts = Vec::new();
-    for tag in ["<item", "<entry"] {
-        for (pos, _) in text.match_indices(tag) {
-            let next = text[pos + tag.len()..].chars().next();
-            if matches!(next, Some(c) if c.is_whitespace() || c == '>' || c == '/') {
-                starts.push(pos);
-            }
-        }
-    }
-    starts.sort_unstable();
-    let mut out = Vec::new();
-    for (i, &start) in starts.iter().enumerate() {
-        let end = starts.get(i + 1).copied().unwrap_or(text.len());
-        out.push(thumbnail_url_in(&text[start..end]));
-    }
-    out
+const MRSS_NS: &str = "http://search.yahoo.com/mrss/";
+
+/// 読み取り中の `<item>` / `<entry>`。
+#[derive(Default)]
+struct ScanItem {
+    /// `<item>` / `<entry>` からの深さ (直下の子が 1)。
+    depth: usize,
+    /// rel が alternate または省略されたリンク。
+    alternate: Option<String>,
+    /// rel を問わない最初のリンク。
+    first: Option<String>,
+    /// `<guid>` / `<id>`。
+    id: Option<String>,
+    thumbnails: Vec<String>,
+    /// 中身の文字列を集めている直下の子 (`link` / `guid` / `id`)。
+    field: Option<&'static str>,
+    text: String,
 }
 
-fn thumbnail_url_in(chunk: &str) -> Option<String> {
-    let tag_start = chunk.find("<media:thumbnail")?;
-    let tag = &chunk[tag_start..tag_start + chunk[tag_start..].find('>')?];
-    let after = &tag[tag.find("url=")? + 4..];
-    let quote = after.chars().next().filter(|c| *c == '"' || *c == '\'')?;
-    let rest = &after[1..];
-    let url = &rest[..rest.find(quote)?];
-    Some(url.replace("&amp;", "&"))
+impl ScanItem {
+    fn add_link(&mut self, href: &str, rel: Option<&str>) {
+        let href = href.trim();
+        if href.is_empty() {
+            return;
+        }
+        if self.first.is_none() {
+            self.first = Some(href.to_string());
+        }
+        if self.alternate.is_none() && rel.is_none_or(|r| r == "alternate") {
+            self.alternate = Some(href.to_string());
+        }
+    }
+
+    /// `parse_feed` が記事の URL にするのと同じリンク。
+    fn key(self) -> Option<(String, Vec<String>)> {
+        let link = self
+            .alternate
+            .or(self.first)
+            .or(self.id.filter(|i| i.starts_with("http")))?;
+        Some((link, self.thumbnails))
+    }
+}
+
+/// 属性の値を実体参照を戻して返す。名前空間の接頭辞つきの属性は見ない。
+fn attr(e: &BytesStart, name: &str) -> Option<String> {
+    e.attributes()
+        .flatten()
+        .find(|a| a.key.as_ref() == name)
+        .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
+        .map(|v| v.into_owned())
+}
+
+/// `<media:thumbnail url="...">` を、それを含む `<item>` / `<entry>` のリンクごとに集める。
+/// feed-rs 3.0.0 は `<media:content>` の無いエントリーのサムネイルを捨てるので、ここで拾う。
+/// サムネイルは名前空間 `http://search.yahoo.com/mrss/` に解決される `thumbnail` 要素だけ
+/// (接頭辞の名前は問わない)。CDATA とコメントの中身は要素として読まない。
+fn media_thumbnails(bytes: &[u8]) -> HashMap<String, Vec<String>> {
+    let mut reader = NsReader::from_reader(DecodingReader::new(bytes));
+    let mut buf = Vec::new();
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    let mut item: Option<ScanItem> = None;
+    loop {
+        buf.clear();
+        let Ok((ns, event)) = reader.read_resolved_event_into(&mut buf) else {
+            break;
+        };
+        let is_mrss = matches!(ns, ResolveResult::Bound(n) if n.as_ref() == MRSS_NS);
+        match event {
+            Event::Eof => break,
+            Event::Decl(d) => {
+                if let Some(enc) = d.encoder() {
+                    reader.get_mut().set_encoding(enc);
+                }
+            }
+            Event::Start(ref e) | Event::Empty(ref e) => {
+                let empty = matches!(event, Event::Empty(_));
+                let local = e.local_name();
+                let local = local.as_ref();
+                let Some(it) = item.as_mut() else {
+                    if !empty && (local == "item" || local == "entry") {
+                        item = Some(ScanItem::default());
+                    }
+                    continue;
+                };
+                if !empty {
+                    it.depth += 1;
+                }
+                if is_mrss && local == "thumbnail" {
+                    if let Some(u) = attr(e, "url") {
+                        it.thumbnails.push(u);
+                    }
+                    continue;
+                }
+                let direct = if empty { it.depth == 0 } else { it.depth == 1 };
+                if !direct {
+                    continue;
+                }
+                match local {
+                    "link" => match attr(e, "href") {
+                        Some(href) => it.add_link(&href, attr(e, "rel").as_deref()),
+                        None if !empty => it.field = Some("link"),
+                        None => {}
+                    },
+                    "guid" | "id" if !empty => it.field = Some("id"),
+                    _ => {}
+                }
+                if it.field.is_some() {
+                    it.text.clear();
+                }
+            }
+            Event::Text(ref t) => {
+                if let Some(it) = item.as_mut().filter(|i| i.field.is_some()) {
+                    it.text.push_str(&t.xml10_content());
+                }
+            }
+            Event::CData(ref t) => {
+                if let Some(it) = item.as_mut().filter(|i| i.field.is_some()) {
+                    it.text.push_str(&t.xml10_content());
+                }
+            }
+            Event::GeneralRef(ref r) => {
+                if let Some(it) = item.as_mut().filter(|i| i.field.is_some()) {
+                    if let Ok(Some(c)) = r.resolve_char_ref() {
+                        it.text.push(c);
+                    } else if let Some(s) = resolve_predefined_entity(&r.xml10_content()) {
+                        it.text.push_str(s);
+                    }
+                }
+            }
+            Event::End(_) => {
+                let Some(it) = item.as_mut() else { continue };
+                if it.depth == 0 {
+                    if let Some((link, thumbs)) = item.take().and_then(ScanItem::key) {
+                        out.entry(link).or_default().extend(thumbs);
+                    }
+                    continue;
+                }
+                if it.depth == 1 {
+                    let text = std::mem::take(&mut it.text);
+                    match it.field.take() {
+                        Some("link") => it.add_link(&text, None),
+                        Some(_) if it.id.is_none() => it.id = Some(text.trim().to_string()),
+                        _ => {}
+                    }
+                }
+                it.depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    out.retain(|_, v| !v.is_empty());
+    out
 }
 
 async fn get_bytes(http: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
@@ -352,6 +482,98 @@ mod tests {
         let url = format!("{}/untitled", server.uri());
         let info = validate(&http_client().unwrap(), &url).await.unwrap();
         assert_eq!(info.title, url);
+    }
+
+    fn images(xml: &str) -> Vec<(String, Option<String>)> {
+        let (_, items) = parse_feed(xml.as_bytes()).unwrap();
+        items.into_iter().map(|i| (i.url, i.image_url)).collect()
+    }
+
+    #[test]
+    fn atom_entry_takes_media_thumbnail() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:m="http://search.yahoo.com/mrss/"><title>A</title>
+<entry><id>tag:e.com,2026:1</id><title>One</title>
+  <link href="https://e.com/1/comments" rel="replies"/>
+  <link href="https://e.com/1" rel="alternate"/>
+  <m:thumbnail url="https://img.e.com/1.jpg"/></entry>
+<entry><id>https://e.com/2</id><title>Two</title></entry>
+</feed>"#;
+        assert_eq!(
+            images(xml),
+            vec![
+                (
+                    "https://e.com/1".into(),
+                    Some("https://img.e.com/1.jpg".into())
+                ),
+                ("https://e.com/2".into(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn thumbnail_goes_to_its_own_item_when_an_earlier_item_is_dropped() {
+        let xml = r#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>no link</title><description><![CDATA[<item><media:thumbnail url="https://img.e.com/fake.jpg"/></item>]]></description></item>
+<!-- <item><link>https://e.com/1</link><media:thumbnail url="https://img.e.com/comment.jpg"/></item> -->
+<item><title>plain</title><link>https://e.com/1</link></item>
+<item><title>thumb</title><link>https://e.com/2</link><media:thumbnail url="https://img.e.com/2.jpg"/></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![
+                ("https://e.com/1".into(), None),
+                (
+                    "https://e.com/2".into(),
+                    Some("https://img.e.com/2.jpg".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn thumbnail_inside_media_group_without_content() {
+        let xml = r#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>g</title><link>https://e.com/1</link>
+  <media:group><media:title>x</media:title><media:thumbnail url="https://img.e.com/g.jpg"/></media:group></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![(
+                "https://e.com/1".into(),
+                Some("https://img.e.com/g.jpg".into())
+            )]
+        );
+    }
+
+    #[test]
+    fn skips_http_thumbnail_for_a_later_https_one() {
+        let xml = r#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>t</title><link>https://e.com/1</link>
+  <media:thumbnail url="http://img.e.com/a.jpg"/><media:thumbnail url="https://img.e.com/b.jpg"/></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![(
+                "https://e.com/1".into(),
+                Some("https://img.e.com/b.jpg".into())
+            )]
+        );
+    }
+
+    #[test]
+    fn thumbnail_url_entities_are_decoded() {
+        let xml = r#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>t</title><link>https://e.com/p?a=1&amp;b=2</link>
+  <media:thumbnail url="https://img.e.com/x.jpg?w=1&amp;h=2&#38;q=3"/></item>
+</channel></rss>"#;
+        assert_eq!(
+            images(xml),
+            vec![(
+                "https://e.com/p?a=1&b=2".into(),
+                Some("https://img.e.com/x.jpg?w=1&h=2&q=3".into())
+            )]
+        );
     }
 
     #[test]

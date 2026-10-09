@@ -2127,6 +2127,7 @@ dependencies = [
  "chrono",
  "encoding_rs",
  "feed-rs",
+ "quick-xml",
  "reqwest",
  "rusqlite",
  "scraper",
