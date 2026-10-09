@@ -56,10 +56,10 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         limit: u32,
         /// この日 (YYYY-MM-DD、ローカル) の0時以降
-        #[arg(long)]
+        #[arg(long, requires = "json")]
         from: Option<String>,
         /// この日 (YYYY-MM-DD、ローカル) の終わりまで
-        #[arg(long)]
+        #[arg(long, requires = "json")]
         to: Option<String>,
         /// JSONで出力する
         #[arg(long)]
@@ -79,11 +79,21 @@ enum Command {
         /// 対象日 (YYYY-MM-DD)。既定は今日
         #[arg(long)]
         date: Option<String>,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "topic")]
         category: Option<String>,
         /// トピック名
         #[arg(long)]
         topic: Option<String>,
+        /// JSONで出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// URL の本文をテキストで取得する (DB は使わない)
+    Page {
+        url: String,
+        /// 本文の最大文字数
+        #[arg(long, default_value_t = infodesk_core::page::DEFAULT_MAX_CHARS)]
+        max_chars: usize,
         /// JSONで出力する
         #[arg(long)]
         json: bool,
@@ -387,6 +397,16 @@ fn digests(
     Ok(())
 }
 
+async fn page(url: &str, max_chars: usize, json: bool) -> Result<()> {
+    let p = infodesk_core::page::fetch_page(&collector::http_client()?, url, max_chars).await?;
+    if json {
+        return print_json(&json::page_json(&p));
+    }
+    println!("{}\n", p.title.as_deref().unwrap_or_default());
+    println!("{}", p.text);
+    Ok(())
+}
+
 async fn source(store: &Store, command: SourceCommand) -> Result<()> {
     match command {
         SourceCommand::List => {
@@ -463,6 +483,15 @@ fn config(store: &Store, command: ConfigCommand) -> Result<()> {
 }
 
 async fn run(cli: Cli) -> Result<()> {
+    // page は DB を使わない。--db は受け取るだけで開かない。
+    if let Command::Page {
+        url,
+        max_chars,
+        json,
+    } = &cli.command
+    {
+        return page(url, *max_chars, *json).await;
+    }
     let path = match cli.db {
         Some(p) => p,
         None => default_db_path()?,
@@ -508,6 +537,7 @@ async fn run(cli: Cli) -> Result<()> {
             topic,
             json,
         } => digests(&store, &period, date, category, topic, json),
+        Command::Page { .. } => unreachable!("handled before the store is opened"),
         Command::Source { command } => source(&store, command).await,
         Command::Topic { command: c } => topic(&store, c),
         Command::Config { command: c } => config(&store, c),
@@ -523,5 +553,33 @@ async fn main() {
             e => eprintln!("error: {e}"),
         }
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("infodesk").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn items_from_and_to_require_json() {
+        assert!(parse(&["items", "--from", "2026-10-01"]).is_err());
+        assert!(parse(&["items", "--to", "2026-10-01"]).is_err());
+        assert!(parse(&["items", "--from", "2026-10-01", "--json"]).is_ok());
+    }
+
+    #[test]
+    fn digests_category_conflicts_with_topic() {
+        assert!(parse(&["digests", "day", "--category", "github", "--topic", "t"]).is_err());
+        assert!(parse(&["digests", "day", "--category", "github"]).is_ok());
+    }
+
+    #[test]
+    fn page_accepts_global_db_before_the_subcommand() {
+        let cli = parse(&["--db", "/tmp/x.db", "page", "https://a.example/", "--json"]).unwrap();
+        assert!(matches!(cli.command, Command::Page { json: true, .. }));
     }
 }

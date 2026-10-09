@@ -3,6 +3,7 @@
 use chrono::{Duration, FixedOffset, NaiveDate, TimeZone, Utc};
 use infodesk_core::collector::text::truncate_chars;
 use infodesk_core::model::{Category, DigestScope, Item, ItemFilter, ItemOrder, Period};
+use infodesk_core::page::PageText;
 use infodesk_core::period::period_start;
 use infodesk_core::{Error, Result, Store};
 use serde_json::{Value, json};
@@ -20,6 +21,10 @@ pub struct ItemsArgs {
     pub to: Option<NaiveDate>,
     pub text: Option<String>,
     pub limit: u32,
+}
+
+pub fn page_json(p: &PageText) -> Value {
+    json!({ "page": p })
 }
 
 pub fn clamp_limit(limit: u32) -> u32 {
@@ -326,5 +331,20 @@ mod tests {
         store.set_setting("ollama.model", "gemma4:26b").unwrap();
         let v = config_json(&store).unwrap();
         assert_eq!(v["settings"]["ollama.model"], "gemma4:26b");
+    }
+
+    #[test]
+    fn page_json_wraps_the_page_with_final_url_and_truncated() {
+        let p = infodesk_core::page::PageText {
+            url: "https://a.example/x".into(),
+            final_url: "https://a.example/y".into(),
+            title: None,
+            text: "本文".into(),
+            truncated: true,
+        };
+        let v = page_json(&p);
+        assert_eq!(v["page"]["final_url"], "https://a.example/y");
+        assert_eq!(v["page"]["truncated"], true);
+        assert!(v["page"]["title"].is_null());
     }
 }

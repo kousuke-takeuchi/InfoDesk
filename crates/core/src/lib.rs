@@ -2,6 +2,7 @@ pub mod collector;
 pub mod error;
 pub mod llm;
 pub mod model;
+pub mod page;
 pub mod period;
 pub mod seed;
 pub mod store;
