@@ -94,13 +94,67 @@ describe("ChatThread", () => {
   it("offers to send with the other provider only when the user asks", async () => {
     setupIpc({});
     const errorText = JSON.stringify({ kind: "llm_unreachable", provider: "ollama", message: "x" });
-    const calls = mockFetch(() => streamResponse([{ type: "start" }, { type: "error", errorText }] as never));
+    const calls = mockFetch(
+      () => streamResponse([{ type: "start" }, { type: "error", errorText }] as never),
+      () => streamResponse(answerChunks("Claude の答え")),
+    );
     const props = renderThread();
     await ask("質問B");
     await screen.findByText("Ollama に接続できません");
     expect(calls).toHaveLength(1);
     await userEvent.setup().click(screen.getByRole("button", { name: "Claude で送る" }));
     expect(props.onProviderChange).toHaveBeenCalledWith("claude");
+    expect(await screen.findByText("Claude の答え")).toBeInTheDocument();
+    expect(calls).toHaveLength(2);
+    expect(calls[1].body.provider).toBe("claude");
+  });
+
+  it("does not leave an empty answer bubble when the stream fails before any content", async () => {
+    setupIpc({});
+    const errorText = JSON.stringify({ kind: "llm_unreachable", provider: "ollama", message: "x" });
+    mockFetch(() => streamResponse([{ type: "start" }, { type: "error", errorText }] as never));
+    renderThread();
+    await ask("質問D");
+    await screen.findByText("Ollama に接続できません");
+    expect(document.querySelectorAll(".chat-msg.assistant")).toHaveLength(0);
+    expect(document.querySelectorAll(".chat-msg.user")).toHaveLength(1);
+  });
+
+  it("opens http(s) links from an answer in the browser and leaves other links inert", async () => {
+    const ipc = setupIpc({ open_link: () => null });
+    mockFetch(() => streamResponse(answerChunks("[記事](https://example.com/a) と [危険](javascript:alert(1)) と [相対](/local)")));
+    renderThread();
+    await ask("リンクを");
+    const link = await screen.findByRole("link", { name: "記事" });
+    const before = window.location.href;
+    const user = userEvent.setup();
+    await user.click(link);
+    expect(ipc.last("open_link")).toEqual({ url: "https://example.com/a" });
+    expect(window.location.href).toBe(before);
+    expect(screen.queryByRole("link", { name: "危険" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "相対" })).not.toBeInTheDocument();
+    await user.click(screen.getByText("危険"));
+    await user.click(screen.getByText("相対"));
+    expect(ipc.count("open_link")).toBe(1);
+    expect(window.location.href).toBe(before);
+  });
+
+  it("keeps the referenced articles under every answer", async () => {
+    setupIpc({ open_item: () => null });
+    const refChunks = (id: number, title: string) => [
+      { type: "tool-input-available", toolCallId: `c${id}`, toolName: "search_articles", input: { query: "q" } },
+      { type: "tool-output-available", toolCallId: `c${id}`, output: { items: [{ id, title }], total: 1 } },
+    ] as never;
+    mockFetch(
+      () => streamResponse(answerChunks("一つ目", refChunks(1, "記事その一"))),
+      () => streamResponse(answerChunks("二つ目", refChunks(2, "記事その二"))),
+    );
+    renderThread();
+    await ask("一");
+    expect(await screen.findByRole("button", { name: "記事その一" })).toBeInTheDocument();
+    await ask("二");
+    expect(await screen.findByRole("button", { name: "記事その二" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "記事その一" })).toBeInTheDocument();
   });
 
   it("renders a saved conversation and the empty state", async () => {

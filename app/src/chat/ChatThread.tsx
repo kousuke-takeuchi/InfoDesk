@@ -1,10 +1,10 @@
 import { useChat } from "@ai-sdk/react";
-import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive } from "@assistant-ui/react";
+import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { AlertCircle, ArrowUp, CornerDownRight, Sparkles } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { createContext, useContext, useMemo, useRef, type ComponentPropsWithoutRef } from "react";
 import { api } from "../api";
 import type { ChatContext, ProviderId } from "./context";
 import { parseChatError } from "./errors";
@@ -29,8 +29,26 @@ export interface ChatThreadProps {
 const OTHER: Record<ProviderId, ProviderId> = { ollama: "claude", claude: "ollama" };
 const PROVIDER_NAME: Record<ProviderId, string> = { ollama: "Ollama", claude: "Claude" };
 
+const HTTP_URL = /^https?:\/\//i;
+
+/** 回答の中のリンク。アプリの画面を置き換えないよう、http(s) だけを既定のブラウザーで開く。 */
+function AnswerLink({ node: _node, href, children, ...rest }: ComponentPropsWithoutRef<"a"> & { node?: unknown }) {
+  if (!href || !HTTP_URL.test(href)) return <span>{children}</span>;
+  return (
+    <a
+      {...rest}
+      href={href}
+      onClick={(e) => { e.preventDefault(); void api.openLink(href); }}
+    >
+      {children}
+    </a>
+  );
+}
+
+const MARKDOWN_COMPONENTS = { a: AnswerLink };
+
 function MarkdownText() {
-  return <MarkdownTextPrimitive className="chat-markdown" />;
+  return <MarkdownTextPrimitive className="chat-markdown" components={MARKDOWN_COMPONENTS} />;
 }
 
 function References({ message }: { message: UIMessage }) {
@@ -44,6 +62,30 @@ function References({ message }: { message: UIMessage }) {
     </div>
   );
 }
+
+/** useChat の元のメッセージ (UIMessage)。参照記事を各回答の下に出すために使う。 */
+const ChatMessagesContext = createContext<readonly UIMessage[]>([]);
+
+function UserMessage() {
+  return <MessagePrimitive.Root className="chat-msg user"><MessagePrimitive.Parts /></MessagePrimitive.Root>;
+}
+
+function AssistantMessage() {
+  const id = useAuiState((s) => s.message.id);
+  const empty = useAuiState((s) => s.message.content.length === 0);
+  const running = useAuiState((s) => s.message.status?.type === "running");
+  const original = useContext(ChatMessagesContext).find((m) => m.id === id);
+  // 内容が何も届かないまま失敗した回答 (start の直後の error) は空の吹き出しを出さない。
+  if (empty) return null;
+  return (
+    <MessagePrimitive.Root className="chat-msg assistant">
+      <MessagePrimitive.Parts components={{ Text: MarkdownText, tools: { Fallback: ToolCall } }} />
+      {original && !running && <References message={original} />}
+    </MessagePrimitive.Root>
+  );
+}
+
+const MESSAGE_COMPONENTS = { UserMessage, AssistantMessage };
 
 export function ChatThread(props: ChatThreadProps) {
   const { endpoint, chatKey, initialMessages, provider, context, onPersist } = props;
@@ -68,7 +110,6 @@ export function ChatThread(props: ChatThreadProps) {
   });
   const runtime = useAISDKRuntime(chat);
   const error = parseChatError(chat.error);
-  const lastAssistant = [...chat.messages].reverse().find((m) => m.role === "assistant");
 
   const retry = () => { chat.clearError(); void chat.regenerate(); };
   const switchAndRetry = (p: ProviderId) => {
@@ -79,62 +120,52 @@ export function ChatThread(props: ChatThreadProps) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadPrimitive.Root className="chat-thread">
-        <ThreadPrimitive.Viewport className="chat-viewport">
-          <ThreadPrimitive.Empty>
-            <div className="chat-empty">
-              <Sparkles size={22} aria-hidden />
-              <h3>収集した記事について質問できます</h3>
-              <p className="text-secondary">表示中のカテゴリーと期間を文脈にして答えます。例:</p>
-              {props.suggestions.map((s) => (
-                <button key={s} className="chat-suggestion" onClick={() => void chat.sendMessage({ text: s })}>
-                  <CornerDownRight size={13} aria-hidden />{s}
-                </button>
-              ))}
-            </div>
-          </ThreadPrimitive.Empty>
-          <ThreadPrimitive.Messages
-            components={{
-              UserMessage: () => (
-                <MessagePrimitive.Root className="chat-msg user"><MessagePrimitive.Parts /></MessagePrimitive.Root>
-              ),
-              AssistantMessage: () => (
-                <MessagePrimitive.Root className="chat-msg assistant">
-                  <MessagePrimitive.Parts components={{ Text: MarkdownText, tools: { Fallback: ToolCall } }} />
-                </MessagePrimitive.Root>
-              ),
-            }}
-          />
-          {lastAssistant && chat.status === "ready" && <References message={lastAssistant} />}
-          {error && (
-            <div className="chat-error" role="alert">
-              <div className="chat-error-title"><AlertCircle size={15} aria-hidden />{error.title}</div>
-              <p><span>{error.message}</span> 質問はそのまま残っています。</p>
-              <div className="chat-error-actions">
-                <button className="btn btn-primary" onClick={retry}>再試行</button>
-                {error.kind === "network" ? (
-                  props.onRestartAgent && <button className="btn" onClick={props.onRestartAgent}>エージェントを再起動</button>
-                ) : (
-                  <button className="btn" onClick={() => switchAndRetry(OTHER[error.provider ?? provider])}>
-                    {PROVIDER_NAME[OTHER[error.provider ?? provider]]} で送る
+      <ChatMessagesContext.Provider value={chat.messages}>
+        <ThreadPrimitive.Root className="chat-thread">
+          <ThreadPrimitive.Viewport className="chat-viewport">
+            <ThreadPrimitive.Empty>
+              <div className="chat-empty">
+                <Sparkles size={22} aria-hidden />
+                <h3>収集した記事について質問できます</h3>
+                <p className="text-secondary">表示中のカテゴリーと期間を文脈にして答えます。例:</p>
+                {props.suggestions.map((s) => (
+                  <button key={s} className="chat-suggestion" onClick={() => void chat.sendMessage({ text: s })}>
+                    <CornerDownRight size={13} aria-hidden />{s}
                   </button>
-                )}
-                <button className="btn" onClick={props.onOpenSettings}>LLM設定</button>
+                ))}
               </div>
+            </ThreadPrimitive.Empty>
+            <ThreadPrimitive.Messages components={MESSAGE_COMPONENTS} />
+            {error && (
+              <div className="chat-error" role="alert">
+                <div className="chat-error-title"><AlertCircle size={15} aria-hidden />{error.title}</div>
+                <p><span>{error.message}</span> 質問はそのまま残っています。</p>
+                <div className="chat-error-actions">
+                  <button className="btn btn-primary" onClick={retry}>再試行</button>
+                  {error.kind === "network" ? (
+                    props.onRestartAgent && <button className="btn" onClick={props.onRestartAgent}>エージェントを再起動</button>
+                  ) : (
+                    <button className="btn" onClick={() => switchAndRetry(OTHER[error.provider ?? provider])}>
+                      {PROVIDER_NAME[OTHER[error.provider ?? provider]]} で送る
+                    </button>
+                  )}
+                  <button className="btn" onClick={props.onOpenSettings}>LLM設定</button>
+                </div>
+              </div>
+            )}
+          </ThreadPrimitive.Viewport>
+          <ComposerPrimitive.Root className="chat-composer">
+            <ComposerPrimitive.Input aria-label="質問" placeholder="記事や要約について質問…" className="chat-input" />
+            <div className="chat-composer-row">
+              <select aria-label="LLM" value={provider} onChange={(e) => props.onProviderChange(e.target.value as ProviderId)}>
+                <option value="ollama">{provider === "ollama" ? props.modelLabel : "Ollama"}</option>
+                <option value="claude">Claude</option>
+              </select>
+              <ComposerPrimitive.Send aria-label="送信" className="chat-send"><ArrowUp size={15} /></ComposerPrimitive.Send>
             </div>
-          )}
-        </ThreadPrimitive.Viewport>
-        <ComposerPrimitive.Root className="chat-composer">
-          <ComposerPrimitive.Input aria-label="質問" placeholder="記事や要約について質問…" className="chat-input" />
-          <div className="chat-composer-row">
-            <select aria-label="LLM" value={provider} onChange={(e) => props.onProviderChange(e.target.value as ProviderId)}>
-              <option value="ollama">{provider === "ollama" ? props.modelLabel : "Ollama"}</option>
-              <option value="claude">Claude</option>
-            </select>
-            <ComposerPrimitive.Send aria-label="送信" className="chat-send"><ArrowUp size={15} /></ComposerPrimitive.Send>
-          </div>
-        </ComposerPrimitive.Root>
-      </ThreadPrimitive.Root>
+          </ComposerPrimitive.Root>
+        </ThreadPrimitive.Root>
+      </ChatMessagesContext.Provider>
     </AssistantRuntimeProvider>
   );
 }

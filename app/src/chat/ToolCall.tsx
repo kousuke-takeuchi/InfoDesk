@@ -7,7 +7,11 @@ const ICONS: Record<string, typeof Search> = { 記事検索: Search, 記事を�
 export function ToolCall({ toolName, args, result, isError, status }: ToolCallMessagePartProps) {
   const { label, detail } = describeTool(toolName, args, result);
   const Icon = ICONS[label] ?? Wrench;
-  const state = isError || status.type === "incomplete" ? "失敗" : status.type === "running" ? "実行中" : "完了";
+  const state =
+    status.type === "incomplete" && status.reason === "cancelled" ? "中断"
+    : isError || status.type === "incomplete" || status.type === "requires-action" ? "失敗"
+    : status.type === "running" ? "実行中"
+    : "完了";
   return (
     <div className={`tool-call${state === "失敗" ? " is-error" : ""}`}>
       <Icon size={13} aria-hidden />

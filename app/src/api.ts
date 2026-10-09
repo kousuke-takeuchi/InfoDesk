@@ -22,6 +22,7 @@ export const api = {
   setStarred: (id: number, starred: boolean) => invoke<void>("set_starred", { id, starred }),
   markAllRead: (filter: ItemFilter) => invoke<number>("mark_all_read", { filter }),
   openItem: (id: number) => invoke<void>("open_item", { id }),
+  openLink: (url: string) => invoke<void>("open_link", { url }),
   sidebarCounts: () => invoke<SidebarCounts>("sidebar_counts"),
   listSources: () => invoke<Source[]>("list_sources"),
   addRssSource: (url: string, name: string | null, category: Category) =>

@@ -73,6 +73,7 @@ pub fn run() {
             commands::items::set_starred,
             commands::items::mark_all_read,
             commands::items::open_item,
+            commands::items::open_link,
             commands::items::sidebar_counts,
             commands::sources::list_sources,
             commands::sources::add_rss_source,

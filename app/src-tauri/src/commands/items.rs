@@ -49,12 +49,22 @@ pub fn mark_all_read_impl(state: &AppState, filter: ItemFilter) -> AppResult<usi
 /// 記事を既読にし、開くURLを返す。http/https 以外のスキームは拒否する。
 pub fn open_item_url(state: &AppState, id: i64) -> AppResult<String> {
     let item = get_item_impl(state, id)?.ok_or_else(|| format!("item {id} not found"))?;
-    let scheme = item.url.split_once(':').map_or("", |(s, _)| s);
-    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
-        return Err(format!("unsupported URL scheme {scheme:?} for item {id}").into());
-    }
+    ensure_http_url(&item.url).map_err(|e| format!("{e} for item {id}"))?;
     set_read_impl(state, id, true)?;
     Ok(item.url)
+}
+
+/// ブラウザーで開いてよい URL (http/https) かを確かめる。
+pub fn ensure_http_url(url: &str) -> AppResult<()> {
+    let scheme = url.split_once(':').map_or("", |(s, _)| s);
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return Err(format!("unsupported URL scheme {scheme:?}").into());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|e| format!("invalid URL {url:?}: {e}"))?;
+    if parsed.host_str().is_none_or(str::is_empty) {
+        return Err(format!("URL {url:?} has no host").into());
+    }
+    Ok(())
 }
 
 pub fn sidebar_counts_impl(state: &AppState) -> AppResult<SidebarCounts> {
@@ -121,6 +131,16 @@ pub fn mark_all_read(state: State<'_, AppState>, filter: ItemFilter) -> AppResul
 #[tauri::command]
 pub fn open_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<()> {
     let url = open_item_url(&state, id)?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 回答の中のリンクを既定のブラウザーで開く。http/https 以外は拒否する。
+#[tauri::command]
+pub fn open_link(app: AppHandle, url: String) -> AppResult<()> {
+    ensure_http_url(&url)?;
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -250,6 +270,24 @@ mod tests {
         assert_eq!(url, "https://e.com/0");
         assert!(get_item_impl(&state, ids[0]).unwrap().unwrap().read);
         assert!(open_item_url(&state, 9999).is_err());
+    }
+
+    #[test]
+    fn ensure_http_url_accepts_only_http_and_https() {
+        assert!(ensure_http_url("https://example.com/a").is_ok());
+        assert!(ensure_http_url("http://example.com").is_ok());
+        assert!(ensure_http_url("HTTPS://Example.com/x?y=1").is_ok());
+        for bad in [
+            "javascript:alert(1)",
+            "file:///etc/hosts",
+            "/relative/path",
+            "mailto:a@example.com",
+            "data:text/html,x",
+            "",
+            "https://",
+        ] {
+            assert!(ensure_http_url(bad).is_err(), "{bad} should be rejected");
+        }
     }
 
     #[test]
