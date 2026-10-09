@@ -511,6 +511,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_page_slower_than_the_page_timeout_gets_no_image() {
+        // 予算は十分にあるが、1 ページの待ち時間を短くすると、遅いページだけ画像なしで、
+        // 段階はそのページを待たずに終わり、ほかのページの画像は入る。
+        let server = wiremock::MockServer::start().await;
+        mount_page(&server, "slow", Some(Duration::from_secs(3))).await;
+        mount_page(&server, "fast1", None).await;
+        mount_page(&server, "fast2", Some(Duration::from_millis(20))).await;
+        let base = server.uri();
+        let mut outcomes = vec![outcome_with(
+            ["slow", "fast1", "fast2"]
+                .iter()
+                .map(|n| plain_item(format!("{base}/{n}")))
+                .collect(),
+            format!("{base}/feed"),
+        )];
+        let http = crate::page::page_client(true).unwrap();
+        let started = std::time::Instant::now();
+        fill_page_images_with(
+            &mut outcomes,
+            &HashSet::new(),
+            &http,
+            true,
+            Duration::from_millis(250),
+            Duration::from_secs(10),
+        )
+        .await;
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(900),
+            "returned after {elapsed:?}"
+        );
+        assert_eq!(
+            images_of(&outcomes),
+            vec![
+                None,
+                Some("https://img.example.com/fast1.jpg".to_string()),
+                Some("https://img.example.com/fast2.jpg".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn same_url_in_two_sources_is_fetched_once() {
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, ResponseTemplate};
