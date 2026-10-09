@@ -198,6 +198,7 @@ pub struct NewItem {
     pub author: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
     pub score: Option<i64>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +218,7 @@ pub struct Item {
     pub ai_summary: Option<String>,
     pub read: bool,
     pub starred: bool,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

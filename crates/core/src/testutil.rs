@@ -15,6 +15,7 @@ pub fn new_item(url: &str, title: &str, excerpt: &str, score: Option<i64>) -> Ne
         author: None,
         published_at: None,
         score,
+        image_url: None,
     }
 }
 

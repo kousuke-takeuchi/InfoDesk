@@ -183,6 +183,7 @@ mod tests {
             author: None,
             published_at: None,
             score: Some(10),
+            image_url: None,
         }
     }
 

@@ -177,6 +177,7 @@ mod tests {
                         author: None,
                         published_at: None,
                         score: None,
+                        image_url: None,
                     })
                     .collect::<Vec<_>>();
                 s.upsert_items(&src, &items, &now)?;
@@ -307,6 +308,7 @@ mod tests {
                     author: None,
                     published_at: None,
                     score: None,
+                    image_url: None,
                 };
                 s.upsert_items(&src, &[item], &chrono::Utc::now())?;
                 Ok(s.query_items(&ItemFilter::default())?[0].id)

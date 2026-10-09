@@ -53,6 +53,7 @@ pub fn parse(html: &str) -> Result<Vec<NewItem>> {
             author: repo.split('/').next().map(String::from),
             published_at: None,
             score: stars_in_period(&text),
+            image_url: repo.split('/').next().map(|o| format!("{BASE}/{o}.png")),
         });
     }
     if out.is_empty() {
@@ -103,6 +104,10 @@ mod tests {
         assert_eq!(items[0].excerpt, "End to end testing agent");
         assert_eq!(items[0].score, Some(1430));
         assert_eq!(items[0].author.as_deref(), Some("tester-army"));
+        assert_eq!(
+            items[0].image_url.as_deref(),
+            Some("https://github.com/tester-army.png")
+        );
         assert_eq!(items[1].title, "solo/repo");
         assert_eq!(items[1].excerpt, "");
         assert_eq!(items[1].score, Some(87));

@@ -191,6 +191,7 @@ mod tests {
             author: None,
             published_at: None,
             score: None,
+            image_url: None,
         };
         state
             .with_store(|s| {

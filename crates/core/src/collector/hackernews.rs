@@ -30,6 +30,7 @@ pub fn parse_item(bytes: &[u8]) -> Option<NewItem> {
         author: item.by,
         published_at: item.time.and_then(|t| DateTime::from_timestamp(t, 0)),
         score: item.score,
+        image_url: None,
     })
 }
 

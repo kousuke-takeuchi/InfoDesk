@@ -42,8 +42,11 @@ pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
         .as_ref()
         .map(clean_text)
         .filter(|t| !t.is_empty());
+    // feed-rs は <media:thumbnail> だけのエントリーを media に出さないので、生の XML から拾う。
+    let thumbs = raw_thumbnails(bytes);
+    let thumbs = (thumbs.len() == feed.entries.len()).then_some(thumbs);
     let mut items = Vec::new();
-    for e in &feed.entries {
+    for (idx, e) in feed.entries.iter().enumerate() {
         let url = match entry_link(&e.links) {
             Some(link) => link.href.trim().to_string(),
             None if e.id.starts_with("http") => e.id.clone(),
@@ -71,9 +74,64 @@ pub fn parse_feed(bytes: &[u8]) -> Result<(Option<String>, Vec<NewItem>)> {
             author: e.authors.first().and_then(|p| p.name.clone()),
             published_at: e.published.or(e.updated),
             score: None,
+            image_url: entry_image(e).or_else(|| {
+                thumbs
+                    .as_ref()
+                    .and_then(|t| t[idx].as_deref())
+                    .and_then(|u| super::images::https_image_url(u, None))
+            }),
         });
     }
     Ok((feed_title, items))
+}
+
+/// Media RSS のサムネイル、画像の Media RSS コンテンツ、画像の enclosure の順に探す。
+fn entry_image(e: &feed_rs::model::Entry) -> Option<String> {
+    let thumbs = e
+        .media
+        .iter()
+        .flat_map(|m| m.thumbnails.iter())
+        .map(|t| t.image.uri.as_str());
+    let contents = e
+        .media
+        .iter()
+        .flat_map(|m| m.content.iter())
+        .filter(|c| c.content_type.as_ref().is_some_and(|t| t.ty() == "image"))
+        .filter_map(|c| c.url.as_ref().map(|u| u.as_str()));
+    thumbs
+        .chain(contents)
+        .find_map(|u| super::images::https_image_url(u, None))
+}
+
+/// `<item>` / `<entry>` ごとの最初の `<media:thumbnail url="...">` を、文書の順に返す。
+fn raw_thumbnails(bytes: &[u8]) -> Vec<Option<String>> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut starts = Vec::new();
+    for tag in ["<item", "<entry"] {
+        for (pos, _) in text.match_indices(tag) {
+            let next = text[pos + tag.len()..].chars().next();
+            if matches!(next, Some(c) if c.is_whitespace() || c == '>' || c == '/') {
+                starts.push(pos);
+            }
+        }
+    }
+    starts.sort_unstable();
+    let mut out = Vec::new();
+    for (i, &start) in starts.iter().enumerate() {
+        let end = starts.get(i + 1).copied().unwrap_or(text.len());
+        out.push(thumbnail_url_in(&text[start..end]));
+    }
+    out
+}
+
+fn thumbnail_url_in(chunk: &str) -> Option<String> {
+    let tag_start = chunk.find("<media:thumbnail")?;
+    let tag = &chunk[tag_start..tag_start + chunk[tag_start..].find('>')?];
+    let after = &tag[tag.find("url=")? + 4..];
+    let quote = after.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+    let rest = &after[1..];
+    let url = &rest[..rest.find(quote)?];
+    Some(url.replace("&amp;", "&"))
 }
 
 async fn get_bytes(http: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
@@ -294,5 +352,30 @@ mod tests {
         let url = format!("{}/untitled", server.uri());
         let info = validate(&http_client().unwrap(), &url).await.unwrap();
         assert_eq!(info.title, url);
+    }
+
+    #[test]
+    fn takes_entry_images_from_media_rss_and_enclosures() {
+        let rss = br#"<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>thumb</title><link>https://e.com/1</link><media:thumbnail url="https://img.e.com/1.jpg"/></item>
+<item><title>content</title><link>https://e.com/2</link><media:content url="https://img.e.com/2.png" type="image/png"/></item>
+<item><title>enclosure</title><link>https://e.com/3</link><enclosure url="https://img.e.com/3.jpg" type="image/jpeg" length="1"/></item>
+<item><title>audio</title><link>https://e.com/4</link><enclosure url="https://e.com/4.mp3" type="audio/mpeg" length="1"/></item>
+<item><title>http</title><link>https://e.com/5</link><media:thumbnail url="http://img.e.com/5.jpg"/></item>
+<item><title>none</title><link>https://e.com/6</link></item>
+</channel></rss>"#;
+        let (_, items) = parse_feed(rss).unwrap();
+        let img: Vec<Option<&str>> = items.iter().map(|i| i.image_url.as_deref()).collect();
+        assert_eq!(
+            img,
+            vec![
+                Some("https://img.e.com/1.jpg"),
+                Some("https://img.e.com/2.png"),
+                Some("https://img.e.com/3.jpg"),
+                None,
+                None,
+                None,
+            ]
+        );
     }
 }

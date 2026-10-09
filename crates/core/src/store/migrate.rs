@@ -4,7 +4,7 @@ use super::schema::SCHEMA;
 use crate::error::Result;
 
 /// 現在のスキーマ版。`MIGRATIONS` の最後の版と一致させる。
-pub const SCHEMA_VERSION: i32 = 3;
+pub const SCHEMA_VERSION: i32 = 4;
 
 /// (適用後の版, SQL)。版の順に並べる。版1は Plan 1 のスキーマ全体。
 const MIGRATIONS: &[(i32, &str)] = &[
@@ -28,6 +28,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
              PRIMARY KEY (thread_id, seq)
          );",
     ),
+    (4, "ALTER TABLE items ADD COLUMN image_url TEXT;"),
 ];
 
 fn user_version(conn: &Connection) -> Result<i32> {
@@ -110,7 +111,7 @@ mod tests {
     fn version_3_adds_chat_tables() {
         let conn = Connection::open_in_memory().unwrap();
         migrate(&conn).unwrap();
-        assert_eq!(version(&conn), 3);
+        assert!(version(&conn) >= 3);
         assert!(has_column(&conn, "chat_threads", "updated_at"));
         assert!(has_column(&conn, "chat_messages", "content"));
     }
@@ -120,5 +121,30 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA user_version = 99").unwrap();
         assert!(migrate(&conn).is_err());
+    }
+
+    #[test]
+    fn version_4_adds_image_url_and_keeps_items() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute_batch("PRAGMA user_version = 3;").unwrap();
+        conn.execute(
+            "INSERT INTO sources(kind, name, category, config) VALUES ('rss', 'S', 'tech_jp', 'https://e.com/feed')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO items(source_id, source_name, category, url, title, excerpt, fetched_at) \
+             VALUES (1, 'S', 'tech_jp', 'https://e.com/1', '残る記事', '', '2026-10-09T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(version(&conn), 4);
+        assert!(has_column(&conn, "items", "image_url"));
+        let title: String = conn
+            .query_row("SELECT title FROM items", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "残る記事");
     }
 }

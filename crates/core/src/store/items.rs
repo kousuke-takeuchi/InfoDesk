@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Row, params, params_from_iter};
@@ -8,7 +10,7 @@ use crate::model::{Category, Item, ItemFilter, ItemOrder, NewItem, Source};
 
 const ITEM_COLS: &str = "items.id, items.source_id, items.source_name, items.category, \
      items.url, items.title, items.excerpt, items.author, items.published_at, \
-     items.fetched_at, items.score, items.ai_summary, items.read, items.starred";
+     items.fetched_at, items.score, items.ai_summary, items.read, items.starred, items.image_url";
 
 fn row_to_item(r: &Row) -> rusqlite::Result<Item> {
     Ok(Item {
@@ -26,6 +28,7 @@ fn row_to_item(r: &Row) -> rusqlite::Result<Item> {
         ai_summary: r.get(11)?,
         read: r.get(12)?,
         starred: r.get(13)?,
+        image_url: r.get(14)?,
     })
 }
 
@@ -93,8 +96,8 @@ impl Store {
         for it in items {
             let inserted = tx.execute(
                 "INSERT INTO items(source_id, source_name, category, url, title, excerpt, \
-                 author, published_at, fetched_at, score) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+                 author, published_at, fetched_at, score, image_url) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
                  ON CONFLICT(url) DO NOTHING",
                 params![
                     source.id,
@@ -107,6 +110,7 @@ impl Store {
                     it.published_at.as_ref().map(ts),
                     ts(now),
                     it.score,
+                    it.image_url,
                 ],
             )?;
             if inserted == 1 {
@@ -129,6 +133,18 @@ impl Store {
         }
         tx.commit()?;
         Ok(created)
+    }
+
+    /// 渡した URL のうち、既に保存されているものを返す。
+    pub fn existing_urls(&self, urls: &[String]) -> Result<HashSet<String>> {
+        let mut out = HashSet::new();
+        let mut stmt = self.conn.prepare("SELECT 1 FROM items WHERE url = ?1")?;
+        for u in urls {
+            if stmt.exists(params![u])? {
+                out.insert(u.clone());
+            }
+        }
+        Ok(out)
     }
 
     /// 絞り込みを WHERE 句と引数に変換する。`limit`/`offset`/`order` は扱わない。
@@ -786,5 +802,32 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].source_id, None);
         assert_eq!(items[0].source_name, "Test Feed");
+    }
+
+    #[test]
+    fn saves_and_reads_image_url_and_reports_existing_urls() {
+        let (store, source) = store_with_source(Category::TechJp);
+        let mut a = new_item("https://e.com/a", "A", "", None);
+        a.image_url = Some("https://img.e.com/a.jpg".into());
+        let b = new_item("https://e.com/b", "B", "", None);
+        store
+            .upsert_items(&source, &[a, b], &at("2026-10-10T00:00:00Z"))
+            .unwrap();
+        let items = store.query_items(&Default::default()).unwrap();
+        let img = |t: &str| {
+            items
+                .iter()
+                .find(|i| i.title == t)
+                .unwrap()
+                .image_url
+                .clone()
+        };
+        assert_eq!(img("A").as_deref(), Some("https://img.e.com/a.jpg"));
+        assert_eq!(img("B"), None);
+        let known = store
+            .existing_urls(&["https://e.com/a".into(), "https://e.com/zzz".into()])
+            .unwrap();
+        assert!(known.contains("https://e.com/a"));
+        assert!(!known.contains("https://e.com/zzz"));
     }
 }

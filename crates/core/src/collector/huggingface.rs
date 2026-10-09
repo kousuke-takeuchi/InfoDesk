@@ -58,6 +58,7 @@ pub fn parse_models(bytes: &[u8]) -> Result<Vec<NewItem>> {
                 excerpt: parts.join(" · "),
                 published_at: m.created_at,
                 score: m.trending_score.map(|s| s.round() as i64),
+                image_url: None,
             }
         })
         .collect())
@@ -77,6 +78,7 @@ pub fn parse_papers(bytes: &[u8]) -> Result<Vec<NewItem>> {
             author: None,
             published_at: e.published_at,
             score: e.paper.upvotes,
+            image_url: None,
         })
         .collect())
 }
