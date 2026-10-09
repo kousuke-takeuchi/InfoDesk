@@ -1579,7 +1579,7 @@ describe("buildInstructions", () => {
   it("states the role, the local date and the tool rules", () => {
     const s = buildInstructions(null, NOW, ALL);
     expect(s).toContain("日本語");
-    expect(s).toContain("今日: 2026-10-09 (木)");
+    expect(s).toContain("今日: 2026-10-09 (金)");
     expect(s).toContain("search_articles");
     expect(s).toContain("推測で");
     expect(s).not.toContain("web_search");
@@ -3501,7 +3501,7 @@ describe("ChatPanel", () => {
     base();
     renderPanel();
     expect(await screen.findByTestId("thread")).toHaveTextContent("|0|ollama");
-    expect(screen.getByRole("button", { name: /新しいスレッド/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新しいスレッド" })).toHaveAttribute("aria-expanded", "false");
     const chips = screen.getByRole("group", { name: "文脈" });
     expect(within(chips).getByText("医療介護")).toBeInTheDocument();
     expect(within(chips).getByText("期間: 1週間")).toBeInTheDocument();
@@ -3552,7 +3552,7 @@ describe("ChatPanel", () => {
     await user.click(screen.getByRole("button", { name: "履歴" }));
     await user.click(screen.getByRole("button", { name: "GitHub の話題" }));
     await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-1"));
-    await user.click(screen.getByRole("button", { name: "新しいスレッド" }));
+    await user.click(screen.getByRole("button", { name: "新規スレッド" }));
     expect(screen.getByTestId("thread")).toHaveTextContent("|0|");
   });
 
@@ -3795,7 +3795,7 @@ export function ChatPanel(props: Props) {
         <button className="chat-title" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
           {title}<ChevronDown size={13} aria-hidden />
         </button>
-        <button className="icon-btn" aria-label="新しいスレッド" onClick={newThread}><SquarePen size={15} /></button>
+        <button className="icon-btn" aria-label="新規スレッド" onClick={newThread}><SquarePen size={15} /></button>
         <button className="icon-btn" aria-label="履歴" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}><History size={15} /></button>
         <button className="icon-btn" aria-label="チャットを閉じる" onClick={props.onClose}><X size={15} /></button>
       </header>
