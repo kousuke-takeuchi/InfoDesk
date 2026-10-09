@@ -11,6 +11,9 @@ export const CLAUDE_CHAT_MODEL = "sonnet";
 /** Ollama のチャットの文脈長。core の要約 (gemma4:26b) と同じ値。既定のままだと長いツール結果や会話が黙って切れる。 */
 export const OLLAMA_NUM_CTX = 16384;
 
+/** Claude の1回の回答で使えるターン数の上限。Ollama の MAX_STEPS と同じ。 */
+export const CLAUDE_MAX_TURNS = 20;
+
 export interface ClaudeModelOptions {
   instructions: string;
   mcpServers: Record<string, unknown>;
@@ -35,6 +38,6 @@ export const defaultModels: ModelFactory = {
       tools: ["WebSearch"],
       allowedTools: o.allowedTools,
       persistSession: false,
-      maxTurns: 12,
+      maxTurns: CLAUDE_MAX_TURNS,
     }),
 };

@@ -24,7 +24,8 @@ export interface ChatDeps {
   now(): Date;
 }
 
-const MAX_STEPS = 12;
+/** Ollama の1回の回答で使えるステップ数の上限。作業計画の更新の分も見込む。 */
+export const MAX_STEPS = 20;
 const FINISHED_TOOL_STATES = new Set(["output-available", "output-error", "output-denied"]);
 /** Ollama では fetch_page の既定の長さを抑える (文脈長に収めるため)。入力の上限は Claude と同じ。 */
 export const OLLAMA_PAGE_MAX_CHARS = 6000;

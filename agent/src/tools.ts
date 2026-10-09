@@ -82,7 +82,7 @@ export function createInfodeskTools(
     }),
     update_plan: tool({
       description:
-        "作業計画を示す、または更新する。ツールを2回以上使う質問で最初に呼び、進むたびに各項目の状態を更新する。",
+        "作業計画を示す、または更新する。ツールを2回以上使う質問で最初に呼ぶ。更新は次のツール呼び出しと同じステップで送り、回答の直前に全項目を done にする更新は送らない。",
       inputSchema: z.object({
         items: z.array(z.object({
           title: z.string().min(1).max(80),

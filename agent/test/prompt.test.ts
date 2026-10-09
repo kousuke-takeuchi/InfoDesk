@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInstructions } from "../src/prompt";
+import { buildInstructions, PLAN_INSTRUCTION } from "../src/prompt";
 
 const NOW = new Date("2026-10-09T10:00:00+09:00");
 const ALL = ["search_articles", "get_article", "read_digests", "fetch_page"];
@@ -45,7 +45,17 @@ describe("buildInstructions", () => {
 
   it("asks for a plan on multi-step questions", () => {
     const s = buildInstructions(null, NOW, [...ALL, "update_plan"]);
-    expect(s).toContain("update_plan");
-    expect(s).toContain("done");
+    expect(PLAN_INSTRUCTION).toBe(
+      "- ツールを2回以上使う見込みの質問では、最初に update_plan で手順を3〜6項目で示す。" +
+        "状態 (pending / in_progress / done) の更新は次のツール呼び出しと同じステップで一緒に送り、更新だけのステップを作らない。" +
+        "回答を書く直前に全項目を done にする更新は送らない (回答が終われば完了として表示される)。",
+    );
+    expect(s.split("\n")).toContain(PLAN_INSTRUCTION);
+  });
+
+  it("leaves out the plan instruction without update_plan", () => {
+    const s = buildInstructions(null, NOW, ALL);
+    expect(s).not.toContain("update_plan");
+    expect(s.split("\n")).not.toContain(PLAN_INSTRUCTION);
   });
 });

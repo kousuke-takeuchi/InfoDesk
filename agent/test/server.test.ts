@@ -5,12 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { CliError, createCliRunner } from "../src/cli";
-import { streamChat, type ChatDeps, type ChatRequest } from "../src/chat";
+import { MAX_STEPS, streamChat, type ChatDeps, type ChatRequest } from "../src/chat";
 import { createAgentServer } from "../src/server";
 
 const FAKE = fileURLToPath(new URL("./fake-infodesk.mjs", import.meta.url));
 const TOKEN = "t0ken";
 const ORIGIN = "tauri://localhost";
+const NOW = new Date("2026-10-09T10:00:00+09:00");
+const NOW_ISO = NOW.toISOString();
 const usage = {
   inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
   outputTokens: { total: 1, text: 1, reasoning: undefined },
@@ -160,9 +162,45 @@ describe("streamChat (Ollama)", () => {
     const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
     const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
     const chunks = sseChunks(await res.text());
-    const meta = chunks.filter((c) => c.messageMetadata).map((c) => c.messageMetadata);
-    expect(meta.some((m) => typeof m.startedAt === "string")).toBe(true);
-    expect(meta.some((m) => typeof m.finishedAt === "string")).toBe(true);
+    expect(chunks.find((c) => c.type === "start").messageMetadata).toEqual({ startedAt: NOW_ISO });
+    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO });
+  });
+
+  it("answers after plan updates sent alongside the tool calls, within the step budget", async () => {
+    const plan = (statuses: string[]) => JSON.stringify({
+      items: statuses.map((status, i) => ({ title: `手順${i + 1}`, status })),
+    });
+    const steps: object[][] = [
+      [{ type: "tool-call", toolCallId: "p0", toolName: "update_plan", input: plan(["in_progress", "pending", "pending"]) }],
+      ...[0, 1, 2].map((n) => [
+        { type: "tool-call", toolCallId: `s${n}`, toolName: "search_articles", input: JSON.stringify({ query: `q${n}` }) },
+        { type: "tool-call", toolCallId: `p${n + 1}`, toolName: "update_plan",
+          input: plan(["done", "done", "done"].map((d, i) => (i < n ? d : i === n ? "in_progress" : "pending"))) },
+      ]),
+    ];
+    let call = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        const step = steps[call];
+        call += 1;
+        const chunks = step
+          ? [...step, { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage }]
+          : [
+              { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "まとめです。" }, { type: "text-end", id: "t" },
+              { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+            ];
+        return { stream: simulateReadableStream({ chunks: chunks as never }) };
+      },
+    });
+    const d = deps(model);
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
+    const chunks = sseChunks(await res.text());
+    expect(chunks.find((c) => c.type === "error")).toBeUndefined();
+    expect(chunks.filter((c) => c.type === "tool-output-available" && c.output?.ok === true).length).toBe(4);
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("まとめです。");
+    expect(model.doStreamCalls.length).toBe(5);
+    expect(model.doStreamCalls.length).toBeLessThanOrEqual(MAX_STEPS);
   });
 
   it("streams an LLM failure as a structured error chunk", async () => {
@@ -312,5 +350,27 @@ describe("streamChat (Claude)", () => {
       "mcp__infodesk__fetch_page", "mcp__infodesk__update_plan", "WebSearch",
     ]);
     expect(opts.instructions).toContain("InfoDesk");
+  });
+
+  it("sends start and finish times as message metadata", async () => {
+    const claude = vi.fn(() => new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({ chunks: [
+          { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "はい" }, { type: "text-end", id: "t" },
+          { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+        ] as never }),
+      }),
+    }));
+    const d: ChatDeps = {
+      run: createCliRunner([FAKE], "/tmp/x.db"),
+      loadSettings: async () => ({}),
+      models: { ollama: () => { throw new Error("not used"); }, claude },
+      now: () => NOW,
+    };
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body({ provider: "claude" }) });
+    const chunks = sseChunks(await res.text());
+    expect(chunks.find((c) => c.type === "start").messageMetadata).toEqual({ startedAt: NOW_ISO });
+    expect(chunks.find((c) => c.type === "finish").messageMetadata).toEqual({ finishedAt: NOW_ISO });
   });
 });

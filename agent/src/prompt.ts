@@ -23,6 +23,12 @@ function periodText(p: ChatPeriod): string {
   return `ダイジェストの期間: ${PERIOD_LABEL[p.period]} (${unit})`;
 }
 
+/** update_plan があるときの指示。更新は次のツール呼び出しと同じステップで送らせ、ステップの上限を食わないようにする。 */
+export const PLAN_INSTRUCTION =
+  "- ツールを2回以上使う見込みの質問では、最初に update_plan で手順を3〜6項目で示す。" +
+  "状態 (pending / in_progress / done) の更新は次のツール呼び出しと同じステップで一緒に送り、更新だけのステップを作らない。" +
+  "回答を書く直前に全項目を done にする更新は送らない (回答が終われば完了として表示される)。";
+
 export function buildInstructions(context: ChatContext | null, now: Date, tools: string[]): string {
   const lines = [
     "あなたは InfoDesk のリサーチアシスタントです。利用者が収集した技術ニュースと医療介護ニュースについて、日本語で答えます。",
@@ -34,7 +40,7 @@ export function buildInstructions(context: ChatContext | null, now: Date, tools:
     "- 記事の詳しい中身が必要なときだけ fetch_page で本文を取る。",
   ];
   if (tools.includes("update_plan")) {
-    lines.push("- ツールを2回以上使う見込みの質問では、最初に update_plan で手順を3〜6項目で示し、進むたびに状態 (pending / in_progress / done) を更新する。最後は全項目を done にする。");
+    lines.push(PLAN_INSTRUCTION);
   }
   if (tools.includes("web_search")) {
     lines.push("- 収集した記事の外の情報が必要なときだけ Web 検索 (web_search または WebSearch) を使う。");
