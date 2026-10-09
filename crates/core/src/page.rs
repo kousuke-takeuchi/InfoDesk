@@ -67,7 +67,7 @@ pub(crate) async fn fetch_with(
     allow_loopback: bool,
 ) -> Result<PageText> {
     let (mut resp, content_type_header, content_type) = open(http, url, allow_loopback).await?;
-    let is_html = content_type == "text/html" || content_type == "application/xhtml+xml";
+    let is_html = is_html(&content_type);
     let final_url = resp.url().to_string();
     let mut bytes: Vec<u8> = Vec::new();
     let mut cut = false;
@@ -99,6 +99,12 @@ pub(crate) async fn fetch_with(
         text,
         truncated: cut || truncated_by_chars,
     })
+}
+
+/// Content-Type (ヘッダーの全文でも MIME 型だけでもよい) が HTML か。
+fn is_html(content_type: &str) -> bool {
+    let mime = content_type.split(';').next().unwrap_or("").trim();
+    mime.eq_ignore_ascii_case("text/html") || mime.eq_ignore_ascii_case("application/xhtml+xml")
 }
 
 /// URL を検査して送り、状態コードと Content-Type を確かめる。
@@ -133,8 +139,7 @@ async fn open(
         .unwrap_or("")
         .trim()
         .to_ascii_lowercase();
-    let is_html = content_type == "text/html" || content_type == "application/xhtml+xml";
-    if !is_html && content_type != "text/plain" {
+    if !is_html(&content_type) && content_type != "text/plain" {
         return Err(Error::Invalid(format!(
             "unsupported content type: {content_type}"
         )));
@@ -151,7 +156,7 @@ pub(crate) async fn fetch_html_head(
     allow_loopback: bool,
 ) -> Result<(Url, String)> {
     let (mut resp, content_type_header, content_type) = open(http, url, allow_loopback).await?;
-    if content_type != "text/html" && content_type != "application/xhtml+xml" {
+    if !is_html(&content_type) {
         return Err(Error::Invalid("not html".into()));
     }
     let final_url = resp.url().clone();
@@ -701,5 +706,15 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[test]
+    fn is_html_accepts_html_and_xhtml_only() {
+        assert!(is_html("text/html"));
+        assert!(is_html("text/html; charset=utf-8"));
+        assert!(is_html(" Application/XHTML+XML "));
+        assert!(!is_html("text/plain"));
+        assert!(!is_html("application/pdf"));
+        assert!(!is_html(""));
     }
 }

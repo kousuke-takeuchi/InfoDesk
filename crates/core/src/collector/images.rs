@@ -1,6 +1,6 @@
 //! 記事の画像 (spec 13節)。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use reqwest::Url;
@@ -12,6 +12,7 @@ use crate::model::SourceKind;
 pub const PAGE_IMAGE_CONCURRENCY: usize = 4;
 pub const PAGE_IMAGE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const PAGE_IMAGE_MAX_BYTES: usize = 512 * 1024;
+pub const PAGE_IMAGE_BUDGET: Duration = Duration::from_secs(60);
 
 const META_SELECTORS: [&str; 4] = [
     r#"meta[property="og:image"]"#,
@@ -69,17 +70,31 @@ pub async fn fill_page_images(outcomes: &mut [FetchOutcome], known: &HashSet<Str
     let Ok(http) = crate::page::page_client(false) else {
         return;
     };
-    fill_page_images_with(outcomes, known, &http, false).await;
+    fill_page_images_with(
+        outcomes,
+        known,
+        &http,
+        false,
+        PAGE_IMAGE_TIMEOUT,
+        PAGE_IMAGE_BUDGET,
+    )
+    .await;
 }
 
+/// `page_timeout` は 1 ページあたり、`budget` はこの段階全体の締め切り。
+/// 締め切りを過ぎたら新しく取りに行かず、取得中のものも打ち切る (記事は画像なしで入る)。
 pub(crate) async fn fill_page_images_with(
     outcomes: &mut [FetchOutcome],
     known: &HashSet<String>,
     http: &reqwest::Client,
     allow_loopback: bool,
+    page_timeout: Duration,
+    budget: Duration,
 ) {
-    // (outcome の番号, item の番号, URL)
-    let mut targets: Vec<(usize, usize, String)> = Vec::new();
+    let deadline = tokio::time::Instant::now() + budget;
+    // 取りに行く URL ごとに、それを使う (outcome の番号, item の番号) をまとめる。
+    let mut targets: Vec<(String, Vec<(usize, usize)>)> = Vec::new();
+    let mut index: HashMap<String, usize> = HashMap::new();
     for (oi, o) in outcomes.iter().enumerate() {
         let Ok(items) = &o.result else { continue };
         for (ii, it) in items.iter().enumerate() {
@@ -87,32 +102,59 @@ pub(crate) async fn fill_page_images_with(
                 && !known.contains(&it.url)
                 && wants_page_image(o.source.kind, &it.url)
             {
-                targets.push((oi, ii, it.url.clone()));
+                let ti = *index.entry(it.url.clone()).or_insert_with(|| {
+                    targets.push((it.url.clone(), Vec::new()));
+                    targets.len() - 1
+                });
+                targets[ti].1.push((oi, ii));
             }
         }
     }
-    for chunk in targets.chunks(PAGE_IMAGE_CONCURRENCY) {
-        let mut set = tokio::task::JoinSet::new();
-        for (oi, ii, url) in chunk.iter().cloned() {
-            let http = http.clone();
-            set.spawn(async move {
-                let found = tokio::time::timeout(
-                    PAGE_IMAGE_TIMEOUT,
-                    crate::page::fetch_html_head(&http, &url, PAGE_IMAGE_MAX_BYTES, allow_loopback),
-                )
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .and_then(|(final_url, html)| og_image(&html, &final_url));
-                (oi, ii, found)
-            });
-        }
-        while let Some(Ok((oi, ii, found))) = set.join_next().await {
-            if let (Some(img), Ok(items)) = (found, &mut outcomes[oi].result) {
-                items[ii].image_url = Some(img);
+
+    let mut set = tokio::task::JoinSet::new();
+    let mut pending = targets.iter().map(|(url, _)| url.clone()).enumerate();
+    let targets = &targets;
+    let drain = async {
+        loop {
+            // 空いた枠を埋めて、常に最大 PAGE_IMAGE_CONCURRENCY 件を取得中にする。
+            while set.len() < PAGE_IMAGE_CONCURRENCY {
+                let Some((ti, url)) = pending.next() else {
+                    break;
+                };
+                let http = http.clone();
+                set.spawn(async move {
+                    let found = tokio::time::timeout(
+                        page_timeout,
+                        crate::page::fetch_html_head(
+                            &http,
+                            &url,
+                            PAGE_IMAGE_MAX_BYTES,
+                            allow_loopback,
+                        ),
+                    )
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .and_then(|(final_url, html)| og_image(&html, &final_url));
+                    (ti, found)
+                });
+            }
+            match set.join_next().await {
+                None => break,
+                Some(Ok((ti, Some(img)))) => {
+                    for &(oi, ii) in &targets[ti].1 {
+                        if let Ok(items) = &mut outcomes[oi].result {
+                            items[ii].image_url = Some(img.clone());
+                        }
+                    }
+                }
+                // 画像なし、または task が panic した: 次へ。
+                Some(Ok((_, None))) | Some(Err(_)) => continue,
             }
         }
-    }
+    };
+    let _ = tokio::time::timeout_at(deadline, drain).await;
+    set.abort_all();
 }
 
 #[cfg(test)]
@@ -315,7 +357,15 @@ mod tests {
         )];
         let known: HashSet<String> = [format!("{base}/known")].into_iter().collect();
         let http = crate::page::page_client(true).unwrap();
-        fill_page_images_with(&mut outcomes, &known, &http, true).await;
+        fill_page_images_with(
+            &mut outcomes,
+            &known,
+            &http,
+            true,
+            PAGE_IMAGE_TIMEOUT,
+            PAGE_IMAGE_BUDGET,
+        )
+        .await;
         let items = outcomes[0].result.as_ref().unwrap();
         let img: Vec<Option<&str>> = items.iter().map(|i| i.image_url.as_deref()).collect();
         assert_eq!(
@@ -347,5 +397,150 @@ mod tests {
         )];
         fill_page_images(&mut outcomes, &HashSet::new()).await;
         assert_eq!(outcomes[0].result.as_ref().unwrap()[0].image_url, None);
+    }
+
+    fn plain_item(url: String) -> crate::model::NewItem {
+        crate::model::NewItem {
+            url,
+            title: "t".into(),
+            excerpt: String::new(),
+            author: None,
+            published_at: None,
+            score: None,
+            image_url: None,
+        }
+    }
+
+    /// `/{name}` に og:image 付きのページを置く。`delay` があれば応答を遅らせる。
+    async fn mount_page(server: &wiremock::MockServer, name: &str, delay: Option<Duration>) {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+        let html = format!(
+            r#"<html><head><meta property="og:image" content="https://img.example.com/{name}.jpg"></head></html>"#
+        );
+        let mut resp = ResponseTemplate::new(200).set_body_raw(html.into_bytes(), "text/html");
+        if let Some(d) = delay {
+            resp = resp.set_delay(d);
+        }
+        Mock::given(method("GET"))
+            .and(path(format!("/{name}")))
+            .respond_with(resp)
+            .mount(server)
+            .await;
+    }
+
+    fn images_of(outcomes: &[super::FetchOutcome]) -> Vec<Option<String>> {
+        outcomes
+            .iter()
+            .flat_map(|o| o.result.as_ref().unwrap().iter())
+            .map(|i| i.image_url.clone())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn budget_stops_slow_pages_without_losing_fast_ones() {
+        let server = wiremock::MockServer::start().await;
+        mount_page(&server, "fast1", None).await;
+        mount_page(&server, "slow", Some(Duration::from_secs(5))).await;
+        mount_page(&server, "fast2", None).await;
+        let base = server.uri();
+        let mut outcomes = vec![outcome_with(
+            ["fast1", "slow", "fast2"]
+                .iter()
+                .map(|n| plain_item(format!("{base}/{n}")))
+                .collect(),
+            format!("{base}/feed"),
+        )];
+        let http = crate::page::page_client(true).unwrap();
+        let budget = Duration::from_millis(600);
+        let started = std::time::Instant::now();
+        fill_page_images_with(
+            &mut outcomes,
+            &HashSet::new(),
+            &http,
+            true,
+            PAGE_IMAGE_TIMEOUT,
+            budget,
+        )
+        .await;
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < budget + Duration::from_millis(400),
+            "returned after {elapsed:?}"
+        );
+        assert_eq!(
+            images_of(&outcomes),
+            vec![
+                Some("https://img.example.com/fast1.jpg".to_string()),
+                None,
+                Some("https://img.example.com/fast2.jpg".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_slow_page_does_not_stall_the_rest_of_the_window() {
+        // 8 件のうち先頭だけが遅い。4 件ずつの塊なら後ろの 4 件は先頭を待つが、
+        // 窓なら空いた枠からすぐ次を取りに行くので、予算内に 7 件とも取れる。
+        let server = wiremock::MockServer::start().await;
+        mount_page(&server, "slow", Some(Duration::from_secs(5))).await;
+        let fast: Vec<String> = (1..=7).map(|i| format!("fast{i}")).collect();
+        for n in &fast {
+            mount_page(&server, n, None).await;
+        }
+        let base = server.uri();
+        let mut items = vec![plain_item(format!("{base}/slow"))];
+        items.extend(fast.iter().map(|n| plain_item(format!("{base}/{n}"))));
+        let mut outcomes = vec![outcome_with(items, format!("{base}/feed"))];
+        let http = crate::page::page_client(true).unwrap();
+        fill_page_images_with(
+            &mut outcomes,
+            &HashSet::new(),
+            &http,
+            true,
+            PAGE_IMAGE_TIMEOUT,
+            Duration::from_millis(800),
+        )
+        .await;
+        let mut want = vec![None];
+        want.extend(
+            fast.iter()
+                .map(|n| Some(format!("https://img.example.com/{n}.jpg"))),
+        );
+        assert_eq!(images_of(&outcomes), want);
+    }
+
+    #[tokio::test]
+    async fn same_url_in_two_sources_is_fetched_once() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+        let server = wiremock::MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/dup"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                br#"<html><head><meta property="og:image" content="https://img.example.com/dup.jpg"></head></html>"#.to_vec(),
+                "text/html",
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let base = server.uri();
+        let url = format!("{base}/dup");
+        let mut outcomes = vec![
+            outcome_with(vec![plain_item(url.clone())], format!("{base}/a")),
+            outcome_with(vec![plain_item(url.clone())], format!("{base}/b")),
+        ];
+        let http = crate::page::page_client(true).unwrap();
+        fill_page_images_with(
+            &mut outcomes,
+            &HashSet::new(),
+            &http,
+            true,
+            PAGE_IMAGE_TIMEOUT,
+            PAGE_IMAGE_BUDGET,
+        )
+        .await;
+        let want = Some("https://img.example.com/dup.jpg".to_string());
+        assert_eq!(images_of(&outcomes), vec![want.clone(), want]);
     }
 }
