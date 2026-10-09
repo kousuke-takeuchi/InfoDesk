@@ -15,8 +15,8 @@ export function ToolCall({ toolName, args, result, isError, status }: ToolCallMe
   return (
     <div className={`tool-call${state === "失敗" ? " is-error" : ""}`}>
       <Icon size={13} aria-hidden />
-      <span className="tool-label">{label}</span>
-      {detail && <span aria-hidden>:</span>}
+      {/* コロンは名前に付けて、flex の gap が前に入らないようにする (「記事検索: 認知症」) */}
+      <span className="tool-label">{label}{detail && <span aria-hidden>:</span>}</span>
       {detail && <span className="tool-detail">{detail}</span>}
       <span className={`tool-state${state === "実行中" ? " running" : ""}`}>{state}</span>
     </div>

@@ -3,7 +3,7 @@ import { AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPr
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { AlertCircle, ArrowUp, CornerDownRight, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowUp, ChevronDown, CornerDownRight, Settings, Sparkles } from "lucide-react";
 import { createContext, useContext, useMemo, useRef, type ComponentPropsWithoutRef } from "react";
 import { api } from "../api";
 import type { ChatContext, ProviderId } from "./context";
@@ -157,10 +157,14 @@ export function ChatThread(props: ChatThreadProps) {
           <ComposerPrimitive.Root className="chat-composer">
             <ComposerPrimitive.Input aria-label="質問" placeholder="記事や要約について質問…" className="chat-input" />
             <div className="chat-composer-row">
-              <select aria-label="LLM" value={provider} onChange={(e) => props.onProviderChange(e.target.value as ProviderId)}>
-                <option value="ollama">{provider === "ollama" ? props.modelLabel : "Ollama"}</option>
-                <option value="claude">Claude</option>
-              </select>
+              <span className="model-picker">
+                <Settings size={12} aria-hidden className="model-picker-icon" />
+                <select aria-label="LLM" value={provider} onChange={(e) => props.onProviderChange(e.target.value as ProviderId)}>
+                  <option value="ollama">{provider === "ollama" ? props.modelLabel : "Ollama"}</option>
+                  <option value="claude">Claude</option>
+                </select>
+                <ChevronDown size={12} aria-hidden className="model-picker-chevron" />
+              </span>
               <ComposerPrimitive.Send aria-label="送信" className="chat-send"><ArrowUp size={15} /></ComposerPrimitive.Send>
             </div>
           </ComposerPrimitive.Root>

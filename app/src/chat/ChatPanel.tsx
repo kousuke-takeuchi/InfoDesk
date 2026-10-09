@@ -17,6 +17,8 @@ interface Props {
   onRemoveAttachment(i: number): void;
   onClose(): void;
   onOpenSettings(tab: "llm"): void;
+  /** 設定を開いているあいだは隠す。外さずに残すので、回答の途中や開いたスレッドが失われない。 */
+  hidden?: boolean;
 }
 
 const PERIOD_LABEL = { day: "今日", week: "今週", month: "今月" } as const;
@@ -48,12 +50,15 @@ export function ChatPanel(props: Props) {
   const [threads, setThreads] = useState<Thread[]>([]);
   type Current = { id: number | null; key: string; messages: UIMessage[] };
   const [current, setCurrentState] = useState<Current>({ id: null, key: "new-0", messages: [] });
-  // 保存コールバックが古い id を掴まないよう、最新の値を参照でも持つ。
   const currentRef = useRef(current);
   const setCurrent = useCallback((next: Current | ((c: Current) => Current)) => {
     currentRef.current = typeof next === "function" ? next(currentRef.current) : next;
     setCurrentState(currentRef.current);
   }, []);
+  // 表示中のスレッドの key → 保存先のスレッド id。新しいスレッドは作成中の Promise を持ち、二重に作らない。
+  const threadIds = useRef(new Map<string, Promise<number>>());
+  const newCount = useRef(0);
+  const openSeq = useRef(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [provider, setProvider] = useState<ProviderId>("ollama");
   const [model, setModel] = useState("");
@@ -74,36 +79,49 @@ export function ChatPanel(props: Props) {
 
   const newThread = () => {
     setMenuOpen(false);
-    setCurrent((c) => ({ id: null, key: `new-${Number(c.key.split("-")[1] ?? 0) + 1}`, messages: [] }));
+    openSeq.current += 1; // 読み込み中のスレッドが後から表示を上書きしないように
+    newCount.current += 1;
+    setCurrent({ id: null, key: `new-${newCount.current}`, messages: [] });
   };
   const openThread = (id: number) => {
     setMenuOpen(false);
+    const seq = ++openSeq.current;
     api.getChatMessages(id)
-      .then((messages) => setCurrent({ id, key: `thread-${id}`, messages }))
-      .catch((e) => setError(errorMessage(e)));
+      .then((messages) => {
+        // 後から頼んだスレッドが先に届いていたら、古い応答は捨てる。
+        if (seq !== openSeq.current) return;
+        const key = `thread-${id}`;
+        threadIds.current.set(key, Promise.resolve(id));
+        setCurrent({ id, key, messages });
+      })
+      .catch((e) => { if (seq === openSeq.current) setError(errorMessage(e)); });
   };
   const deleteThread = (id: number) => {
     api.deleteChatThread(id)
       .then(() => {
+        threadIds.current.delete(`thread-${id}`);
         if (currentRef.current.id === id) newThread();
         loadThreads();
       })
       .catch((e) => setError(errorMessage(e)));
   };
 
+  // 保存先は描画時に束ねた key だけで決める。回答の完了が切替の後に届いても、元のスレッドへ保存する。
   // スレッドは最初の回答を保存するときに作る。空のスレッドを残さないため。
-  const persist = useCallback(async (messages: UIMessage[]) => {
+  const persist = useCallback(async (key: string, messages: UIMessage[]) => {
     try {
-      const key = currentRef.current.key;
-      let id = currentRef.current.id;
-      if (id === null) {
+      let pending = threadIds.current.get(key);
+      if (!pending) {
         const title = firstUserText(messages).slice(0, TITLE_CHARS) || "新しいスレッド";
-        const t = await api.createChatThread(title);
-        id = t.id;
-        // 作成を待つあいだに別のスレッドへ切り替わっていたら、その表示は変えない。
-        setCurrent((c) => (c.key === key ? { ...c, id: t.id } : c));
+        pending = api.createChatThread(title).then((t) => t.id);
+        threadIds.current.set(key, pending);
+        pending.catch(() => threadIds.current.delete(key));
       }
+      const id = await pending;
       await api.saveChatMessages(id, messages);
+      // 保存した内容を覚えておく。エージェントの再起動などで作り直したときに、保存済みの会話から再開するため。
+      // key は変わらないので作り直しは起きない。
+      setCurrent((c) => (c.key === key ? { ...c, id, messages } : c));
       loadThreads();
     } catch (e) {
       setError(errorMessage(e));
@@ -115,7 +133,7 @@ export function ChatPanel(props: Props) {
   const chips = [scopeChip(props.scope), periodChip(props.period)].filter(Boolean) as string[];
 
   return (
-    <aside className="chat-panel" aria-label="チャット">
+    <aside className="chat-panel" aria-label="チャット" hidden={props.hidden}>
       <header className="chat-header">
         <button className="chat-title" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
           {title}<ChevronDown size={13} aria-hidden />
@@ -161,7 +179,7 @@ export function ChatPanel(props: Props) {
           modelLabel={model ? `Ollama · ${model}` : "Ollama"}
           context={{ scope: props.scope, period: props.period, attachments: props.attachments }}
           onProviderChange={setProvider}
-          onPersist={persist}
+          onPersist={(m: UIMessage[]) => persist(current.key, m)}
           onOpenSettings={() => props.onOpenSettings("llm")}
           onRestartAgent={restart}
           suggestions={suggestions}

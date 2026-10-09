@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { emitEvent, setupIpc } from "../test/ipc";
@@ -148,5 +148,86 @@ describe("ChatPanel", () => {
     expect(typeof lastThreadProps.onRestartAgent).toBe("function");
     lastThreadProps.onRestartAgent();
     await waitFor(() => expect(ipc.count("restart_chat")).toBe(1));
+  });
+
+  it("keeps the saved history of the open thread across an agent restart", async () => {
+    let endpoint: any = READY;
+    const ipc = base({
+      chat_endpoint: () => endpoint,
+      create_chat_thread: (a) => ({ id: 9, title: a.title, created_at: "x", updated_at: "x" }),
+      save_chat_messages: () => null,
+      restart_chat: () => null,
+    });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const two = [
+      { id: "u", role: "user", parts: [{ type: "text", text: "質問" }] },
+      { id: "a", role: "assistant", parts: [{ type: "text", text: "回答" }] },
+    ];
+    await act(async () => { await lastThreadProps.onPersist(two); });
+    endpoint = { status: "starting" };
+    act(() => lastThreadProps.onRestartAgent());
+    expect(await screen.findByText("エージェントを起動しています…")).toBeInTheDocument();
+    endpoint = READY;
+    await emitEvent("chat-endpoint-changed");
+    await screen.findByTestId("thread");
+    expect(lastThreadProps.initialMessages).toEqual(two);
+    const three = [...lastThreadProps.initialMessages, { id: "u2", role: "user", parts: [{ type: "text", text: "続き" }] }];
+    await act(async () => { await lastThreadProps.onPersist(three); });
+    expect(ipc.count("create_chat_thread")).toBe(1);
+    expect(ipc.last("save_chat_messages")).toEqual({ threadId: 9, messages: three });
+  });
+
+  it("saves a late answer into the thread it belongs to, not the one now open", async () => {
+    const ipc = base({ save_chat_messages: () => null });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "認知症の今週の動き" }));
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-2|"));
+    const persistA = lastThreadProps.onPersist;
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "GitHub の話題" }));
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|"));
+    await act(async () => { await persistA([{ id: "a", role: "assistant", parts: [] }]); });
+    expect(ipc.last("save_chat_messages").threadId).toBe(2);
+  });
+
+  it("saves into the new thread it created even if another thread was opened meanwhile", async () => {
+    let resolveCreate!: (v: unknown) => void;
+    const ipc = base({
+      create_chat_thread: () => new Promise((r) => { resolveCreate = r; }),
+      save_chat_messages: () => null,
+    });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const persistNew = lastThreadProps.onPersist;
+    let pending!: Promise<void>;
+    act(() => { pending = persistNew([{ id: "u", role: "user", parts: [{ type: "text", text: "q" }] }]); });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "GitHub の話題" }));
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|"));
+    await act(async () => { resolveCreate({ id: 9, title: "q", created_at: "x", updated_at: "x" }); await pending; });
+    expect(ipc.last("save_chat_messages").threadId).toBe(9);
+    expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|");
+  });
+
+  it("applies only the last opened thread when loads resolve out of order", async () => {
+    const resolvers: Record<number, (v: unknown) => void> = {};
+    base({ get_chat_messages: (a) => new Promise((r) => { resolvers[a.threadId] = r; }) });
+    renderPanel();
+    await screen.findByTestId("thread");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "認知症の今週の動き" }));
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+    await user.click(screen.getByRole("button", { name: "GitHub の話題" }));
+    await waitFor(() => expect(Object.keys(resolvers)).toHaveLength(2));
+    await act(async () => { resolvers[1]([]); });
+    await waitFor(() => expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|0|"));
+    await act(async () => { resolvers[2]([{ id: "u", role: "user", parts: [] }]); });
+    expect(screen.getByTestId("thread")).toHaveTextContent("thread-1|0|");
   });
 });

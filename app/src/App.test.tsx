@@ -238,17 +238,28 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "設定" })).toHaveAttribute("aria-current", "true");
     });
 
-    it("hides the panel in settings and brings it back afterwards", async () => {
-      setupIpc(handlers({ list_sources: () => [], source_item_counts: () => ({}) }));
+    it("keeps the panel and its open thread while settings is shown, hidden", async () => {
+      setupIpc(handlers({
+        list_sources: () => [], source_item_counts: () => ({}),
+        list_chat_threads: () => [{ id: 2, title: "認知症の今週の動き", created_at: "x", updated_at: "x" }],
+        get_chat_messages: () => [],
+      }));
       render(<App />);
       await waitFor(() => expect(allItem()).toHaveTextContent("7"));
       await userEvent.click(screen.getByRole("button", { name: "チャットを開く" }));
-      expect(panel()).toBeInTheDocument();
+      const el = panel()!;
+      await userEvent.click(within(el).getByRole("button", { name: "履歴" }));
+      await userEvent.click(await within(el).findByRole("button", { name: "認知症の今週の動き" }));
+      await waitFor(() => expect(within(el).getByRole("button", { name: "認知症の今週の動き", expanded: false })).toBeInTheDocument());
       await userEvent.click(screen.getByRole("button", { name: "設定" }));
       expect(await screen.findByRole("button", { name: "RSSを追加" })).toBeInTheDocument();
       expect(panel()).toBeNull();
+      expect(el).toBeInTheDocument();
+      expect(el).not.toBeVisible();
       await userEvent.click(allItem());
-      expect(panel()).toBeInTheDocument();
+      expect(panel()).toBe(el);
+      expect(el).toBeVisible();
+      expect(within(el).getByRole("button", { name: "認知症の今週の動き", expanded: false })).toBeInTheDocument();
     });
   });
 });

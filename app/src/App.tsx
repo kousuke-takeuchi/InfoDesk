@@ -132,8 +132,9 @@ export default function App() {
           )}
           {view === "settings" && <SettingsView key={settingsKey} status={status} initialTab={settingsTab} />}
         </div>
-        {view !== "settings" && chatOpen && (
-          <ChatPanel scope={scope} period={chatPeriod} attachments={attachments}
+        {/* 設定を開いても外さずに隠すだけにして、回答の途中や開いているスレッドを残す。 */}
+        {chatOpen && (
+          <ChatPanel hidden={view === "settings"} scope={scope} period={chatPeriod} attachments={attachments}
             onRemoveAttachment={removeAttachment} onClose={() => setChatOpen(false)} onOpenSettings={openLlmSettings} />
         )}
       </main>

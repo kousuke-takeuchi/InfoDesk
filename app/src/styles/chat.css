@@ -22,9 +22,17 @@
 .chat-composer { margin: 8px 12px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-window); padding: 8px 10px; }
 .chat-input { width: 100%; border: 0; resize: none; background: transparent; color: var(--text-primary); font: inherit; outline: none; min-height: 36px; }
 .chat-composer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.model-picker { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 70%; border-radius: 5px; background: var(--bg-subtle); color: var(--text-secondary); }
+.model-picker select { appearance: none; -webkit-appearance: none; border: 0; outline: none; background: transparent; color: inherit; font: inherit; font-size: 12px; line-height: 1; padding: 5px 22px 5px 24px; border-radius: 5px; min-width: 0; max-width: 100%; text-overflow: ellipsis; cursor: default; }
+.model-picker select:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.model-picker select option { background: var(--bg-window); color: var(--text-primary); }
+.model-picker-icon, .model-picker-chevron { position: absolute; pointer-events: none; }
+.model-picker-icon { left: 8px; }
+.model-picker-chevron { right: 7px; }
 .chat-send { width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
 .chat-send:disabled { opacity: 0.4; }
 
+.chat-panel[hidden] { display: none; }
 .chat-panel { width: 400px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--bg-subtle); display: flex; flex-direction: column; min-height: 0; position: relative; }
 .chat-header { display: flex; align-items: center; gap: 6px; padding: 12px 12px 8px 16px; border-bottom: 1px solid var(--border); }
 .chat-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-weight: 600; background: none; border: 0; color: var(--text-primary); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
