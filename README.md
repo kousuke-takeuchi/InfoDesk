@@ -47,6 +47,16 @@ cd app && npm install && npm run tauri dev
 | `claude.bin` | `claude` | claude CLIのパス |
 | `summary.top_n` | `20` | カテゴリーごとに要約を付ける記事数 |
 
+## チャット
+
+右のパネルで、収集した記事と要約についてエージェントに質問できる。エージェントは Node のサイドカー (`agent/`) で動き、アプリが起動する。
+
+- Node 22 以上が必要。場所は設定の LLM タブ「Node のパス」で指定する (既定 `node`。`/opt/homebrew/bin` と `/usr/local/bin` も探す)。
+- LLM はパネル下のモデル選択で Ollama と Claude を切り替える。Claude は `claude` CLI (設定「claude コマンドのパス」) を使い、モデルは `sonnet`。
+- Ollama で Web検索を使うには、設定に ollama.com の API キーを入れる。
+- 開発時は `cd agent && npm install && npm run build` のあと `cd app && npm run tauri dev`。バンドルは `cd app && npm run bundle`。
+- サイドカーのツールは、アプリ本体を `--cli` 付きで起動して `infodesk` CLI として使う。例: `InfoDesk.app/Contents/MacOS/infodesk-app --cli --db <DB> items --json`。
+
 ## テスト
 
 ```bash

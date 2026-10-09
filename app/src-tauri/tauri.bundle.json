@@ -1,0 +1,5 @@
+{
+  "bundle": {
+    "resources": { "../../agent/dist/agent.mjs": "agent/agent.mjs" }
+  }
+}

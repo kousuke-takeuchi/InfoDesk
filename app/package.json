@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest"
+    "test": "vitest",
+    "bundle": "npm --prefix ../agent run build && tauri build --debug --bundles app --config src-tauri/tauri.bundle.json"
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.139",
