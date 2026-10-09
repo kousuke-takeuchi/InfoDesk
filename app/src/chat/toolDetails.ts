@@ -1,20 +1,21 @@
 import { CATEGORIES } from "../types";
-import { unwrap } from "./unwrap";
+import { obj, stripMcpPrefix, unwrap, type Obj } from "./unwrap";
 
 type Row = { label: string; value: string };
-type Obj = Record<string, any>;
 
-const MCP_PREFIX = "mcp__infodesk__";
 const PERIOD: Record<string, string> = { day: "日次", week: "週次", month: "月次" };
 const DIGEST_STATUS: Record<string, string> = { done: "生成済み", pending: "保留", failed: "失敗", none: "なし" };
 const MAX_TITLES = 20;
 const PAGE_HEAD = 300;
 
-const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
+// Joins the present parts only, so a missing field never prints "undefined".
+function joinPresent(head: unknown[], sep: string, tail: unknown): string {
+  return [...head, tail].filter((p) => p != null && p !== "").map(String).join(sep);
+}
 
 export function toolDetails(toolName: string, args: unknown, result: unknown, errorText?: string): Row[] {
   if (errorText) return [{ label: "エラー", value: errorText }];
-  const name = toolName.startsWith(MCP_PREFIX) ? toolName.slice(MCP_PREFIX.length) : toolName;
+  const name = stripMcpPrefix(toolName);
   const a = obj(args);
   const r = unwrap(result) ?? {};
   const rows: Row[] = [];
@@ -45,7 +46,12 @@ export function toolDetails(toolName: string, args: unknown, result: unknown, er
       if (period) rows.push({ label: "期間", value: r.period_start ? `${period} (${r.period_start}〜)` : period });
       const digests: Obj[] = Array.isArray(r.digests) ? r.digests : [];
       if (digests.length) {
-        rows.push({ label: "要約", value: digests.map((d) => `${d.label}: ${DIGEST_STATUS[String(d.status)] ?? d.status}`).join("\n") });
+        const lines = digests.map((d) => {
+          const status = d?.status == null ? "" : DIGEST_STATUS[String(d.status)] ?? String(d.status);
+          return joinPresent([d?.label], ": ", status);
+        });
+        const value = lines.filter(Boolean).join("\n");
+        if (value) rows.push({ label: "要約", value });
       }
       break;
     }
@@ -62,7 +68,8 @@ export function toolDetails(toolName: string, args: unknown, result: unknown, er
     case "WebSearch": {
       if (a.query) rows.push({ label: "検索語", value: String(a.query) });
       const results: Obj[] = Array.isArray(r.results) ? r.results : [];
-      if (results.length) rows.push({ label: "結果", value: results.map((x) => `${x.title} · ${x.url}`).join("\n") });
+      const value = results.map((x) => joinPresent([x?.title], " · ", x?.url)).filter(Boolean).join("\n");
+      if (value) rows.push({ label: "結果", value });
       break;
     }
   }

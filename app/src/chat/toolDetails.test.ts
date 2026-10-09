@@ -31,4 +31,16 @@ describe("toolDetails", () => {
   it("shows the error text for a failed tool", () => {
     expect(toolDetails("get_article", { id: 404 }, undefined, "item 404 not found")).toEqual([{ label: "エラー", value: "item 404 not found" }]);
   });
+
+  it("tolerates null entries and missing fields", () => {
+    expect(toolDetails("read_digests", { period: "day" }, { period: "day", digests: [null, { label: "GitHub", status: "done" }, { status: "none" }] }))
+      .toEqual([{ label: "期間", value: "日次" }, { label: "要約", value: "GitHub: 生成済み\nなし" }]);
+    const web = toolDetails("web_search", { query: "q" }, { results: [null, { title: "R" }, { url: "https://u.com" }, { title: "S", url: "https://s.com" }] });
+    expect(web).toEqual([{ label: "検索語", value: "q" }, { label: "結果", value: "R\nhttps://u.com\nS · https://s.com" }]);
+    for (const row of web) expect(row.value).not.toContain("undefined");
+  });
+
+  it("returns nothing for an unknown tool", () => {
+    expect(toolDetails("mcp__other__thing", { query: "q" }, { items: [{ title: "x" }] })).toEqual([]);
+  });
 });

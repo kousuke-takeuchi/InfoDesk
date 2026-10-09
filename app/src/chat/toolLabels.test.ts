@@ -21,4 +21,8 @@ describe("describeTool", () => {
   it("falls back to the raw name", () => {
     expect(describeTool("mcp__other__thing", {}, undefined)).toEqual({ label: "mcp__other__thing", detail: "" });
   });
+
+  it("does not treat plan updates as a labelled tool", () => {
+    expect(describeTool("update_plan", { items: [] }, undefined)).toEqual({ label: "update_plan", detail: "" });
+  });
 });

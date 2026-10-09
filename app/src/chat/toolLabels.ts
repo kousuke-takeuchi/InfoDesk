@@ -1,6 +1,6 @@
 import { CATEGORIES } from "../types";
+import { obj, stripMcpPrefix } from "./unwrap";
 
-const MCP_PREFIX = "mcp__infodesk__";
 const PERIOD = { day: "日次", week: "週次", month: "月次" } as Record<string, string>;
 const LABELS: Record<string, string> = {
   search_articles: "記事検索",
@@ -9,14 +9,10 @@ const LABELS: Record<string, string> = {
   fetch_page: "本文取得",
   web_search: "Web検索",
   WebSearch: "Web検索",
-  update_plan: "計画の更新",
 };
 
-type Obj = Record<string, any>;
-const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
-
 export function describeTool(toolName: string, args: unknown, result: unknown): { label: string; detail: string } {
-  const name = toolName.startsWith(MCP_PREFIX) ? toolName.slice(MCP_PREFIX.length) : toolName;
+  const name = stripMcpPrefix(toolName);
   const label = LABELS[name];
   if (!label) return { label: toolName, detail: "" };
   const a = obj(args);

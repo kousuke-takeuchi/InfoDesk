@@ -2,12 +2,16 @@ import type { UIMessage } from "ai";
 
 export type PlanItem = { title: string; status: "pending" | "in_progress" | "done" };
 
-type Obj = Record<string, any>;
-const MCP_PREFIX = "mcp__infodesk__";
+import { stripMcpPrefix, type Obj } from "./unwrap";
+
 const STATUSES = ["pending", "in_progress", "done"];
+const MAX_ITEMS = 8;
+const MAX_TITLE = 80;
+// A streaming input is partial; a rejected or denied update never became the plan.
+const SKIPPED_STATES = ["input-streaming", "output-error", "output-denied"];
 
 export function isPlanTool(name: string): boolean {
-  return (name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name) === "update_plan";
+  return stripMcpPrefix(name) === "update_plan";
 }
 
 function toolName(part: Obj): string | null {
@@ -16,23 +20,26 @@ function toolName(part: Obj): string | null {
   return null;
 }
 
-export function latestPlan(message: UIMessage): PlanItem[] | null {
-  let last: unknown;
-  let found = false;
-  for (const part of message.parts as Obj[]) {
-    const name = toolName(part);
-    if (name && isPlanTool(name)) {
-      last = part.input?.items;
-      found = true;
-    }
-  }
-  if (!found || !Array.isArray(last)) return null;
+function validPlan(raw: unknown): PlanItem[] | null {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_ITEMS) return null;
   const items: PlanItem[] = [];
-  for (const it of last) {
-    if (typeof it?.title !== "string" || !STATUSES.includes(it?.status)) return null;
-    items.push({ title: it.title, status: it.status });
+  for (const it of raw) {
+    const title = it?.title;
+    if (typeof title !== "string" || !title.trim() || title.length > MAX_TITLE) return null;
+    if (!STATUSES.includes(it?.status)) return null;
+    items.push({ title, status: it.status });
   }
   return items;
+}
+
+export function latestPlan(message: UIMessage): PlanItem[] | null {
+  let latest: PlanItem[] | null = null;
+  for (const part of message.parts as Obj[]) {
+    const name = toolName(part);
+    if (!name || !isPlanTool(name) || SKIPPED_STATES.includes(part.state)) continue;
+    latest = validPlan(part.input?.items) ?? latest;
+  }
+  return latest;
 }
 
 // The model may skip a final all-done update, so a finished answer shows every item done.
@@ -44,7 +51,7 @@ export function workStats(message: UIMessage): { steps: number; tools: number } 
   let steps = 0;
   let tools = 0;
   for (const part of message.parts as Obj[]) {
-    if (part.type === "reasoning") steps++;
+    if (part.type === "reasoning" && typeof part.text === "string" && part.text.trim()) steps++;
     const name = toolName(part);
     if (name && !isPlanTool(name)) {
       steps++;

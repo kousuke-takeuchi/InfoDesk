@@ -60,3 +60,57 @@ describe("progress", () => {
     expect(statusLine({ running: false, elapsedMs: null, steps: 4, tools: 3 })).toBe("4ステップ");
   });
 });
+
+describe("progress fix round 1", () => {
+  const good = plan([{ title: "検索", status: "in_progress" }], "p1");
+  const want = [{ title: "検索", status: "in_progress" }];
+
+  it("keeps the earlier plan while a later update is streaming", () => {
+    const streaming = { type: "tool-update_plan", toolCallId: "p2", state: "input-streaming", input: { items: [{ title: "検" }] } };
+    expect(latestPlan(msg([good, streaming]))).toEqual(want);
+    const claudeStreaming = { type: "dynamic-tool", toolName: "mcp__infodesk__update_plan", toolCallId: "c", state: "input-streaming", input: { items: [{ title: "a", status: "done" }] } };
+    expect(latestPlan(msg([good, claudeStreaming]))).toEqual(want);
+  });
+
+  it("keeps the earlier plan when a later update was rejected or denied", () => {
+    const nine = Array.from({ length: 9 }, (_, i) => ({ title: `t${i}`, status: "pending" }));
+    const rejected = { type: "tool-update_plan", toolCallId: "p2", state: "output-error", input: { items: nine }, errorText: "too many" };
+    expect(latestPlan(msg([good, rejected]))).toEqual(want);
+    const rejectedValid = { type: "tool-update_plan", toolCallId: "p3", state: "output-error", input: { items: [{ title: "x", status: "done" }] }, errorText: "x" };
+    expect(latestPlan(msg([good, rejectedValid]))).toEqual(want);
+    const denied = { type: "tool-update_plan", toolCallId: "p4", state: "output-denied", input: { items: [{ title: "x", status: "done" }] } };
+    expect(latestPlan(msg([good, denied]))).toEqual(want);
+  });
+
+  it("validates item count and titles", () => {
+    const nine = Array.from({ length: 9 }, (_, i) => ({ title: `t${i}`, status: "pending" }));
+    const eight = nine.slice(0, 8);
+    expect(latestPlan(msg([plan(eight)]))).toEqual(eight);
+    expect(latestPlan(msg([plan(nine)]))).toBeNull();
+    expect(latestPlan(msg([plan([])]))).toBeNull();
+    expect(latestPlan(msg([plan([{ title: "  ", status: "done" }])]))).toBeNull();
+    expect(latestPlan(msg([plan([{ title: "あ".repeat(80), status: "done" }])]))).toEqual([{ title: "あ".repeat(80), status: "done" }]);
+    expect(latestPlan(msg([plan([{ title: "あ".repeat(81), status: "done" }])]))).toBeNull();
+    expect(latestPlan(msg([good, plan(nine, "p2")]))).toEqual(want);
+  });
+
+  it("counts only non-empty reasoning and ignores step-start", () => {
+    const m = msg([
+      { type: "step-start" },
+      { type: "reasoning", text: "  \n" },
+      { type: "reasoning", text: "" },
+      { type: "reasoning" },
+      { type: "reasoning", text: "考え" },
+      { type: "step-start" },
+      { type: "tool-search_articles", toolCallId: "s", state: "output-available", input: {}, output: {} },
+    ]);
+    expect(workStats(m)).toEqual({ steps: 2, tools: 1 });
+  });
+
+  it("pins formatting edges and partial times", () => {
+    expect(formatSeconds(59_600)).toBe("1分00秒");
+    expect(formatSeconds(-5_000)).toBe("0秒");
+    expect(answerTimes(msg([], { startedAt: "2026-10-10T00:00:00.000Z" })))
+      .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: null });
+  });
+});
