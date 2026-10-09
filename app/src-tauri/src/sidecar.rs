@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 use tokio::process::{Child, Command};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -191,14 +191,13 @@ pub async fn launch(
     match tokio::time::timeout(ready_timeout, wait_ready).await {
         Ok(Some(port)) => {
             // 準備完了後も出力を読み捨てて、パイプが詰まらないようにする。
-            tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
+            // 生のバイトで読むので、UTF-8 でない出力があっても止まらない。
+            tokio::spawn(async move {
+                let mut raw = lines.into_inner();
+                let _ = tokio::io::copy(&mut raw, &mut tokio::io::sink()).await;
+            });
             if let Some(stderr) = child.stderr.take() {
-                tokio::spawn(async move {
-                    let mut lines = BufReader::new(stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        eprintln!("[agent] {line}");
-                    }
-                });
+                tokio::spawn(drain_stderr(stderr, |line| eprintln!("[agent] {line}")));
             }
             Ok((child, port))
         }
@@ -305,16 +304,37 @@ impl Sidecar {
     }
 }
 
+/// 標準エラーを行ごとに生のバイトで読み、UTF-8 でなくても読み続ける。
+async fn drain_stderr<R: AsyncRead + Unpin>(reader: R, mut log: impl FnMut(&str)) {
+    let mut reader = BufReader::new(reader);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => log(String::from_utf8_lossy(&buf).trim_end()),
+        }
+    }
+}
+
+/// バンドルのリソースを使う。デバッグビルドで見つからないときだけ、リポジトリの成果物に戻る。
+fn pick_agent_path(resource: Option<PathBuf>, allow_dev_fallback: bool) -> PathBuf {
+    match resource {
+        Some(p) if p.is_file() || !allow_dev_fallback => p,
+        _ if allow_dev_fallback => {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../agent/dist/agent.mjs")
+        }
+        _ => PathBuf::from("agent/agent.mjs"),
+    }
+}
+
 fn agent_path(app: &AppHandle) -> PathBuf {
-    // バンドルでは resources/agent/agent.mjs。開発時はリポジトリの agent/dist/agent.mjs。
-    if let Ok(p) = app
+    // バンドルでは resources/agent/agent.mjs。開発 (デバッグビルド) ではリポジトリの agent/dist/agent.mjs。
+    let resource = app
         .path()
         .resolve("agent/agent.mjs", tauri::path::BaseDirectory::Resource)
-        && p.is_file()
-    {
-        return p;
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../agent/dist/agent.mjs")
+        .ok();
+    pick_agent_path(resource, cfg!(debug_assertions))
 }
 
 fn launch_config(app: &AppHandle) -> Result<LaunchConfig, LaunchError> {
@@ -486,5 +506,32 @@ cat > /dev/null"#,
             .unwrap_err();
         assert_eq!(err.kind, "start_failed");
         assert!(err.message.contains("timed out"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn drain_stderr_survives_invalid_utf8() {
+        let data: &[u8] = b"first\n\xff\xfe bad\nlast line\n";
+        let mut got = Vec::new();
+        drain_stderr(data, |l| got.push(l.to_string())).await;
+        assert_eq!(got.len(), 3);
+        assert_eq!(got[0], "first");
+        assert!(got[1].contains('\u{FFFD}'));
+        assert_eq!(got[2], "last line");
+    }
+
+    #[test]
+    fn agent_path_fallback_is_debug_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("agent/agent.mjs");
+        let dev = pick_agent_path(Some(missing.clone()), true);
+        assert!(dev.ends_with("agent/dist/agent.mjs"));
+        assert_eq!(pick_agent_path(Some(missing.clone()), false), missing);
+        std::fs::create_dir_all(missing.parent().unwrap()).unwrap();
+        std::fs::write(&missing, "").unwrap();
+        assert_eq!(pick_agent_path(Some(missing.clone()), true), missing);
+        assert_eq!(
+            pick_agent_path(None, false),
+            PathBuf::from("agent/agent.mjs")
+        );
     }
 }
