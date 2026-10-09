@@ -55,4 +55,28 @@ describe("WorkSummary", () => {
     expect(screen.getByText("まとめる").closest("li")).toHaveAttribute("data-status", "in_progress");
     expect(document.querySelector(".work-plan .spin")).toBeNull();
   });
+
+  it("announces only when the tool count changes, while the visible line keeps ticking", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-10T00:00:05.000Z"));
+    const meta = { startedAt: "2026-10-10T00:00:00.000Z" };
+    const { rerender } = render(<WorkSummary message={msg([plan, search], meta)} running collapsed={false} onToggle={() => {}} />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveClass("visually-hidden");
+    expect(status).toHaveTextContent("調査中 · ツール1回");
+    expect(screen.getByText("調査中 · 5秒 · ツール1回").closest("[role=status]")).toBeNull();
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(screen.getByText("調査中 · 9秒 · ツール1回")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^調査中 · ツール1回$/);
+    rerender(<WorkSummary message={msg([plan, search, { ...search, toolCallId: "s2" }], meta)} running collapsed={false} onToggle={() => {}} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/^調査中 · ツール2回$/);
+    rerender(<WorkSummary message={msg([plan, search, { ...search, toolCallId: "s2" }], { ...meta, finishedAt: "2026-10-10T00:00:12.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/^回答しました · 2ステップ$/);
+  });
+
+  it("keeps failed tools visible in the folded summary", () => {
+    const failed = { type: "tool-search_articles", toolCallId: "e", state: "output-error", input: {}, errorText: "boom" };
+    render(<WorkSummary message={msg([search, failed], { startedAt: "2026-10-10T00:00:00.000Z", finishedAt: "2026-10-10T00:00:18.000Z" })} running={false} collapsed onToggle={() => {}} />);
+    expect(screen.getByRole("button", { name: "2ステップ · 18秒 · 失敗1" })).toBeInTheDocument();
+  });
 });

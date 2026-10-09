@@ -8,6 +8,22 @@ export function streamResponse(chunks: UIMessageChunk[]): Response {
   });
 }
 
+/** 前半の chunk を流したあと release() まで止まる応答。回答中の画面を確かめるのに使う。 */
+export function pausedStreamResponse(before: UIMessageChunk[], after: UIMessageChunk[]): { response: () => Response; release: () => void } {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const response = () => createUIMessageStreamResponse({
+    stream: createUIMessageStream({
+      execute: async ({ writer }) => {
+        for (const c of before) writer.write(c);
+        await gate;
+        for (const c of after) writer.write(c);
+      },
+    }),
+  });
+  return { response, release };
+}
+
 export const answerChunks = (text: string, extra: UIMessageChunk[] = []): UIMessageChunk[] => [
   { type: "start" },
   ...extra,

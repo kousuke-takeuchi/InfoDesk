@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { answerTimes, displayPlan, formatSeconds, isPlanTool, latestPlan, statusLine, workStats } from "./progress";
+import { announceLine, answerTimes, displayPlan, formatSeconds, isPlanTool, latestPlan, statusLine, workStats } from "./progress";
 
 const msg = (parts: unknown[], metadata?: unknown): UIMessage => ({ id: "a", role: "assistant", parts, metadata } as UIMessage);
 const plan = (items: unknown, toolCallId = "p") => ({ type: "tool-update_plan", toolCallId, state: "output-available", input: { items }, output: { ok: true } });
@@ -40,7 +40,7 @@ describe("progress", () => {
       { type: "dynamic-tool", toolName: "mcp__infodesk__fetch_page", toolCallId: "f", state: "output-available", input: {}, output: {} },
       { type: "text", text: "答え" },
     ]);
-    expect(workStats(m)).toEqual({ steps: 3, tools: 2 });
+    expect(workStats(m)).toEqual({ steps: 3, tools: 2, failed: 0 });
   });
 
   it("reads times from metadata", () => {
@@ -104,7 +104,7 @@ describe("progress fix round 1", () => {
       { type: "step-start" },
       { type: "tool-search_articles", toolCallId: "s", state: "output-available", input: {}, output: {} },
     ]);
-    expect(workStats(m)).toEqual({ steps: 2, tools: 1 });
+    expect(workStats(m)).toEqual({ steps: 2, tools: 1, failed: 0 });
   });
 
   it("pins formatting edges and partial times", () => {
@@ -112,5 +112,31 @@ describe("progress fix round 1", () => {
     expect(formatSeconds(-5_000)).toBe("0秒");
     expect(answerTimes(msg([], { startedAt: "2026-10-10T00:00:00.000Z" })))
       .toEqual({ startedAt: Date.parse("2026-10-10T00:00:00.000Z"), finishedAt: null });
+  });
+});
+
+describe("progress failures and announcements", () => {
+  it("counts failed tools, but not failed plan updates", () => {
+    const m = msg([
+      { type: "tool-search_articles", toolCallId: "s1", state: "output-error", input: {}, errorText: "boom" },
+      { type: "tool-search_articles", toolCallId: "s2", state: "output-denied", input: {} },
+      { type: "dynamic-tool", toolName: "mcp__infodesk__fetch_page", toolCallId: "f", state: "output-available", input: {}, output: {} },
+      { type: "tool-update_plan", toolCallId: "p", state: "output-error", input: {}, errorText: "bad" },
+    ]);
+    expect(workStats(m)).toEqual({ steps: 3, tools: 3, failed: 2 });
+  });
+
+  it("appends failures to the finished line only", () => {
+    expect(statusLine({ running: false, elapsedMs: 18_000, steps: 4, tools: 3, failed: 2 })).toBe("4ステップ · 18秒 · 失敗2");
+    expect(statusLine({ running: false, elapsedMs: null, steps: 4, tools: 3, failed: 1 })).toBe("4ステップ · 失敗1");
+    expect(statusLine({ running: false, elapsedMs: 18_000, steps: 4, tools: 3, failed: 0 })).toBe("4ステップ · 18秒");
+    expect(statusLine({ running: true, elapsedMs: 5_000, steps: 2, tools: 2, failed: 1 })).toBe("調査中 · 5秒 · ツール2回");
+  });
+
+  it("builds an announcement without the ticking seconds", () => {
+    expect(announceLine({ running: true, steps: 0, tools: 0, failed: 0 })).toBe("調査中");
+    expect(announceLine({ running: true, steps: 3, tools: 2, failed: 0 })).toBe("調査中 · ツール2回");
+    expect(announceLine({ running: false, steps: 4, tools: 3, failed: 0 })).toBe("回答しました · 4ステップ");
+    expect(announceLine({ running: false, steps: 4, tools: 3, failed: 1 })).toBe("回答しました · 4ステップ · 失敗1");
   });
 });

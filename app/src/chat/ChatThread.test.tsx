@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { UIMessage } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setupIpc } from "../test/ipc";
-import { answerChunks, mockFetch, streamResponse } from "../test/stream";
+import { answerChunks, mockFetch, pausedStreamResponse, streamResponse } from "../test/stream";
 import { ChatThread } from "./ChatThread";
 import type { ChatContext } from "./context";
 
@@ -220,28 +220,41 @@ describe("ChatThread", () => {
 
   it("shows the plan and work while answering, then folds the work into one line", async () => {
     setupIpc({ open_item: () => null });
-    mockFetch(() => streamResponse([
+    const stream = pausedStreamResponse([
       { type: "start", messageMetadata: { startedAt: new Date(Date.now() - 3000).toISOString() } },
-      { type: "reasoning-start", id: "r" }, { type: "reasoning-delta", id: "r", delta: "まず検索する" }, { type: "reasoning-end", id: "r" },
-      { type: "tool-input-available", toolCallId: "p", toolName: "update_plan", input: { items: [{ title: "検索", status: "done" }, { title: "まとめる", status: "done" }] } },
+      { type: "tool-input-available", toolCallId: "p", toolName: "update_plan", input: { items: [{ title: "検索", status: "done" }, { title: "まとめる", status: "in_progress" }] } },
       { type: "tool-output-available", toolCallId: "p", output: { ok: true, count: 2 } },
       { type: "tool-input-available", toolCallId: "s", toolName: "search_articles", input: { query: "認知症" } },
       { type: "tool-output-available", toolCallId: "s", output: { items: [{ id: 1, title: "記事A" }], total: 1 } },
+      { type: "reasoning-start", id: "r" }, { type: "reasoning-delta", id: "r", delta: "まず検索する" },
+    ] as never, [
+      { type: "reasoning-end", id: "r" },
       { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "答えです" }, { type: "text-end", id: "t" },
       { type: "finish", messageMetadata: { finishedAt: new Date().toISOString() } },
-    ] as never));
+    ] as never);
+    mockFetch(stream.response);
     renderThread();
     await ask("質問");
-    expect(await screen.findByText("答えです")).toBeInTheDocument();
+    // 回答中: 作業はたたまれず、ツールの行と思考の見出しが見える。
+    expect(await screen.findByText("記事検索")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "考え中…" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "作業計画" })).toHaveTextContent("まとめる");
-    const summary = screen.getByRole("button", { name: /^2ステップ · \d+秒$/ });
+    expect(screen.queryByText("答えです")).toBeNull();
+    stream.release();
+    expect(await screen.findByText("答えです")).toBeInTheDocument();
+    const summary = await screen.findByRole("button", { name: /^2ステップ · \d+秒$/ });
     expect(summary).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("記事検索")).toBeNull();
+    expect(screen.queryByRole("button", { name: /考え/ })).toBeNull();
     expect(screen.queryByText("update_plan")).toBeNull();
-    await userEvent.setup().click(summary);
+    const user = userEvent.setup();
+    await user.click(summary);
     expect(screen.getByText("記事検索")).toBeInTheDocument();
     expect(screen.queryByText("update_plan")).toBeNull();
-    expect(screen.getByRole("button", { name: "考えた内容" })).toBeInTheDocument();
+    const reasoning = screen.getByRole("button", { name: "考えた内容" });
+    expect(screen.queryByText("まず検索する")).toBeNull();
+    await user.click(reasoning);
+    expect(screen.getByText("まず検索する")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "記事A" })).toBeInTheDocument();
   });
 });

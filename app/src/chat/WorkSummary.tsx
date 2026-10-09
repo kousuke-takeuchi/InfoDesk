@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { Check, ChevronRight, Circle, LoaderCircle } from "lucide-react";
 import { createContext, useEffect, useState } from "react";
-import { answerTimes, displayPlan, latestPlan, statusLine, workStats } from "./progress";
+import { announceLine, answerTimes, displayPlan, latestPlan, statusLine, workStats } from "./progress";
 
 /** 完了した回答で作業 (思考とツール) を隠すか。回答中は false。 */
 export const WorkCollapsedContext = createContext(false);
@@ -24,19 +24,22 @@ export function WorkSummary({ message, running, collapsed, onToggle }: {
 }) {
   const now = useNow(running);
   const rawPlan = latestPlan(message);
-  const { steps, tools } = workStats(message);
+  const { steps, tools, failed } = workStats(message);
   const { startedAt, finishedAt } = answerTimes(message);
   const end = running ? now : finishedAt;
   const elapsedMs = startedAt !== null && end !== null ? Math.max(0, end - startedAt) : null;
   if (!running && steps === 0 && !rawPlan) return null;
-  const line = statusLine({ running, elapsedMs, steps, tools });
+  const line = statusLine({ running, elapsedMs, steps, tools, failed });
+  // 見える行は毎秒変わるので読み上げない。読み上げは秒数を含まない別の行で行う。
+  const announcement = announceLine({ running, steps, tools, failed });
   // 正常に終わった回答は全項目を完了にする。途中で止まった回答は最後の状態のまま、回転なしで出す。
   const finished = !running && finishedAt !== null;
   const plan = rawPlan ? displayPlan(rawPlan, finished) : null;
   return (
     <div className="work-summary">
+      <div className="visually-hidden" role="status">{announcement}</div>
       {running ? (
-        <div className="work-status" role="status"><LoaderCircle size={13} className="spin" aria-hidden />{line}</div>
+        <div className="work-status"><LoaderCircle size={13} className="spin" aria-hidden />{line}</div>
       ) : steps > 0 ? (
         <button className="work-status" aria-expanded={!collapsed} onClick={onToggle}>
           <ChevronRight size={13} className={collapsed ? "" : "open"} aria-hidden />{line}

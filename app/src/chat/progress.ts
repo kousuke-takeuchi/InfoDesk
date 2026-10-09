@@ -47,18 +47,23 @@ export function displayPlan(plan: PlanItem[], finished: boolean): PlanItem[] {
   return finished ? plan.map((it) => ({ ...it, status: "done" as const })) : plan;
 }
 
-export function workStats(message: UIMessage): { steps: number; tools: number } {
+// A tool counts as failed the way assistant-ui marks it isError: an error or a denied approval.
+const FAILED_STATES = ["output-error", "output-denied"];
+
+export function workStats(message: UIMessage): { steps: number; tools: number; failed: number } {
   let steps = 0;
   let tools = 0;
+  let failed = 0;
   for (const part of message.parts as Obj[]) {
     if (part.type === "reasoning" && typeof part.text === "string" && part.text.trim()) steps++;
     const name = toolName(part);
     if (name && !isPlanTool(name)) {
       steps++;
       tools++;
+      if (FAILED_STATES.includes(part.state)) failed++;
     }
   }
-  return { steps, tools };
+  return { steps, tools, failed };
 }
 
 export function answerTimes(message: UIMessage): { startedAt: number | null; finishedAt: number | null } {
@@ -76,11 +81,20 @@ export function formatSeconds(ms: number): string {
   return `${Math.floor(total / 60)}分${String(total % 60).padStart(2, "0")}秒`;
 }
 
-export function statusLine(args: { running: boolean; elapsedMs: number | null; steps: number; tools: number }): string {
-  const { running, elapsedMs, steps, tools } = args;
+export function statusLine(args: { running: boolean; elapsedMs: number | null; steps: number; tools: number; failed?: number }): string {
+  const { running, elapsedMs, steps, tools, failed = 0 } = args;
   const time = elapsedMs === null ? null : formatSeconds(elapsedMs);
   const parts = running
     ? ["調査中", time, tools > 0 ? `ツール${tools}回` : null]
-    : [`${steps}ステップ`, time];
+    : [`${steps}ステップ`, time, failed > 0 ? `失敗${failed}` : null];
+  return parts.filter((p): p is string => p !== null).join(" · ");
+}
+
+/** 読み上げ用の状態。秒数を含めず、ツールの回数が変わるか回答が終わったときだけ変わる。 */
+export function announceLine(args: { running: boolean; steps: number; tools: number; failed: number }): string {
+  const { running, steps, tools, failed } = args;
+  const parts = running
+    ? ["調査中", tools > 0 ? `ツール${tools}回` : null]
+    : ["回答しました", `${steps}ステップ`, failed > 0 ? `失敗${failed}` : null];
   return parts.filter((p): p is string => p !== null).join(" · ");
 }
