@@ -33,6 +33,9 @@ export function buildInstructions(context: ChatContext | null, now: Date, tools:
     "- 生成済みの期間要約は read_digests で読む。",
     "- 記事の詳しい中身が必要なときだけ fetch_page で本文を取る。",
   ];
+  if (tools.includes("update_plan")) {
+    lines.push("- ツールを2回以上使う見込みの質問では、最初に update_plan で手順を3〜6項目で示し、進むたびに状態 (pending / in_progress / done) を更新する。最後は全項目を done にする。");
+  }
   if (tools.includes("web_search")) {
     lines.push("- 収集した記事の外の情報が必要なときだけ Web 検索 (web_search または WebSearch) を使う。");
   }

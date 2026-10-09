@@ -98,6 +98,13 @@ function drainOnCancel(inner: ReadableStream<UIMessageChunk>): ReadableStream<UI
   });
 }
 
+function metadataFor(deps: ChatDeps) {
+  return ({ part }: { part: { type: string } }) =>
+    part.type === "start" ? { startedAt: deps.now().toISOString() }
+    : part.type === "finish" ? { finishedAt: deps.now().toISOString() }
+    : undefined;
+}
+
 async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, signal: AbortSignal): Promise<ReadableStream<UIMessageChunk>> {
   const onError = (e: unknown) => describeError(e, req.provider, settings);
   const messages = dropIncompleteToolParts(req.messages);
@@ -112,7 +119,7 @@ async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, 
       tools,
       stopWhen: isStepCount(MAX_STEPS),
     });
-    return createAgentUIStream({ agent, uiMessages: truncateOlderToolOutputs(messages), abortSignal: signal, onError }) as Promise<ReadableStream<UIMessageChunk>>;
+    return createAgentUIStream({ agent, uiMessages: truncateOlderToolOutputs(messages), abortSignal: signal, onError, messageMetadata: metadataFor(deps), sendReasoning: true }) as Promise<ReadableStream<UIMessageChunk>>;
   }
   // Claude: Claude Code CLI が自分でツールを実行するので、ツールは MCP で渡す。Web検索は組み込みの WebSearch。
   const tools = createInfodeskTools(deps.run, {});
@@ -128,7 +135,7 @@ async function openStream(req: ChatRequest, deps: ChatDeps, settings: Settings, 
     messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
     abortSignal: signal,
   });
-  return result.toUIMessageStream({ onError });
+  return result.toUIMessageStream({ onError, messageMetadata: metadataFor(deps), sendReasoning: true });
 }
 
 /** ストリームを始める前の失敗 (設定の読み込み、モデルの用意、メッセージの検証) も、UI には error チャンクで返す。 */

@@ -149,6 +149,22 @@ describe("streamChat (Ollama)", () => {
     expect(JSON.stringify(firstPrompt)).toContain("InfoDesk");
   });
 
+  it("sends start and finish times as message metadata", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({ stream: simulateReadableStream({ chunks: [
+        { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "はい" }, { type: "text-end", id: "t" },
+        { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+      ] as never }) }),
+    });
+    const d = deps(model);
+    const { base } = await start((req, res, signal) => streamChat(req, res, d, signal));
+    const res = await fetch(`${base}/chat`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: body() });
+    const chunks = sseChunks(await res.text());
+    const meta = chunks.filter((c) => c.messageMetadata).map((c) => c.messageMetadata);
+    expect(meta.some((m) => typeof m.startedAt === "string")).toBe(true);
+    expect(meta.some((m) => typeof m.finishedAt === "string")).toBe(true);
+  });
+
   it("streams an LLM failure as a structured error chunk", async () => {
     const model = new MockLanguageModelV4({
       doStream: async () => { throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } }); },
@@ -293,7 +309,7 @@ describe("streamChat (Claude)", () => {
     expect(Object.keys(opts.mcpServers)).toEqual(["infodesk"]);
     expect(opts.allowedTools).toEqual([
       "mcp__infodesk__search_articles", "mcp__infodesk__get_article", "mcp__infodesk__read_digests",
-      "mcp__infodesk__fetch_page", "WebSearch",
+      "mcp__infodesk__fetch_page", "mcp__infodesk__update_plan", "WebSearch",
     ]);
     expect(opts.instructions).toContain("InfoDesk");
   });

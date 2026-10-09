@@ -42,4 +42,10 @@ describe("buildInstructions", () => {
     expect(s).toContain("すべての記事");
     expect(s).toContain("直近3日");
   });
+
+  it("asks for a plan on multi-step questions", () => {
+    const s = buildInstructions(null, NOW, [...ALL, "update_plan"]);
+    expect(s).toContain("update_plan");
+    expect(s).toContain("done");
+  });
 });

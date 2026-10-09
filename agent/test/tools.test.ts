@@ -14,10 +14,21 @@ async function exec(tools: Record<string, any>, name: string, input: unknown) {
 describe("createInfodeskTools", () => {
   it("offers web_search only when a key is set", () => {
     expect(Object.keys(createInfodeskTools(run, {}))).toEqual([
-      "search_articles", "get_article", "read_digests", "fetch_page",
+      "search_articles", "get_article", "read_digests", "fetch_page", "update_plan",
     ]);
     expect(Object.keys(createInfodeskTools(run, { webSearchKey: "k" }))).toContain("web_search");
-    expect(TOOL_NAMES).toEqual(["search_articles", "get_article", "read_digests", "fetch_page", "web_search"]);
+    expect(TOOL_NAMES).toEqual(["search_articles", "get_article", "read_digests", "fetch_page", "update_plan", "web_search"]);
+  });
+
+  it("accepts a plan update and validates it", async () => {
+    const tools = createInfodeskTools(run, {});
+    const plan = { items: [{ title: "記事を検索", status: "done" }, { title: "まとめる", status: "in_progress" }] };
+    expect(await exec(tools, "update_plan", plan)).toEqual({ ok: true, count: 2 });
+    const schema = (tools.update_plan as any).inputSchema;
+    expect(schema.safeParse({ items: [] }).success).toBe(false);
+    expect(schema.safeParse({ items: Array.from({ length: 9 }, () => ({ title: "x", status: "pending" })) }).success).toBe(false);
+    expect(schema.safeParse({ items: [{ title: "x", status: "doing" }] }).success).toBe(false);
+    expect(TOOL_NAMES).toContain("update_plan");
   });
 
   it("maps search_articles input to CLI flags", async () => {

@@ -2,7 +2,7 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import type { CliRunner } from "./cli";
 
-export const TOOL_NAMES = ["search_articles", "get_article", "read_digests", "fetch_page", "web_search"] as const;
+export const TOOL_NAMES = ["search_articles", "get_article", "read_digests", "fetch_page", "update_plan", "web_search"] as const;
 
 const CATEGORIES = ["github", "arxiv", "huggingface", "hackernews", "tech_jp", "tech_intl", "medcare"] as const;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
@@ -79,6 +79,17 @@ export function createInfodeskTools(
       }),
       execute: async ({ url, max_chars }, { abortSignal }) =>
         run(["page", url, "--json", `--max-chars=${max_chars ?? pageMaxChars}`], abortSignal),
+    }),
+    update_plan: tool({
+      description:
+        "作業計画を示す、または更新する。ツールを2回以上使う質問で最初に呼び、進むたびに各項目の状態を更新する。",
+      inputSchema: z.object({
+        items: z.array(z.object({
+          title: z.string().min(1).max(80),
+          status: z.enum(["pending", "in_progress", "done"]),
+        })).min(1).max(8),
+      }),
+      execute: async ({ items }) => ({ ok: true, count: items.length }),
     }),
   };
   if (opts.webSearchKey) {
