@@ -50,7 +50,7 @@ InfoDesk は RSS、GitHub、Hugging Face、arXiv、Hacker News、Google News か
 必要なもの: macOS (動作確認は Apple Silicon)、[Rust](https://rustup.rs)、Node.js 22 以上、そしてモデルを取得済みの [Ollama](https://ollama.com) か [`claude` CLI](https://claude.com/claude-code) のどちらか。
 
 ```bash
-git clone <this repository>
+git clone https://github.com/kousuke-takeuchi/InfoDesk.git
 cd InfoDesk
 cd agent && npm install && npm run build && cd ..
 cd app && npm install && npm run tauri dev

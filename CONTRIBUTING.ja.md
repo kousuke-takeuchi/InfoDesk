@@ -45,7 +45,7 @@
 
 ## 問題の報告
 
-公開の課題管理はまだありません。セキュリティの問題は [SECURITY.md](SECURITY.md) を参照してください。問題を説明するときは、個人情報や API キーを含めないでください。
+不具合や提案は [GitHub Issues](https://github.com/kousuke-takeuchi/InfoDesk/issues) に書いてください。セキュリティの問題は [SECURITY.md](SECURITY.md) を参照してください。問題を説明するときは、個人情報や API キーを含めないでください。
 
 ## ライセンス
 

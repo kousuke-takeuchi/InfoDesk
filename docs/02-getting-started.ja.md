@@ -21,7 +21,7 @@ InfoDesk は macOS 専用です。動作を確認しているのは Apple Silico
 ## 2. 開発モードで動かす
 
 ```bash
-git clone <this repository>
+git clone https://github.com/kousuke-takeuchi/InfoDesk.git
 cd InfoDesk
 cd agent && npm install && npm run build && cd ..   # チャットのエージェント (チャットを使わないなら省略可)
 cd app && npm install

@@ -21,7 +21,7 @@ InfoDesk runs on macOS only. Apple Silicon is the tested setup. There is no preb
 ## 2. Run in development
 
 ```bash
-git clone <this repository>
+git clone https://github.com/kousuke-takeuchi/InfoDesk.git
 cd InfoDesk
 cd agent && npm install && npm run build && cd ..   # chat agent (skip if you do not need chat)
 cd app && npm install

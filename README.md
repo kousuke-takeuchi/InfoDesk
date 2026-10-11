@@ -50,7 +50,7 @@ digest, a feed and a chat panel. Your data stays in a SQLite file on your Mac.
 Prerequisites: macOS (Apple Silicon is what has been tested), [Rust](https://rustup.rs), Node.js 22+, and either [Ollama](https://ollama.com) with a model pulled or the [`claude` CLI](https://claude.com/claude-code).
 
 ```bash
-git clone <this repository>
+git clone https://github.com/kousuke-takeuchi/InfoDesk.git
 cd InfoDesk
 cd agent && npm install && npm run build && cd ..
 cd app && npm install && npm run tauri dev

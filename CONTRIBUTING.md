@@ -45,7 +45,7 @@ Thanks for your interest. InfoDesk is a local-first desktop reader (Tauri 2 + Re
 
 ## Reporting problems
 
-There is no public issue tracker yet. For security issues see [SECURITY.md](SECURITY.md). Please do not share personal data or API keys when you describe a problem.
+Report bugs and ideas in [GitHub Issues](https://github.com/kousuke-takeuchi/InfoDesk/issues). For security issues see [SECURITY.md](SECURITY.md). Please do not share personal data or API keys when you describe a problem.
 
 ## License
 

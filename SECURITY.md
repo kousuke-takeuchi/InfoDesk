@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-This repository has no public issue tracker yet. Please do not open a public report. Contact the project owner (Kousuke Takeuchi) through a private channel instead. Include the version (or commit), the macOS version, and steps to reproduce. Please do not attach personal data or API keys.
+Please report security issues through GitHub's **private vulnerability reporting** on this repository (Security, then "Report a vulnerability") rather than a public issue. Include the version (or commit), the macOS version, and steps to reproduce. Please do not attach personal data or API keys.
 
 ## What is in scope
 

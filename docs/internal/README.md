@@ -24,5 +24,5 @@ InfoDeskを開発するコントリビュータ向けの内部ドキュメント
 ## 前提
 
 - 対象はmacOSのみ(Apple Siliconで確認)。バージョン0.1.0、アルファ版の個人プロジェクト。
-- Gitのリモートとリモートのビルド(CI)は無い。ローカルで `cargo test` と各 `npm test` を通すことが検証の基準([testing.md](testing.md))。
+- リモートは GitHub の [kousuke-takeuchi/InfoDesk](https://github.com/kousuke-takeuchi/InfoDesk) (既定ブランチ `master`)。リモートのビルド(CI)は無い。ローカルで `cargo test` と各 `npm test` を通すことが検証の基準([testing.md](testing.md))。
 - 設計書(スペック)は2026-10-06付の1本で、追記で14〜16節まで伸びている。実装は設計書に従うが、実装で変えた点は feature-inventory.md に差分として書く。
