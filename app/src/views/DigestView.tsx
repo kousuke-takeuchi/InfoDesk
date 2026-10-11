@@ -9,6 +9,7 @@ import { useTauriEvent } from "../hooks/useTauriEvent";
 import type { ChatAttachment, ChatPeriod } from "../chat/context";
 import { localDateString, periodHeading } from "../lib/dates";
 import { digestDisplay, parseDigestBody } from "../lib/digest";
+import { ImageCards, cardItems } from "./digest/ImageCards";
 import { Overview } from "./digest/Overview";
 import { errorMessage, type AppStatus, type DigestScope, type DigestStats, type DigestView as DV, type Item, type Period, type Topic } from "../types";
 
@@ -16,6 +17,7 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: "day", label: "今日" }, { id: "week", label: "週" }, { id: "month", label: "月" },
 ];
 const REF_LIMIT = 5;
+const REF_FETCH = 12;
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 interface Props {
@@ -49,7 +51,7 @@ function selectionKey(s: Selection): string {
 function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => void }) {
   const [items, setItems] = useState<Item[]>([]);
   // 再読み込みのたびに配列は作り直される。中身が同じなら取り直さないよう、id の並びをキーにする。
-  const refKey = ids.slice(0, REF_LIMIT).join(",");
+  const refKey = ids.slice(0, REF_FETCH).join(",");
   useEffect(() => {
     let alive = true;
     const refIds = refKey === "" ? [] : refKey.split(",").map(Number);
@@ -58,12 +60,21 @@ function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => vo
     return () => { alive = false; };
   }, [refKey]);
   if (items.length === 0) return null;
+  const carded = new Set(cardItems(items).map((i) => i.id));
+  const links = items.filter((i) => !carded.has(i.id));
+  const shown = links.slice(0, REF_LIMIT);
+  const more = ids.length - carded.size - shown.length;
   return (
-    <div className="digest-refs">
-      <span className="text-tertiary tiny">根拠記事</span>
-      {items.map((it) => <button key={it.id} className="link-btn" onClick={() => onOpen(it.id)}>{it.title}</button>)}
-      {ids.length > REF_LIMIT && <span className="text-secondary">他 {ids.length - REF_LIMIT}件</span>}
-    </div>
+    <>
+      <ImageCards items={items} onOpen={onOpen} />
+      {shown.length > 0 && (
+        <div className="digest-refs">
+          <span className="text-tertiary tiny">根拠記事</span>
+          {shown.map((it) => <button key={it.id} className="link-btn" onClick={() => onOpen(it.id)}>{it.title}</button>)}
+          {more > 0 && <span className="text-secondary">他 {more}件</span>}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -201,10 +212,11 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
                 )}
               </div>
               {display.kind === "done" && (() => {
-                const { bullets, paragraphs } = parseDigestBody(display.digest.body);
+                const { headline, bullets, paragraphs } = parseDigestBody(display.digest.body);
                 return (
                   <>
-                    {bullets.length > 0 && <ul className="digest-bullets">{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>}
+                    {headline && <p className="digest-headline">{headline}</p>}
+                    {bullets.length > 0 && <ol className="digest-points">{bullets.map((b, i) => <li key={i}>{b}</li>)}</ol>}
                     {paragraphs.map((p, i) => <p key={i} style={{ margin: 0, lineHeight: 1.6 }}>{p}</p>)}
                     <References ids={display.digest.item_ids} onOpen={(id) => { api.openItem(id).catch(fail); }} />
                   </>

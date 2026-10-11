@@ -13,3 +13,14 @@
 .topic-trends li[data-trend="down"] .delta { color: var(--danger); }
 .topic-trends .delta { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
 @media (max-width: 1139px) { .overview { grid-template-columns: minmax(0, 1fr); } }
+
+.digest-headline { font-size: 16px; font-weight: 600; line-height: 1.5; margin: 4px 0 10px; color: var(--text-primary); }
+.digest-points { list-style: none; counter-reset: point; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 8px; }
+.digest-points li { counter-increment: point; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; line-height: 1.6; }
+.digest-points li::before { content: counter(point); width: 20px; height: 20px; border-radius: 50%; background: var(--selection); color: var(--accent); font-size: 11px; font-weight: 600; display: grid; place-items: center; margin-top: 2px; }
+.image-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+.image-card { display: flex; flex-direction: column; gap: 6px; text-align: left; background: var(--bg-window); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; padding: 0 0 8px; cursor: pointer; }
+.image-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--bg-subtle); }
+.image-card .card-title { padding: 0 8px; font-size: 12px; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.image-card .card-source { padding: 0 8px; font-size: 11px; color: var(--text-tertiary); }
+@media (max-width: 1139px) { .image-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

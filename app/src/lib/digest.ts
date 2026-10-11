@@ -5,16 +5,28 @@ const BULLET = /^\s*(?:[-*]\s+|[・•]\s*|\d+[.)]\s+)(.*)$/;
 const RULE = /^(?:[-*_]\s*){3,}$/;
 const MARKER_ONLY = /^[-*・•]$/;
 const HEADING = /^#{1,6}\s+(.*)$/;
+const HEADLINE = /^見出し\s*[:：]\s*(.*)$/;
 const BOLD = /(\*\*|__)(.+?)\1/g;
 
 const stripBold = (text: string) => text.replace(BOLD, "$2").trim();
 
-export function parseDigestBody(body: string): { bullets: string[]; paragraphs: string[] } {
+export function parseDigestBody(body: string): { headline: string | null; bullets: string[]; paragraphs: string[] } {
   const bullets: string[] = [];
   const paragraphs: string[] = [];
+  let headline: string | null = null;
+  let first = true;
   for (const raw of body.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || RULE.test(line) || MARKER_ONLY.test(line)) continue;
+    // 見出しは最初の空でない行だけ。長さはモデルへの指示で、ここでは切らない。
+    if (first) {
+      first = false;
+      const hm = HEADLINE.exec(line);
+      if (hm) {
+        headline = hm[1].trim() || null;
+        continue;
+      }
+    }
     const m = BULLET.exec(line);
     if (m) {
       const text = stripBold(m[1]);
@@ -25,7 +37,7 @@ export function parseDigestBody(body: string): { bullets: string[]; paragraphs: 
     const text = stripBold(h ? h[1] : line);
     if (text) paragraphs.push(text);
   }
-  return { bullets, paragraphs };
+  return { headline, bullets, paragraphs };
 }
 
 export type DigestDisplay =

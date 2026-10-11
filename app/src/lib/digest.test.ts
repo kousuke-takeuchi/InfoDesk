@@ -12,32 +12,66 @@ const view = (d: Digest | null, item_count = 0): DigestView => ({ scope: { categ
 describe("parseDigestBody", () => {
   it("extracts bullets and keeps the rest as paragraphs", () => {
     const body = "- 一つ目。\n* 二つ目。\n・三つ目\n• 四つ目\n1. 五つ目\n\n全体として伸びている。";
-    expect(parseDigestBody(body)).toEqual({
+    expect(parseDigestBody(body)).toEqual({ headline: null,
       bullets: ["一つ目。", "二つ目。", "三つ目", "四つ目", "五つ目"],
       paragraphs: ["全体として伸びている。"],
     });
-    expect(parseDigestBody("")).toEqual({ bullets: [], paragraphs: [] });
+    expect(parseDigestBody("")).toEqual({ headline: null, bullets: [], paragraphs: [] });
   });
   it("skips empty bullets and marker-only lines", () => {
-    expect(parseDigestBody("- \n*\n・\n•\n- 本文")).toEqual({ bullets: ["本文"], paragraphs: [] });
+    expect(parseDigestBody("- \n*\n・\n•\n- 本文")).toEqual({ headline: null, bullets: ["本文"], paragraphs: [] });
   });
 
   it("drops horizontal rules", () => {
-    expect(parseDigestBody("---\n- 一つ\n***\n* * *\n段落")).toEqual({ bullets: ["一つ"], paragraphs: ["段落"] });
+    expect(parseDigestBody("---\n- 一つ\n***\n* * *\n段落")).toEqual({ headline: null, bullets: ["一つ"], paragraphs: ["段落"] });
   });
 
   it("strips bold markers from bullets and paragraphs", () => {
-    expect(parseDigestBody("- **重要**な点\n- __強調__です\n**全体**の傾向")).toEqual({
+    expect(parseDigestBody("- **重要**な点\n- __強調__です\n**全体**の傾向")).toEqual({ headline: null,
       bullets: ["重要な点", "強調です"],
       paragraphs: ["全体の傾向"],
     });
   });
 
   it("turns heading lines into paragraphs without hashes", () => {
-    expect(parseDigestBody("# 見出し1\n###### 見出し6\n- 項目")).toEqual({
+    expect(parseDigestBody("# 見出し1\n###### 見出し6\n- 項目")).toEqual({ headline: null,
       bullets: ["項目"],
       paragraphs: ["見出し1", "見出し6"],
     });
+  });
+});
+
+describe("parseDigestBody headline", () => {
+  it("takes a headline from the first line", () => {
+    const r = parseDigestBody("見出し: 認知症の新薬が国内で適用拡大へ\n- 新薬の話題\n- 介護報酬\n全体の傾向。");
+    expect(r.headline).toBe("認知症の新薬が国内で適用拡大へ");
+    expect(r.bullets).toEqual(["新薬の話題", "介護報酬"]);
+    expect(r.paragraphs).toEqual(["全体の傾向。"]);
+  });
+
+  it("accepts a full-width colon and surrounding spaces, ignores a headline that is not first", () => {
+    expect(parseDigestBody("  見出し：要点  \n- a").headline).toBe("要点");
+    expect(parseDigestBody("- a\n見出し: 後ろ").headline).toBeNull();
+    expect(parseDigestBody("見出し: \n- a").headline).toBeNull();
+    expect(parseDigestBody("- a\n- b").headline).toBeNull();
+  });
+
+  it("keeps a long headline whole and skips blank lines before it", () => {
+    const long = "あ".repeat(80);
+    expect(parseDigestBody(`\n\n見出し: ${long}\n- a`).headline).toBe(long);
+  });
+
+  it("keeps the body as before when there is no headline", () => {
+    const r = parseDigestBody("- a\n本文");
+    expect(r.headline).toBeNull();
+    expect(r.bullets).toEqual(["a"]);
+    expect(r.paragraphs).toEqual(["本文"]);
+  });
+
+  it("drops an empty headline line without putting it in the body", () => {
+    const r = parseDigestBody("見出し: \n- a");
+    expect(r.paragraphs).toEqual([]);
+    expect(r.bullets).toEqual(["a"]);
   });
 });
 

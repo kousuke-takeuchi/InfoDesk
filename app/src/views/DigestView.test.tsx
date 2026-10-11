@@ -93,14 +93,14 @@ describe("DigestView", () => {
   it("shows the period overview above the sections", async () => {
     const ipc = setupIpc({ get_digests: () => views, get_item: () => null, digest_stats: () => WEEK_STATS });
     renderAll();
-    expect(await screen.findByRole("img", { name: /カテゴリー別の記事数/ })).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: /カテゴリー別の記事数/ })).toBeInTheDocument();
     expect(ipc.last("digest_stats")).toEqual({ period: "day", date: "2026-10-06", topicId: null });
   });
 
   it("refetches the overview for a new period and on items-changed", async () => {
     const ipc = setupIpc({ get_digests: () => views, get_item: () => null, digest_stats: () => WEEK_STATS });
     renderAll();
-    await screen.findByRole("img", { name: /カテゴリー別の記事数/ });
+    await screen.findByRole("group", { name: /カテゴリー別の記事数/ });
     await userEvent.click(screen.getByRole("button", { name: "週" }));
     await waitFor(() => expect(ipc.last("digest_stats")).toEqual({ period: "week", date: "2026-10-06", topicId: null }));
     const before = ipc.count("digest_stats");
@@ -349,6 +349,32 @@ describe("DigestView", () => {
     expect(await screen.findByRole("button", { name: "記事11" })).toBeInTheDocument();
     expect(screen.getByText("根拠記事")).toBeInTheDocument();
   });
+  it("shows the headline, numbered points and image cards, and leaves carded articles out of the links", async () => {
+    const withImg = (a: { id: number }) => ({ ...item(a), image_url: a.id % 2 === 1 ? `https://i/${a.id}.jpg` : null });
+    const ipc = setupIpc({
+      get_digests: () => [{ scope: { category: "github" }, label: "GitHub", item_count: 6,
+        digest: digest({ body: "見出し: 今日の要点\n- 一つ目。\n- 二つ目。", item_ids: [1, 2, 3, 4, 5, 6] }) }],
+      get_item: withImg, open_item: () => undefined,
+    });
+    const { container } = renderAll();
+    expect(await screen.findByText("今日の要点")).toHaveClass("digest-headline");
+    expect(container.querySelector("ol.digest-points")?.querySelectorAll("li")).toHaveLength(2);
+    expect(container.querySelector("ul.digest-bullets")).toBeNull();
+    await waitFor(() => expect(container.querySelectorAll(".image-card")).toHaveLength(3));
+    expect(container.querySelectorAll(".digest-refs .link-btn")).toHaveLength(3);
+    expect(container.querySelector(".digest-refs")).toHaveTextContent("記事2");
+    expect(container.querySelector(".digest-refs")).not.toHaveTextContent("記事1");
+    await userEvent.click(container.querySelectorAll<HTMLElement>(".image-card")[0]);
+    expect(ipc.last("open_item")).toEqual({ id: 1 });
+  });
+
+  it("shows no headline element for a digest without one", async () => {
+    setupIpc({ get_digests: () => views, get_item: item });
+    const { container } = renderAll();
+    expect(await screen.findByText("一つ目。")).toBeInTheDocument();
+    expect(container.querySelector(".digest-headline")).toBeNull();
+  });
+
   it("refetches on items-changed so a section picks up the new article count", async () => {
     let itemCount = 0;
     const ipc = setupIpc({
