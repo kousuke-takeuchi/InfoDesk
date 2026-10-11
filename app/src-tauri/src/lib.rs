@@ -1,6 +1,7 @@
 mod commands;
 mod error;
 mod jobs;
+mod reader;
 mod scheduler;
 mod sidecar;
 mod state;
@@ -50,7 +51,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.label() != reader::READER_WINDOW
+            {
                 let state = window.app_handle().state::<AppState>();
                 if commands::settings::stay_resident(&state) {
                     api.prevent_close();
@@ -74,6 +77,13 @@ pub fn run() {
             commands::items::mark_all_read,
             commands::items::open_item,
             commands::items::open_link,
+            reader::command::open_in_reader,
+            reader::reader_back,
+            reader::reader_forward,
+            reader::reader_reload,
+            reader::reader_open_external,
+            reader::reader_close,
+            reader::reader_state,
             commands::items::sidebar_counts,
             commands::sources::list_sources,
             commands::sources::add_rss_source,

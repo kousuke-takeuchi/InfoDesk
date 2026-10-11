@@ -131,10 +131,7 @@ pub fn mark_all_read(state: State<'_, AppState>, filter: ItemFilter) -> AppResul
 #[tauri::command]
 pub fn open_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<()> {
     let url = open_item_url(&state, id)?;
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    crate::reader::open_in_reader(&app, &url)
 }
 
 /// 回答の中のリンクを既定のブラウザーで開く。http/https 以外は拒否する。

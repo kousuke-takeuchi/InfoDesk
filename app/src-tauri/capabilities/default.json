@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "InfoDesk main window",
   "windows": ["main"],
+  "webviews": ["reader-toolbar"],
   "permissions": [
     "core:default",
     "core:event:default",

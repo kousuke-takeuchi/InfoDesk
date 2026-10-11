@@ -37,6 +37,8 @@ pub struct AppState {
     pub notify: Notifier,
     pub llm: LlmFactory,
     pub chat: crate::sidecar::Sidecar,
+    /// 閲覧ウィンドウの記事ページのタイトル。
+    pub reader_title: Mutex<String>,
 }
 
 impl AppState {
@@ -50,6 +52,7 @@ impl AppState {
             notify,
             llm: Arc::new(provider_from_settings),
             chat: crate::sidecar::Sidecar::default(),
+            reader_title: Mutex::new(String::new()),
         }
     }
 
