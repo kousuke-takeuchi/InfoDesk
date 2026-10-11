@@ -19,7 +19,7 @@ describe("Overview", () => {
   it("shows totals, category bars with sparklines for a week, and topic trends", () => {
     render(<Overview stats={WEEK} error={null} />);
     expect(screen.getByText("21件")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /カテゴリー別の記事数/ })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: /カテゴリー別の記事数/ })).toBeInTheDocument();
     expect(screen.getAllByRole("img", { name: /日ごとの件数/ })).toHaveLength(3);
     const topics = screen.getByRole("list", { name: "話題の強さ" });
     const row = (name: string) => within(topics).getByText(name).closest("li")!;

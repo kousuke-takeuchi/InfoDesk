@@ -5,7 +5,7 @@ interface Row { label: string; value: number; extra?: ReactNode }
 export function BarChart({ rows, max, ariaLabel }: { rows: Row[]; max?: number; ariaLabel: string }) {
   const top = max ?? Math.max(0, ...rows.map((r) => r.value));
   return (
-    <div className="bar-chart" role="img" aria-label={ariaLabel}>
+    <div className="bar-chart" role="group" aria-label={ariaLabel}>
       {rows.map((r) => {
         const ratio = top > 0 ? r.value / top : 0;
         return (

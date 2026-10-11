@@ -5,7 +5,7 @@ import { BarChart } from "./BarChart";
 describe("BarChart", () => {
   it("draws one bar per row with the value as text", () => {
     render(<BarChart ariaLabel="カテゴリー別" rows={[{ label: "医療介護", value: 14 }, { label: "GitHub", value: 7 }, { label: "arXiv", value: 0 }]} />);
-    const fig = screen.getByRole("img", { name: "カテゴリー別" });
+    const fig = screen.getByRole("group", { name: "カテゴリー別" });
     expect(fig).toBeInTheDocument();
     expect(screen.getByText("医療介護")).toBeInTheDocument();
     expect(screen.getByText("14")).toBeInTheDocument();
