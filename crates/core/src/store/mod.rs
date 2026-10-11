@@ -5,6 +5,7 @@ mod migrate;
 mod schema;
 mod settings;
 mod sources;
+mod stats;
 mod topics;
 
 pub use digests::NewDigest;

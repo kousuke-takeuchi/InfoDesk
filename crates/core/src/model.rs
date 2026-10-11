@@ -279,3 +279,28 @@ pub struct ItemFilter {
     pub limit: u32,
     pub offset: u32,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CategoryStat {
+    pub category: Category,
+    pub count: i64,
+    /// 日の期間では空。週は7要素、月はその月の日数。期間の初日から順。
+    pub daily: Vec<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TopicStat {
+    pub topic_id: i64,
+    pub name: String,
+    pub count: i64,
+    pub prev_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DigestStats {
+    pub period: Period,
+    pub period_start: NaiveDate,
+    pub total: i64,
+    pub categories: Vec<CategoryStat>,
+    pub topics: Vec<TopicStat>,
+}
