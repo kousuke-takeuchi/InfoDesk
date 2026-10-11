@@ -23,8 +23,8 @@ Thanks for your interest. InfoDesk is a local-first desktop reader (Tauri 2 + Re
 
    ```bash
    cargo test                                   # Rust: core, CLI and app crates
-   cd app && npx vitest run                     # React UI
-   cd agent && npx vitest run && npm run typecheck   # Node sidecar
+   (cd app && npx vitest run)                   # React UI
+   (cd agent && npx vitest run && npm run typecheck)   # Node sidecar
    ```
 
    The agent script `npm test` sets `TZ=Asia/Tokyo`; use it if a date-dependent test fails.

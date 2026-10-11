@@ -1,6 +1,6 @@
-# Overview
-
 **日本語: [01-overview.ja.md](01-overview.ja.md)** | Next: [Getting Started →](02-getting-started.md)
+
+# Overview
 
 ## What is InfoDesk?
 
@@ -23,7 +23,7 @@ It is an alpha-stage personal project (version 0.1.0). macOS is the only support
 | Digest | Builds day, week and month digests per category and per topic, with an overview of counts and trends | [Digests](04-digests.md) |
 | Feed | Lists articles with filters, thumbnails, read and star marks | [Feed and Reader](05-feed-and-reader.md) |
 | Reader | Opens articles in an in-app reader window | [Feed and Reader](05-feed-and-reader.md) |
-| Chat | Lets you ask an agent about the collected articles and digests | `06-ai-chat.md` |
+| Chat | Lets you ask an agent about the collected articles and digests | [AI Chat](06-ai-chat.md) |
 
 The same data is available from the `infodesk` command line tool.
 

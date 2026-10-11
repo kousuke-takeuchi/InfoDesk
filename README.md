@@ -84,10 +84,12 @@ Read in order. Files are numbered.
 
 Each page has a Japanese twin (`*.ja.md`). Developer documentation lives in [`docs/internal/`](docs/internal/README.md) and is written in Japanese. The design spec and implementation plans are under [`docs/superpowers/`](docs/superpowers/).
 
-## Architecture in one line
+## Architecture at a glance
 
 ```
-React UI / chat panel / CLI  →  Tauri commands  →  infodesk-core (collect, store, summarize)  →  SQLite
+React UI    →  Tauri commands  →  infodesk-core (collect, store, summarize)  →  SQLite
+CLI         →  infodesk-core
+Chat panel  →  Node sidecar (127.0.0.1)  →  app binary in --cli mode  →  infodesk-core
 ```
 
 The `infodesk-core` library does the work, the `infodesk` CLI and the Tauri app are thin front ends over it, and the chat agent is a Node sidecar bound to 127.0.0.1. Details: [internal/architecture.md](docs/internal/architecture.md).

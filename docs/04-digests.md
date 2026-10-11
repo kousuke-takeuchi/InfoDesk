@@ -1,6 +1,6 @@
-# Digests
-
 **日本語: [04-digests.ja.md](04-digests.ja.md)** | ← [Sources and Topics](03-sources-and-topics.md) | Next: [Feed and Reader →](05-feed-and-reader.md)
+
+# Digests
 
 A digest is a Japanese summary of one period. Open it with the **Digest** switch in the toolbar.
 
@@ -71,9 +71,9 @@ Press **Regenerate** in the heading to rebuild the visible sections. Each sectio
 | State | Meaning | What you can do |
 |---|---|---|
 | Generating | The model is writing the digest | Wait |
-| Pending | A generation failed and will be retried at the next scheduled run. The last error is shown | **Retry now** |
+| Pending | A generation failed and will be retried automatically. The last error is shown | **Retry now** |
 | Failed | Generation failed 3 times. The number of attempts and the last error are shown | Check the LLM settings, then **Retry** |
 | Not generated yet | There are articles but no digest | **Generate** |
 | No articles | Nothing was collected in this period | None |
 
-A failed attempt goes back to pending until the third failure, after which it is marked failed. At the end of each scheduled run, pending digests are retried automatically. A successful run recovers the digest.
+A failed attempt goes back to pending until the third failure, after which it is marked failed. The scheduler retries pending digests automatically, at most once every 15 minutes and only when no scheduled job is due. Failed digests are retried only when you press **Retry** (or the retry button in Settings, Schedule). A successful run recovers the digest.

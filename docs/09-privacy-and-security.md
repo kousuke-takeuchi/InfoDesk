@@ -79,7 +79,7 @@ default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:*; im
 Chat runs in a separate Node process that the app starts. It is not a public server.
 
 - It listens on `127.0.0.1` only, on a free port chosen at start.
-- The app creates a random 16-byte token (32 hex characters, read from `/dev/urandom`) when it starts and passes it to the sidecar and to the app's page. Every request must send `Authorization: Bearer <token>`. The comparison is constant-time. A wrong or missing token gets 401.
+- Each time the app starts the sidecar, it creates a random 16-byte token (32 hex characters, read from `/dev/urandom`) and passes it to the sidecar and to the app's page. Every request must send `Authorization: Bearer <token>`. The comparison is constant-time. A wrong or missing token gets 401.
 - CORS accepts only the origins `tauri://localhost` and `http://localhost:1420` (the development server). A request from any other origin gets 403.
 - Only `GET /health` and `POST /chat` exist. Request bodies over 5 MiB are refused (413), and an invalid body gets 400.
 - The sidecar reads your data by running the `infodesk` CLI against the app database. It has no write tool.

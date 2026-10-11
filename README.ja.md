@@ -84,10 +84,12 @@ cargo run -p infodesk -- digest day
 
 各ページに英語版があります (`*.md`)。開発者向けのドキュメントは [`docs/internal/`](docs/internal/README.md) にあり、日本語で書かれています。設計仕様と実装計画は [`docs/superpowers/`](docs/superpowers/) にあります。
 
-## アーキテクチャを一行で
+## アーキテクチャの概要
 
 ```
-React UI / チャットパネル / CLI  →  Tauri コマンド  →  infodesk-core (収集・保存・要約)  →  SQLite
+React UI        →  Tauri コマンド  →  infodesk-core (収集・保存・要約)  →  SQLite
+CLI             →  infodesk-core
+チャットパネル  →  Node のサイドカー (127.0.0.1)  →  --cli モードのアプリ本体  →  infodesk-core
 ```
 
 処理は `infodesk-core` ライブラリが担い、`infodesk` CLI と Tauri アプリはその薄いフロントエンドです。チャットのエージェントは 127.0.0.1 に bind する Node のサイドカーです。詳細: [internal/architecture.md](docs/internal/architecture.md)。

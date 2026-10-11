@@ -1,6 +1,6 @@
-# Feed and Reader
-
 **日本語: [05-feed-and-reader.ja.md](05-feed-and-reader.ja.md)** | ← [Digests](04-digests.md) | Next: [AI Chat →](06-ai-chat.md)
+
+# Feed and Reader
 
 ## 1. The feed
 
@@ -63,7 +63,7 @@ Rules for what opens where:
 
 - Only `http` and `https` addresses open. Navigation inside the reader to any other scheme is blocked.
 - Links that ask for a new window (`target="_blank"`) open in the same reader window.
-- Addresses that point at your own machine or local network (localhost, loopback, private and link-local ranges) are not loaded in the reader. They open in your default browser instead.
+- Addresses that point at your own machine or local network (localhost, loopback, private and link-local ranges) are not loaded in the reader. An article with such an address opens in your default browser instead. A link to such an address in a chat answer is not opened.
 - Article pages get no access to the app's internal commands. See the privacy page for the isolation details.
 
 To ask the chat about an article, press the chat button on its row. See [AI Chat](06-ai-chat.md).

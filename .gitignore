@@ -5,3 +5,4 @@ app/node_modules/
 app/dist/
 agent/node_modules/
 agent/dist/
+scripts/screenshots/out/

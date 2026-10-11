@@ -1,6 +1,6 @@
-# Sources and Topics
-
 **日本語: [03-sources-and-topics.ja.md](03-sources-and-topics.ja.md)** | ← [Getting Started](02-getting-started.md) | Next: [Digests →](04-digests.md)
+
+# Sources and Topics
 
 A **source** is a place InfoDesk collects articles from. Each source belongs to one of seven fixed **categories**. A **topic** is a named list of keywords that cuts across categories.
 
@@ -31,7 +31,7 @@ Open **Settings** and choose the **Sources** tab.
 *The Sources tab (sample data).*
 
 - Use the toggle to enable or disable a source. Disabled sources are not collected.
-- Press the pencil to edit the display name, category and config value. For an RSS source the config value is the feed URL. To change the URL of an RSS source, delete it and add it again.
+- Press the pencil to edit the display name and the category. The config value (for an RSS source, the feed URL) is shown but cannot be changed. To change the URL of an RSS source, delete it and add it again.
 - Press the trash can to delete a source. Articles already collected are kept.
 - Each row shows the last fetch time and a status (item count, error, or disabled).
 
@@ -39,7 +39,7 @@ Open **Settings** and choose the **Sources** tab.
 
 1. Press **Add RSS** (RSSを追加).
 2. Enter the feed URL, a display name (optional) and a category.
-3. InfoDesk fetches the feed once to check it. The **Add** button is enabled only when the feed parses as RSS or Atom. If the display name is empty, the feed title is used.
+3. Press **Add**. InfoDesk fetches the feed once to check it, and saves the source only when the feed parses as RSS or Atom. Otherwise the dialog shows the error and nothing is saved. If the display name is empty, the feed title is used.
 
 An added feed behaves like a built-in one: it can be toggled, edited, collected and summarized.
 

@@ -33,7 +33,7 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 - "収集": the collection interval (1, 3, 6 or 12 hours in the menu), the next collection time, and a "collect now" button.
 - "要約の生成": the daily time, the weekly day and time, and the monthly time (on the 1st). At the daily time the previous day's digest is finalized and the current week and month are rebuilt. Today's daily digest is refreshed after every collection.
 - "起動": launch at login and stay resident.
-- "保留中の要約": the last error, and a button to retry digests that are pending or failed. Pending digests are also retried at each scheduled run.
+- "保留中の要約": the last error, and a button to retry digests that are pending or failed. The scheduler also retries pending digests on its own, at most once every 15 minutes when no other job is due. Failed digests are retried only with this button or the one on the digest.
 
 A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake.
 
@@ -64,7 +64,7 @@ An invalid time or weekday value is ignored and the default is used.
 
 The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
 
-The app only accepts the keys above. Setting `app.launch_at_login` is done with the toggle, because it also registers the login item. With the [CLI](08-cli.md), `config set` writes any key without checking it, so type carefully.
+The app only accepts the keys above. Setting `app.launch_at_login` is done with the toggle, because it also registers the macOS LaunchAgent. With the [CLI](08-cli.md), `config set` writes any key without checking it, so type carefully.
 
 ## Menu bar
 
@@ -80,5 +80,5 @@ InfoDesk puts an icon in the macOS menu bar. Clicking it opens this menu:
 ## Stay resident and launch at login
 
 - **Stay resident** (`app.stay_resident`, on by default): closing the main window hides it. Collection and digest jobs keep running in the menu bar. Turn it off to quit when the window closes. The reader window always closes normally.
-- **Launch at login** (`app.launch_at_login`, off by default): starts InfoDesk when you log in, in the menu bar, with no window. It uses the macOS login item.
+- **Launch at login** (`app.launch_at_login`, off by default): starts InfoDesk when you log in, in the menu bar, with no window. It registers a macOS LaunchAgent that starts the app with `--hidden`.
 - To quit completely, use "InfoDesk を終了" in the menu bar.

@@ -23,8 +23,8 @@
 
    ```bash
    cargo test                                   # Rust: core、CLI、アプリの各クレート
-   cd app && npx vitest run                     # React UI
-   cd agent && npx vitest run && npm run typecheck   # Node サイドカー
+   (cd app && npx vitest run)                   # React UI
+   (cd agent && npx vitest run && npm run typecheck)   # Node サイドカー
    ```
 
    agent の `npm test` は `TZ=Asia/Tokyo` を設定します。日付に依存するテストが落ちたときはこちらを使ってください。
