@@ -3,8 +3,17 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DigestView } from "./DigestView";
 import { EVENTS } from "../api";
-import { emitEvent, setupIpc } from "../test/ipc";
-import type { AppStatus, Digest, DigestView as DV } from "../types";
+import { emitEvent, setupIpc as baseSetupIpc, type IpcHandlers } from "../test/ipc";
+import type { AppStatus, Digest, DigestStats, DigestView as DV } from "../types";
+
+const EMPTY_STATS: DigestStats = { period: "day", period_start: "2026-10-06", total: 0, categories: [], topics: [] };
+const WEEK_STATS: DigestStats = {
+  period: "week", period_start: "2026-10-05", total: 7,
+  categories: [{ category: "github", count: 7, daily: [1, 1, 1, 1, 1, 1, 1] }],
+  topics: [{ topic_id: 1, name: "認知症", count: 3, prev_count: 1 }],
+};
+/** どのテストでも概観の取得が呼ばれるので、既定の digest_stats を足す。 */
+const setupIpc = (handlers: IpcHandlers) => baseSetupIpc({ digest_stats: () => EMPTY_STATS, ...handlers });
 
 const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null };
 const digest = (over: Partial<Digest>): Digest => ({
@@ -79,6 +88,31 @@ describe("DigestView", () => {
     setupIpc({ get_digests: () => { throw { message: "unknown period 'year'" }; } });
     renderAll();
     expect(await screen.findByRole("alert")).toHaveTextContent("unknown period 'year'");
+  });
+
+  it("shows the period overview above the sections", async () => {
+    const ipc = setupIpc({ get_digests: () => views, get_item: () => null, digest_stats: () => WEEK_STATS });
+    renderAll();
+    expect(await screen.findByRole("img", { name: /カテゴリー別の記事数/ })).toBeInTheDocument();
+    expect(ipc.last("digest_stats")).toEqual({ period: "day", date: "2026-10-06", topicId: null });
+  });
+
+  it("refetches the overview for a new period and on items-changed", async () => {
+    const ipc = setupIpc({ get_digests: () => views, get_item: () => null, digest_stats: () => WEEK_STATS });
+    renderAll();
+    await screen.findByRole("img", { name: /カテゴリー別の記事数/ });
+    await userEvent.click(screen.getByRole("button", { name: "週" }));
+    await waitFor(() => expect(ipc.last("digest_stats")).toEqual({ period: "week", date: "2026-10-06", topicId: null }));
+    const before = ipc.count("digest_stats");
+    await emitEvent(EVENTS.items);
+    await waitFor(() => expect(ipc.count("digest_stats")).toBe(before + 1));
+  });
+
+  it("reports an overview failure without hiding the sections", async () => {
+    setupIpc({ get_digests: () => views, get_item: () => null, digest_stats: () => { throw { message: "stats failed" }; } });
+    renderAll();
+    expect(await screen.findByText("stats failed")).toBeInTheDocument();
+    expect(await screen.findByText("一つ目。")).toBeInTheDocument();
   });
 
   it("refetches digests when digests-changed fires", async () => {

@@ -1,0 +1,15 @@
+.overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); gap: 16px 24px; padding: 12px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.overview h3 { font-size: 13px; margin: 0 0 8px; color: var(--text-secondary); font-weight: 600; }
+.bar-chart { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) 36px auto; align-items: center; gap: 8px; font-size: 12px; }
+.bar-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { height: 8px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.bar-value { text-align: right; font-variant-numeric: tabular-nums; }
+.sparkline { color: var(--text-tertiary); }
+.topic-trends { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.topic-trends li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.topic-trends li[data-trend="up"] .delta { color: var(--success); }
+.topic-trends li[data-trend="down"] .delta { color: var(--danger); }
+.topic-trends .delta { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+@media (max-width: 1139px) { .overview { grid-template-columns: minmax(0, 1fr); } }

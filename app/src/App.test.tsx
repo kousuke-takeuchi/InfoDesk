@@ -23,6 +23,7 @@ function handlers(over: IpcHandlers = {}): IpcHandlers {
     list_topics: () => TOPICS,
     collect_now: () => undefined,
     get_digests: () => [],
+    digest_stats: () => ({ period: "day", period_start: "2026-10-06", total: 0, categories: [], topics: [] }),
     get_item: () => null,
     chat_endpoint: () => ({ status: "starting" }),
     list_chat_threads: () => [],

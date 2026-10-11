@@ -9,7 +9,8 @@ import { useTauriEvent } from "../hooks/useTauriEvent";
 import type { ChatAttachment, ChatPeriod } from "../chat/context";
 import { localDateString, periodHeading } from "../lib/dates";
 import { digestDisplay, parseDigestBody } from "../lib/digest";
-import { errorMessage, type AppStatus, type DigestScope, type DigestView as DV, type Item, type Period, type Topic } from "../types";
+import { Overview } from "./digest/Overview";
+import { errorMessage, type AppStatus, type DigestScope, type DigestStats, type DigestView as DV, type Item, type Period, type Topic } from "../types";
 
 const PERIODS: { id: Period; label: string }[] = [
   { id: "day", label: "今日" }, { id: "week", label: "週" }, { id: "month", label: "月" },
@@ -73,7 +74,9 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
   const [loaded, setLoaded] = useState<{ key: string; views: DV[] } | null>(null);
   const [requests, setRequests] = useState<{ context: string; keys: ReadonlySet<string> }>({ context: "", keys: NO_KEYS });
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<{ key: string; value: DigestStats | null; error: string | null } | null>(null);
   const latestLoad = useRef(0);
+  const latestStats = useRef(0);
   // 完了通知による再取得が、応答を反映する前に別の再取得に追い越されても、依頼中の印を外し損ねないよう覚えておく。
   const settlePending = useRef(false);
   const today = new Date();
@@ -112,6 +115,19 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
       });
   }, [period, date, topicId, loadKey]);
 
+  /** 概観の統計。要約とは別に取り、最新の要求だけを反映する。 */
+  const loadStats = useCallback(() => {
+    const mine = ++latestStats.current;
+    api.digestStats(period, date, topicId)
+      .then((v) => { if (latestStats.current === mine) setStats({ key: loadKey, value: v, error: null }); })
+      .catch((e) => { if (latestStats.current === mine) setStats({ key: loadKey, value: null, error: errorMessage(e) }); });
+  }, [period, date, topicId, loadKey]);
+
+  useEffect(() => {
+    loadStats();
+    return () => { latestStats.current++; };
+  }, [loadStats]);
+
   useEffect(() => {
     setError(null);
     load(false);
@@ -121,7 +137,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
   // status は prop で届く。再取得は完了通知 (digests-changed) と記事の増減 (items-changed) のとき。
   useTauriEvent(EVENTS.digests, () => load(true));
   // 収集で item_count が変わる。生成ジョブの完了ではないので、依頼中の印は外さない。
-  useTauriEvent(EVENTS.items, () => load(false));
+  useTauriEvent(EVENTS.items, () => { load(false); loadStats(); });
 
   const fail = (e: unknown) => setError(errorMessage(e));
   const request = (scopes: DigestScope[]) => {
@@ -162,6 +178,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
             <RotateCw size={14} /> 再生成
           </button>
         </div>
+        <Overview stats={stats && stats.key === loadKey ? stats.value : null} error={stats && stats.key === loadKey ? stats.error : null} />
         {views === null && !error && (
           <div className="state-box"><Loader size={15} className="spin" /><span className="grow">読み込み中…</span></div>
         )}
