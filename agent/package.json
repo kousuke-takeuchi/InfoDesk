@@ -13,7 +13,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT OR Apache-2.0",
   "type": "module",
   "private": "true",
   "engines": {
