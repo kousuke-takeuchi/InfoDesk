@@ -5,7 +5,8 @@ const BULLET = /^\s*(?:[-*]\s+|[・•]\s*|\d+[.)]\s+)(.*)$/;
 const RULE = /^(?:[-*_]\s*){3,}$/;
 const MARKER_ONLY = /^[-*・•]$/;
 const HEADING = /^#{1,6}\s+(.*)$/;
-const HEADLINE = /^見出し\s*[:：]\s*(.*)$/;
+// 見出しの行。見出し記号 (#) や、ラベルを囲む太字 (**見出し**: / **見出し:** / **見出し: x**) も受け付ける。
+const HEADLINE = /^(?:#{1,6}\s+)?(\*\*|__)?見出し\s*(?:\1)?\s*[:：]\s*(?:\1)?\s*(.*)$/;
 const BOLD = /(\*\*|__)(.+?)\1/g;
 
 const stripBold = (text: string) => text.replace(BOLD, "$2").trim();
@@ -23,7 +24,10 @@ export function parseDigestBody(body: string): { headline: string | null; bullet
       first = false;
       const hm = HEADLINE.exec(line);
       if (hm) {
-        headline = hm[1].trim() || null;
+        let text = stripBold(hm[2]);
+        // 行全体を太字で囲んだときに残る閉じ記号を外す。
+        if (hm[1] && text.endsWith(hm[1])) text = text.slice(0, -hm[1].length).trim();
+        headline = text || null;
         continue;
       }
     }

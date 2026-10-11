@@ -75,6 +75,26 @@ describe("parseDigestBody headline", () => {
   });
 });
 
+describe("parseDigestBody decorated headline", () => {
+  it.each([
+    ["**見出し**: 要点", "要点"],
+    ["**見出し:** 要点", "要点"],
+    ["__見出し__：要点", "要点"],
+    ["# 見出し: 要点", "要点"],
+    ["## **見出し**: 要点", "要点"],
+    ["**見出し: 要点**", "要点"],
+    ["見出し: 今日の**要点**", "今日の要点"],
+  ])("reads %s as a headline and keeps it out of the body", (first, headline) => {
+    const r = parseDigestBody(`${first}\n- a\n本文`);
+    expect(r).toEqual({ headline, bullets: ["a"], paragraphs: ["本文"] });
+  });
+
+  it("drops an empty decorated headline line", () => {
+    expect(parseDigestBody("# 見出し:\n- a")).toEqual({ headline: null, bullets: ["a"], paragraphs: [] });
+    expect(parseDigestBody("**見出し:**\n- a")).toEqual({ headline: null, bullets: ["a"], paragraphs: [] });
+  });
+});
+
 describe("digestDisplay", () => {
   it("maps statuses", () => {
     expect(digestDisplay(view(digest({ body: "x" })), status).kind).toBe("done");

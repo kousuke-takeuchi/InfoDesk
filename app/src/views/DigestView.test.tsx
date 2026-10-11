@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DigestView } from "./DigestView";
 import { EVENTS } from "../api";
@@ -366,6 +366,50 @@ describe("DigestView", () => {
     expect(container.querySelector(".digest-refs")).not.toHaveTextContent("記事1");
     await userEvent.click(container.querySelectorAll<HTMLElement>(".image-card")[0]);
     expect(ipc.last("open_item")).toEqual({ id: 1 });
+  });
+
+  it("falls back to a text link when a card image fails to load", async () => {
+    const withImg = (a: { id: number }) => ({ ...item(a), image_url: `https://i/${a.id}.jpg` });
+    setupIpc({
+      get_digests: () => [{ scope: { category: "github" }, label: "GitHub", item_count: 3,
+        digest: digest({ body: "- 一つ目。", item_ids: [1, 2, 3] }) }],
+      get_item: withImg,
+    });
+    const { container } = renderAll();
+    await waitFor(() => expect(container.querySelectorAll(".image-card")).toHaveLength(3));
+    expect(container.querySelector(".digest-refs")).toBeNull();
+    fireEvent.error(container.querySelectorAll(".image-card img")[0]);
+    expect(container.querySelectorAll(".image-card")).toHaveLength(2);
+    const refs = within(container.querySelector<HTMLElement>(".digest-refs")!);
+    expect(refs.getByRole("button", { name: "記事1" })).toBeInTheDocument();
+    expect(refs.queryByText(/他/)).not.toBeInTheDocument();
+  });
+
+  it("still shows the remaining count when every fetched article is carded", async () => {
+    const withImg = (a: { id: number }) => a.id <= 3 ? { ...item(a), image_url: `https://i/${a.id}.jpg` } : null;
+    setupIpc({
+      get_digests: () => [{ scope: { category: "github" }, label: "GitHub", item_count: 5,
+        digest: digest({ body: "- 一つ目。", item_ids: [1, 2, 3, 4, 5] }) }],
+      get_item: withImg,
+    });
+    const { container } = renderAll();
+    await waitFor(() => expect(container.querySelectorAll(".image-card")).toHaveLength(3));
+    const refs = container.querySelector(".digest-refs");
+    expect(refs).toHaveTextContent("根拠記事");
+    expect(refs).toHaveTextContent("他 2件");
+    expect(refs!.querySelectorAll(".link-btn")).toHaveLength(0);
+  });
+
+  it("strips bold from a headline and keeps a decorated headline line out of the body", async () => {
+    setupIpc({
+      get_digests: () => [{ scope: { category: "github" }, label: "GitHub", item_count: 0,
+        digest: digest({ body: "**見出し:** 今日の**要点**\n- 一つ目。", item_ids: [] }) }],
+      get_item: item,
+    });
+    const { container } = renderAll();
+    expect(await screen.findByText("今日の要点")).toHaveClass("digest-headline");
+    expect(container.querySelector(".digest-points")).toHaveTextContent("一つ目。");
+    expect(container.querySelector(".digest-section")).not.toHaveTextContent("見出し");
   });
 
   it("shows no headline element for a digest without one", async () => {

@@ -42,9 +42,6 @@
 .digest-section { max-width: 720px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
 .digest-head { display: flex; align-items: center; gap: 10px; }
 .digest-head h2 { font-size: 15px; margin: 0; }
-.digest-bullets { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.digest-bullets li { display: flex; gap: 8px; line-height: 1.6; }
-.digest-bullets li::before { content: "•"; color: var(--text-tertiary); }
 .digest-refs { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding-left: 16px; font-size: 12px; }
 
 /* フィード */

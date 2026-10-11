@@ -50,6 +50,8 @@ function selectionKey(s: Selection): string {
 
 function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => void }) {
   const [items, setItems] = useState<Item[]>([]);
+  // 画像が読み込めなかった記事。カードから外し、文字のリンクに戻す。
+  const [broken, setBroken] = useState<ReadonlySet<number>>(new Set());
   // 再読み込みのたびに配列は作り直される。中身が同じなら取り直さないよう、id の並びをキーにする。
   const refKey = ids.slice(0, REF_FETCH).join(",");
   useEffect(() => {
@@ -60,14 +62,15 @@ function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => vo
     return () => { alive = false; };
   }, [refKey]);
   if (items.length === 0) return null;
-  const carded = new Set(cardItems(items).map((i) => i.id));
+  const carded = new Set(cardItems(items).filter((i) => !broken.has(i.id)).map((i) => i.id));
   const links = items.filter((i) => !carded.has(i.id));
   const shown = links.slice(0, REF_LIMIT);
   const more = ids.length - carded.size - shown.length;
   return (
     <>
-      <ImageCards items={items} onOpen={onOpen} />
-      {shown.length > 0 && (
+      <ImageCards items={items} broken={broken} onBroken={(id) => setBroken((prev) => new Set(prev).add(id))} onOpen={onOpen} />
+      {/* リンクが全部カードになっても、残りの件数は出す。 */}
+      {(shown.length > 0 || more > 0) && (
         <div className="digest-refs">
           <span className="text-tertiary tiny">根拠記事</span>
           {shown.map((it) => <button key={it.id} className="link-btn" onClick={() => onOpen(it.id)}>{it.title}</button>)}

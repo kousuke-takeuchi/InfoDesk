@@ -12,7 +12,7 @@ const item = (id: number, image_url: string | null): Item => ({
 describe("ImageCards", () => {
   it("shows up to three https-image articles as cards in order and opens on click", () => {
     const onOpen = vi.fn();
-    render(<ImageCards items={[item(1, null), item(2, "https://i/2.jpg"), item(3, "http://i/3.jpg"), item(4, "https://i/4.jpg"), item(5, "https://i/5.jpg"), item(6, "https://i/6.jpg")]} onOpen={onOpen} />);
+    render(<ImageCards items={[item(1, null), item(2, "https://i/2.jpg"), item(3, "http://i/3.jpg"), item(4, "https://i/4.jpg"), item(5, "https://i/5.jpg"), item(6, "https://i/6.jpg")]} broken={new Set()} onBroken={() => {}} onOpen={onOpen} />);
     const cards = screen.getAllByRole("button");
     expect(cards.map((c) => c.textContent)).toEqual([expect.stringContaining("記事2"), expect.stringContaining("記事4"), expect.stringContaining("記事5")]);
     const img = cards[0].querySelector("img")!;
@@ -23,11 +23,15 @@ describe("ImageCards", () => {
     expect(onOpen).toHaveBeenCalledWith(4);
   });
 
-  it("hides a card whose image fails and renders nothing without images", () => {
-    const { container, rerender } = render(<ImageCards items={[item(2, "https://i/2.jpg")]} onOpen={() => {}} />);
+  it("reports a failed image, hides broken cards and renders nothing without images", () => {
+    const onBroken = vi.fn();
+    const items = [item(2, "https://i/2.jpg"), item(3, "https://i/3.jpg")];
+    const { container, rerender } = render(<ImageCards items={items} broken={new Set()} onBroken={onBroken} onOpen={() => {}} />);
     fireEvent.error(container.querySelector("img")!);
-    expect(container.querySelector(".image-card")).toBeNull();
-    rerender(<ImageCards items={[item(1, null)]} onOpen={() => {}} />);
+    expect(onBroken).toHaveBeenCalledWith(2);
+    rerender(<ImageCards items={items} broken={new Set([2])} onBroken={onBroken} onOpen={() => {}} />);
+    expect(screen.getAllByRole("button").map((c) => c.textContent)).toEqual([expect.stringContaining("記事3")]);
+    rerender(<ImageCards items={[item(1, null)]} broken={new Set()} onBroken={onBroken} onOpen={() => {}} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
