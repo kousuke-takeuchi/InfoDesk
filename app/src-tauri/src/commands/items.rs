@@ -128,8 +128,9 @@ pub fn mark_all_read(state: State<'_, AppState>, filter: ItemFilter) -> AppResul
     mark_all_read_impl(&state, filter)
 }
 
+/// 閲覧ウィンドウを作るので async にする (同期コマンドはメインスレッドで動き、Windows で固まる)。
 #[tauri::command]
-pub fn open_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<()> {
+pub async fn open_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<()> {
     let url = open_item_url(&state, id)?;
     crate::reader::open_in_reader(&app, &url)
 }

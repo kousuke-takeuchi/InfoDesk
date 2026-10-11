@@ -1,8 +1,10 @@
+use std::net::{IpAddr, Ipv4Addr};
+
 use serde::Serialize;
-use tauri::webview::{NewWindowResponse, WebviewBuilder};
+use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
 use tauri::{
-    AppHandle, Emitter, EventTarget, LogicalPosition, LogicalSize, Manager, Runtime, State, Url,
-    Webview, WebviewUrl, Window,
+    AppHandle, Emitter, EventTarget, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webview,
+    WebviewUrl, Window,
 };
 use tauri_plugin_opener::OpenerExt;
 
@@ -29,9 +31,57 @@ pub fn reader_layout(width: f64, height: f64) -> (Rect, Rect) {
     )
 }
 
-/// 閲覧ウィンドウの中で移動してよい URL (http/https だけ)。
+/// アプリ自身や手元のネットワークを指すホストか。localhost 系の名前と、
+/// ループバック・プライベート・リンクローカル・未指定・マルチキャストの IP を含む。
+/// これらはアプリのオリジン (tauri.localhost や開発サーバー) と重なり得るので、
+/// 記事ページに読み込ませない (読み込むと IPC が使えてしまう)。
+fn is_local_host(url: &Url) -> bool {
+    let Some(host) = url.host_str().filter(|h| !h.is_empty()) else {
+        return true;
+    };
+    // IPv6 は "[::1]" の形で返る
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    match bare.parse::<IpAddr>() {
+        Err(_) => {
+            let d = host.trim_end_matches('.').to_ascii_lowercase();
+            d == "localhost" || d.ends_with(".localhost")
+        }
+        Ok(IpAddr::V4(ip)) => is_local_ipv4(ip),
+        Ok(IpAddr::V6(ip)) => {
+            if let Some(v4) = ip.to_ipv4_mapped() {
+                return is_local_ipv4(v4);
+            }
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_multicast()
+                || ip.is_unicast_link_local()
+                || ip.is_unique_local()
+        }
+    }
+}
+
+fn is_local_ipv4(ip: Ipv4Addr) -> bool {
+    ip.is_loopback()
+        || ip.is_private()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || ip.is_broadcast()
+}
+
+/// 閲覧ウィンドウの中で移動してよい URL (http/https で、手元のホストではないもの)。
 pub fn allow_navigation(url: &Url) -> bool {
-    matches!(url.scheme(), "http" | "https")
+    matches!(url.scheme(), "http" | "https") && !is_local_host(url)
+}
+
+/// 閲覧ウィンドウで開いてよい URL かを確かめる。
+pub fn ensure_reader_url(url: &str) -> AppResult<()> {
+    ensure_http_url(url)?;
+    let parsed = Url::parse(url).map_err(|e| e.to_string())?;
+    if !allow_navigation(&parsed) {
+        return Err(format!("このアドレスは閲覧ウィンドウで開けません: {url}").into());
+    }
+    Ok(())
 }
 
 /// ツールバーに送る、表示中のページの状態。
@@ -88,7 +138,7 @@ fn relayout<R: Runtime>(app: &AppHandle<R>, window: &Window<R>) {
 
 /// 記事を閲覧ウィンドウで開く。窓が無ければ作り、あれば記事ページを移動して前面に出す。
 pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()> {
-    ensure_http_url(url)?;
+    ensure_reader_url(url)?;
     let target = Url::parse(url).map_err(|e| e.to_string())?;
     if let Some(content) = app.get_webview(READER_CONTENT) {
         set_title(&content, String::new());
@@ -127,7 +177,13 @@ pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()
             }
             NewWindowResponse::Deny
         })
-        .on_page_load(|webview, _payload| emit_state(&webview))
+        .on_page_load(|webview, payload| {
+            // 前のページの題名を残さない
+            if let PageLoadEvent::Started = payload.event() {
+                set_title(&webview, String::new());
+            }
+            emit_state(&webview);
+        })
         .on_document_title_changed(|webview, title| {
             set_title(&webview, title);
             emit_state(&webview);
@@ -139,7 +195,10 @@ pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()
     )?;
     let (app2, window2) = (app.clone(), window.clone());
     window.on_window_event(move |e| {
-        if let tauri::WindowEvent::Resized(_) = e {
+        if matches!(
+            e,
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
+        ) {
             relayout(&app2, &window2);
         }
     });
@@ -149,15 +208,16 @@ pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()
 fn content_webview<R: Runtime>(app: &AppHandle<R>) -> AppResult<Webview<R>> {
     Ok(app
         .get_webview(READER_CONTENT)
-        .ok_or_else(|| "reader is not open".to_string())?)
+        .ok_or_else(|| "閲覧ウィンドウが開いていません".to_string())?)
 }
 
 /// フロントエンドから呼ぶ `open_in_reader` コマンド。関数名の衝突を避けるため別モジュールに置く。
 pub mod command {
     use super::*;
 
+    /// 窓を作るので async にする (同期コマンドはメインスレッドで動き、Windows で固まる)。
     #[tauri::command]
-    pub fn open_in_reader(app: AppHandle, url: String) -> AppResult<()> {
+    pub async fn open_in_reader(app: AppHandle, url: String) -> AppResult<()> {
         super::open_in_reader(&app, &url)
     }
 }
@@ -191,14 +251,15 @@ pub fn reader_open_external(app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub fn reader_close(app: AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_window(READER_WINDOW) {
-        w.close()?;
+        // close() と違い、すぐ続く open_in_reader の前に確実に消える
+        w.destroy()?;
     }
     Ok(())
 }
 
 /// ツールバーが読み込まれた直後に最新の状態を取る。
 #[tauri::command]
-pub fn reader_state(app: AppHandle, _state: State<'_, AppState>) -> AppResult<ReaderState> {
+pub fn reader_state(app: AppHandle) -> AppResult<ReaderState> {
     Ok(current_state(&content_webview(&app)?))
 }
 
@@ -232,6 +293,42 @@ mod tests {
         ] {
             assert!(!allow_navigation(&Url::parse(bad).unwrap()), "{bad}");
         }
+    }
+
+    const LOCAL_URLS: [&str; 12] = [
+        "http://tauri.localhost/",
+        "https://tauri.localhost/x",
+        "http://localhost:1420/",
+        "http://LOCALHOST./",
+        "http://127.0.0.1:8080/",
+        "http://[::1]/",
+        "http://10.0.0.1/",
+        "http://192.168.1.2/",
+        "http://169.254.169.254/",
+        "http://0.0.0.0/",
+        "http://[::ffff:127.0.0.1]/",
+        "http://[fe80::1]/",
+    ];
+
+    #[test]
+    fn navigation_refuses_local_and_private_hosts() {
+        for bad in LOCAL_URLS {
+            assert!(!allow_navigation(&Url::parse(bad).unwrap()), "{bad}");
+        }
+        assert!(allow_navigation(
+            &Url::parse("https://news.example.com/a").unwrap()
+        ));
+        assert!(allow_navigation(&Url::parse("http://8.8.8.8/").unwrap()));
+    }
+
+    #[test]
+    fn open_in_reader_refuses_local_and_private_hosts() {
+        for bad in LOCAL_URLS {
+            let err = ensure_reader_url(bad).unwrap_err().to_string();
+            assert!(err.contains("閲覧ウィンドウで開けません"), "{bad}: {err}");
+        }
+        assert!(ensure_reader_url("https://news.example.com/a").is_ok());
+        assert!(ensure_reader_url("javascript:alert(1)").is_err());
     }
 
     #[test]
