@@ -33,14 +33,14 @@ const PROVIDER_NAME: Record<ProviderId, string> = { ollama: "Ollama", claude: "C
 
 const HTTP_URL = /^https?:\/\//i;
 
-/** 回答の中のリンク。アプリの画面を置き換えないよう、http(s) だけを既定のブラウザーで開く。 */
+/** 回答の中のリンク。アプリの画面を置き換えないよう、http(s) だけをアプリ内の閲覧ウィンドウで開く。 */
 function AnswerLink({ node: _node, href, children, ...rest }: ComponentPropsWithoutRef<"a"> & { node?: unknown }) {
   if (!href || !HTTP_URL.test(href)) return <span>{children}</span>;
   return (
     <a
       {...rest}
       href={href}
-      onClick={(e) => { e.preventDefault(); void api.openLink(href); }}
+      onClick={(e) => { e.preventDefault(); void api.openInReader(href); }}
     >
       {children}
     </a>

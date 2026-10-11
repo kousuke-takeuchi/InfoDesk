@@ -29,6 +29,11 @@ export function setupIpc(handlers: IpcHandlers): IpcLog {
     }
     return handler(args);
   }, { shouldMockEvents: true });
+  // getCurrentWebview() が読む現在のウィンドウ/ウェブビューの情報 (リーダーのツールバーが使う)
+  (window as any).__TAURI_INTERNALS__.metadata = {
+    currentWindow: { label: "main" },
+    currentWebview: { windowLabel: "main", label: "reader-toolbar" },
+  };
   return {
     calls,
     unmocked,

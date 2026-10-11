@@ -12,6 +12,7 @@ export const EVENTS = {
   digests: "digests-changed",
   openSettings: "open-settings",
   chat: "chat-endpoint-changed",
+  reader: "reader-state",
 } as const;
 
 export const api = {
@@ -24,6 +25,13 @@ export const api = {
   markAllRead: (filter: ItemFilter) => invoke<number>("mark_all_read", { filter }),
   openItem: (id: number) => invoke<void>("open_item", { id }),
   openLink: (url: string) => invoke<void>("open_link", { url }),
+  openInReader: (url: string) => invoke<void>("open_in_reader", { url }),
+  readerBack: () => invoke<void>("reader_back"),
+  readerForward: () => invoke<void>("reader_forward"),
+  readerReload: () => invoke<void>("reader_reload"),
+  readerOpenExternal: () => invoke<void>("reader_open_external"),
+  readerClose: () => invoke<void>("reader_close"),
+  readerState: () => invoke<{ url: string; title: string }>("reader_state"),
   sidebarCounts: () => invoke<SidebarCounts>("sidebar_counts"),
   listSources: () => invoke<Source[]>("list_sources"),
   addRssSource: (url: string, name: string | null, category: Category) =>

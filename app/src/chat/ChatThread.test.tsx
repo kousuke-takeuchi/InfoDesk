@@ -121,8 +121,8 @@ describe("ChatThread", () => {
     expect(document.querySelectorAll(".chat-msg.user")).toHaveLength(1);
   });
 
-  it("opens http(s) links from an answer in the browser and leaves other links inert", async () => {
-    const ipc = setupIpc({ open_link: () => null });
+  it("opens http(s) links from an answer in the reader and leaves other links inert", async () => {
+    const ipc = setupIpc({ open_in_reader: () => null, open_link: () => null });
     mockFetch(() => streamResponse(answerChunks("[記事](https://example.com/a) と [危険](javascript:alert(1)) と [相対](/local)")));
     renderThread();
     await ask("リンクを");
@@ -130,13 +130,14 @@ describe("ChatThread", () => {
     const before = window.location.href;
     const user = userEvent.setup();
     await user.click(link);
-    expect(ipc.last("open_link")).toEqual({ url: "https://example.com/a" });
+    expect(ipc.last("open_in_reader")).toEqual({ url: "https://example.com/a" });
     expect(window.location.href).toBe(before);
     expect(screen.queryByRole("link", { name: "危険" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "相対" })).not.toBeInTheDocument();
     await user.click(screen.getByText("危険"));
     await user.click(screen.getByText("相対"));
-    expect(ipc.count("open_link")).toBe(1);
+    expect(ipc.count("open_in_reader")).toBe(1);
+    expect(ipc.count("open_link")).toBe(0);
     expect(window.location.href).toBe(before);
   });
 
