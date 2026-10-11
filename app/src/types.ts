@@ -93,6 +93,28 @@ export interface DigestView {
   item_count: number;
 }
 
+export interface CategoryStat {
+  category: Category;
+  count: number;
+  /** 日の期間では空。期間の初日から順。 */
+  daily: number[];
+}
+
+export interface TopicStat {
+  topic_id: number;
+  name: string;
+  count: number;
+  prev_count: number;
+}
+
+export interface DigestStats {
+  period: Period;
+  period_start: string;
+  total: number;
+  categories: CategoryStat[];
+  topics: TopicStat[];
+}
+
 export interface AppStatus {
   collecting: boolean;
   summarizing: boolean;

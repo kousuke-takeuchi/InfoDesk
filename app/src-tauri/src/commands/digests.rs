@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use infodesk_core::model::{Category, Digest, DigestScope, ItemFilter, Period};
+use infodesk_core::model::{Category, Digest, DigestScope, DigestStats, ItemFilter, Period};
 use infodesk_core::period::{period_start, utc_range};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -79,6 +79,27 @@ pub fn get_digests(
     topic_id: Option<i64>,
 ) -> AppResult<Vec<DigestView>> {
     digests_for(&state, &period, &date, topic_id)
+}
+
+pub fn digest_stats_impl(
+    state: &AppState,
+    period: &str,
+    date: &str,
+    topic_id: Option<i64>,
+) -> AppResult<DigestStats> {
+    let period = parse_period(period)?;
+    let date = parse_date(date)?;
+    state.with_store(|s| s.digest_stats(period, date, state.tz, topic_id))
+}
+
+#[tauri::command]
+pub fn digest_stats(
+    state: State<'_, AppState>,
+    period: String,
+    date: String,
+    topic_id: Option<i64>,
+) -> AppResult<DigestStats> {
+    digest_stats_impl(&state, &period, &date, topic_id)
 }
 
 /// 再生成の引数を検証する。対象が空なら `None` (ジョブを起動しない)。
@@ -226,6 +247,19 @@ mod tests {
         assert_eq!(views[0].item_count, 1);
         let views = digests_for(&state, "day", &before, Some(topic)).unwrap();
         assert_eq!(views[0].item_count, 0);
+    }
+
+    #[test]
+    fn digest_stats_parses_arguments_and_returns_all_categories() {
+        let (state, _events) = test_state();
+        let s = digest_stats_impl(&state, "week", "2026-10-08", None).unwrap();
+        assert_eq!(s.period_start.to_string(), "2026-10-05");
+        assert_eq!(
+            s.categories.len(),
+            infodesk_core::model::Category::ALL.len()
+        );
+        assert!(digest_stats_impl(&state, "year", "2026-10-08", None).is_err());
+        assert!(digest_stats_impl(&state, "day", "10/08", None).is_err());
     }
 
     #[test]

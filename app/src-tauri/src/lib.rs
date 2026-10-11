@@ -104,6 +104,7 @@ pub fn run() {
             commands::topics::update_topic,
             commands::topics::delete_topic,
             commands::digests::get_digests,
+            commands::digests::digest_stats,
             commands::digests::regenerate_digest,
             commands::digests::collect_now,
             commands::digests::retry_pending_digests,

@@ -2,7 +2,7 @@ import type { UIMessage } from "ai";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  AppStatus, Category, ChatEndpoint, ChatThread, DigestScope, DigestView, Item, ItemFilter, Period,
+  AppStatus, Category, ChatEndpoint, ChatThread, DigestScope, DigestStats, DigestView, Item, ItemFilter, Period,
   ProbeResult, Settings, SidebarCounts, Source, Topic,
 } from "./types";
 
@@ -41,6 +41,9 @@ export const api = {
   getDigests: (period: Period, date: string, topicId: number | null) =>
     invoke<DigestView[]>("get_digests", { period, date, topicId }),
   /** 指定した scope を1つのジョブで順に再生成する。 */
+  digestStats: (period: Period, date: string, topicId: number | null) =>
+    invoke<DigestStats>("digest_stats", { period, date, topicId }),
+
   regenerateDigest: (period: Period, date: string, scopes: DigestScope[]) =>
     invoke<void>("regenerate_digest", { period, date, scopes }),
   collectNow: () => invoke<void>("collect_now"),
