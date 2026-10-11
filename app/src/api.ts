@@ -40,10 +40,9 @@ export const api = {
   deleteTopic: (id: number) => invoke<void>("delete_topic", { id }),
   getDigests: (period: Period, date: string, topicId: number | null) =>
     invoke<DigestView[]>("get_digests", { period, date, topicId }),
-  /** 指定した scope を1つのジョブで順に再生成する。 */
   digestStats: (period: Period, date: string, topicId: number | null) =>
     invoke<DigestStats>("digest_stats", { period, date, topicId }),
-
+  /** 指定した scope を1つのジョブで順に再生成する。 */
   regenerateDigest: (period: Period, date: string, scopes: DigestScope[]) =>
     invoke<void>("regenerate_digest", { period, date, scopes }),
   collectNow: () => invoke<void>("collect_now"),
