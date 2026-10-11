@@ -46,12 +46,30 @@ pub fn mark_all_read_impl(state: &AppState, filter: ItemFilter) -> AppResult<usi
     Ok(n)
 }
 
-/// 記事を既読にし、開くURLを返す。http/https 以外のスキームは拒否する。
-pub fn open_item_url(state: &AppState, id: i64) -> AppResult<String> {
+/// 記事をどこで開くか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenTarget {
+    /// アプリ内の閲覧ウィンドウ。
+    Reader,
+    /// 既定のブラウザー (閲覧ウィンドウが拒む手元や LAN のホスト)。
+    External,
+}
+
+/// URL の開き先を決める。http/https 以外は拒否する。
+pub fn open_target(url: &str) -> AppResult<OpenTarget> {
+    ensure_http_url(url)?;
+    Ok(if crate::reader::ensure_reader_url(url).is_ok() {
+        OpenTarget::Reader
+    } else {
+        OpenTarget::External
+    })
+}
+
+/// 記事の URL と開き先を返す。既読にはしない (開けてから `set_read_impl` する)。
+pub fn open_item_url(state: &AppState, id: i64) -> AppResult<(String, OpenTarget)> {
     let item = get_item_impl(state, id)?.ok_or_else(|| format!("item {id} not found"))?;
-    ensure_http_url(&item.url).map_err(|e| format!("{e} for item {id}"))?;
-    set_read_impl(state, id, true)?;
-    Ok(item.url)
+    let target = open_target(&item.url).map_err(|e| format!("{e} for item {id}"))?;
+    Ok((item.url, target))
 }
 
 /// ブラウザーで開いてよい URL (http/https) かを確かめる。
@@ -131,8 +149,15 @@ pub fn mark_all_read(state: State<'_, AppState>, filter: ItemFilter) -> AppResul
 /// 閲覧ウィンドウを作るので async にする (同期コマンドはメインスレッドで動き、Windows で固まる)。
 #[tauri::command]
 pub async fn open_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    let url = open_item_url(&state, id)?;
-    crate::reader::open_in_reader(&app, &url)
+    let (url, target) = open_item_url(&state, id)?;
+    match target {
+        OpenTarget::Reader => crate::reader::open_in_reader(&app, &url)?,
+        OpenTarget::External => app
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| e.to_string())?,
+    }
+    set_read_impl(&state, id, true)
 }
 
 /// 回答の中のリンクを既定のブラウザーで開く。http/https 以外は拒否する。
@@ -262,13 +287,33 @@ mod tests {
     }
 
     #[test]
-    fn open_item_marks_read_and_returns_url() {
+    fn open_item_url_returns_url_without_marking_read() {
         let (state, _) = test_state();
         let ids = seed_items(&state);
-        let url = open_item_url(&state, ids[0]).unwrap();
+        let (url, target) = open_item_url(&state, ids[0]).unwrap();
         assert_eq!(url, "https://e.com/0");
-        assert!(get_item_impl(&state, ids[0]).unwrap().unwrap().read);
+        assert_eq!(target, OpenTarget::Reader);
+        assert!(!get_item_impl(&state, ids[0]).unwrap().unwrap().read);
         assert!(open_item_url(&state, 9999).is_err());
+    }
+
+    #[test]
+    fn open_target_uses_browser_for_local_hosts() {
+        assert_eq!(
+            open_target("https://news.example.com/a").unwrap(),
+            OpenTarget::Reader
+        );
+        for local in [
+            "http://localhost:8080/x",
+            "http://192.168.1.2/",
+            "http://10.0.0.1/a",
+            "http://[::1]/",
+        ] {
+            assert_eq!(open_target(local).unwrap(), OpenTarget::External, "{local}");
+        }
+        for bad in ["javascript:alert(1)", "file:///etc/hosts", "https://", ""] {
+            assert!(open_target(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

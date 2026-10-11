@@ -136,19 +136,60 @@ fn relayout<R: Runtime>(app: &AppHandle<R>, window: &Window<R>) {
     }
 }
 
+/// 閲覧ウィンドウを開くときにすること。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReaderAction {
+    /// 記事ページがあるので移動するだけ。
+    Navigate,
+    /// 窓はあるが記事ページが無い (前回の作成が途中で失敗した)。壊して作り直す。
+    Rebuild,
+    /// 何も無いので作る。
+    Create,
+}
+
+pub fn reader_action(has_content: bool, has_window: bool) -> ReaderAction {
+    match (has_content, has_window) {
+        (true, _) => ReaderAction::Navigate,
+        (false, true) => ReaderAction::Rebuild,
+        (false, false) => ReaderAction::Create,
+    }
+}
+
 /// 記事を閲覧ウィンドウで開く。窓が無ければ作り、あれば記事ページを移動して前面に出す。
 pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()> {
     ensure_reader_url(url)?;
     let target = Url::parse(url).map_err(|e| e.to_string())?;
-    if let Some(content) = app.get_webview(READER_CONTENT) {
-        set_title(&content, String::new());
-        content.navigate(target)?;
-        if let Some(w) = app.get_window(READER_WINDOW) {
-            let _ = w.show();
-            let _ = w.set_focus();
+    let state = app.state::<AppState>();
+    // 2つの最初の open が同時に窓を作らないよう、確認から作成までを1つずつにする。
+    // この中に .await は無い。
+    let _guard = state.reader_lock.lock().unwrap_or_else(|e| e.into_inner());
+    let content = app.get_webview(READER_CONTENT);
+    let window = app.get_window(READER_WINDOW);
+    match reader_action(content.is_some(), window.is_some()) {
+        ReaderAction::Navigate => {
+            if let Some(content) = content {
+                set_title(&content, String::new());
+                content.navigate(target)?;
+            }
+            if let Some(w) = window {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            Ok(())
         }
-        return Ok(());
+        ReaderAction::Rebuild => {
+            if let Some(w) = window {
+                w.destroy()?;
+            }
+            create_reader(app, target)
+        }
+        ReaderAction::Create => create_reader(app, target),
     }
+}
+
+/// 閲覧ウィンドウとその中の2つの WebView を作る。途中で失敗したら窓を壊して残さない。
+fn create_reader<R: Runtime>(app: &AppHandle<R>, target: Url) -> AppResult<()> {
     if let Ok(mut t) = app.state::<AppState>().reader_title.lock() {
         t.clear();
     }
@@ -157,7 +198,19 @@ pub fn open_in_reader<R: Runtime>(app: &AppHandle<R>, url: &str) -> AppResult<()
         .inner_size(1100.0, 820.0)
         .min_inner_size(640.0, 400.0)
         .build()?;
-    let size = logical_size(&window)?;
+    if let Err(e) = add_reader_children(app, &window, target) {
+        let _ = window.destroy();
+        return Err(e);
+    }
+    Ok(())
+}
+
+fn add_reader_children<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &Window<R>,
+    target: Url,
+) -> AppResult<()> {
+    let size = logical_size(window)?;
     let (bar, content) = reader_layout(size.width, size.height);
     let handle = app.clone();
     let toolbar = WebviewBuilder::new(READER_TOOLBAR, WebviewUrl::App("reader.html".into()));
@@ -277,6 +330,13 @@ mod tests {
         );
         let (_, tiny) = reader_layout(300.0, 20.0);
         assert!(tiny.3 >= 0.0, "高さが足りなくても負にしない");
+    }
+
+    #[test]
+    fn reader_action_navigates_rebuilds_or_creates() {
+        assert_eq!(reader_action(true, true), ReaderAction::Navigate);
+        assert_eq!(reader_action(false, true), ReaderAction::Rebuild);
+        assert_eq!(reader_action(false, false), ReaderAction::Create);
     }
 
     #[test]

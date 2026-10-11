@@ -40,7 +40,7 @@ function AnswerLink({ node: _node, href, children, ...rest }: ComponentPropsWith
     <a
       {...rest}
       href={href}
-      onClick={(e) => { e.preventDefault(); void api.openInReader(href); }}
+      onClick={(e) => { e.preventDefault(); void api.openInReader(href).catch(() => {}); }}
     >
       {children}
     </a>
@@ -64,7 +64,7 @@ function References({ message }: { message: UIMessage }) {
   return (
     <div className="chat-refs">
       {refs.map((r) => (
-        <button key={r.id} className="chat-ref" onClick={() => void api.openItem(r.id)}>{r.title}</button>
+        <button key={r.id} className="chat-ref" onClick={() => void api.openItem(r.id).catch(() => {})}>{r.title}</button>
       ))}
     </div>
   );

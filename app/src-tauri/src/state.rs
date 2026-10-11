@@ -39,6 +39,8 @@ pub struct AppState {
     pub chat: crate::sidecar::Sidecar,
     /// 閲覧ウィンドウの記事ページのタイトル。
     pub reader_title: Mutex<String>,
+    /// 閲覧ウィンドウの作成を1つずつにする。中で `.await` しないこと。
+    pub reader_lock: Mutex<()>,
 }
 
 impl AppState {
@@ -53,6 +55,7 @@ impl AppState {
             llm: Arc::new(provider_from_settings),
             chat: crate::sidecar::Sidecar::default(),
             reader_title: Mutex::new(String::new()),
+            reader_lock: Mutex::new(()),
         }
     }
 
