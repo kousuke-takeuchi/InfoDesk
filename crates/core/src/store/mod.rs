@@ -6,9 +6,11 @@ mod schema;
 mod settings;
 mod sources;
 mod stats;
+mod sync;
 mod topics;
 
 pub use digests::NewDigest;
+pub use sync::SyncFileRow;
 
 use std::path::Path;
 

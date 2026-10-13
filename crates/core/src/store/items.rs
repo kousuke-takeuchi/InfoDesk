@@ -4,9 +4,11 @@ use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Row, params, params_from_iter};
 
+use super::sync::set_flag_in;
 use super::{Store, col_opt_ts, col_parse, col_ts, ts};
 use crate::error::{Error, Result};
 use crate::model::{Category, Item, ItemFilter, ItemOrder, NewItem, Source};
+use crate::sync::format::Field;
 
 const ITEM_COLS: &str = "items.id, items.source_id, items.source_name, items.category, \
      items.url, items.title, items.excerpt, items.author, items.published_at, \
@@ -50,7 +52,7 @@ fn quote_phrase(s: &str) -> Value {
 /// 部分一致だと `AI` が "again" に、`Rust` が "trust" に一致してしまうため。
 /// それ以外は部分一致: trigramのFTS5は3文字未満の語句に一致しないため、3文字未満はLIKEで照合する。
 /// FTS5に渡す語句はフレーズとして引用し、FTS5の演算子 (AND, *, NEAR など) を無効にする。
-fn keyword_clause(keywords: &[String], args: &mut Vec<Value>) -> String {
+pub(super) fn keyword_clause(keywords: &[String], args: &mut Vec<Value>) -> String {
     let mut parts = Vec::new();
     for kw in keywords.iter().map(|k| k.trim()).filter(|k| !k.is_empty()) {
         if kw.chars().all(|c| c.is_ascii_alphanumeric()) {
@@ -234,19 +236,11 @@ impl Store {
     }
 
     pub fn set_read(&self, id: i64, read: bool) -> Result<()> {
-        self.conn.execute(
-            "UPDATE items SET read = ?2 WHERE id = ?1",
-            params![id, read],
-        )?;
-        Ok(())
+        self.set_flag(id, Field::Read, read)
     }
 
     pub fn set_starred(&self, id: i64, starred: bool) -> Result<()> {
-        self.conn.execute(
-            "UPDATE items SET starred = ?2 WHERE id = ?1",
-            params![id, starred],
-        )?;
-        Ok(())
+        self.set_flag(id, Field::Starred, starred)
     }
 
     pub fn set_ai_summary(&self, id: i64, summary: &str) -> Result<()> {
@@ -268,7 +262,7 @@ impl Store {
         let ids: Vec<i64> = self.query_items(&all)?.into_iter().map(|i| i.id).collect();
         let tx = self.conn.unchecked_transaction()?;
         for id in &ids {
-            tx.execute("UPDATE items SET read = 1 WHERE id = ?1", params![id])?;
+            set_flag_in(&tx, *id, Field::Read, true)?;
         }
         tx.commit()?;
         Ok(ids.len())

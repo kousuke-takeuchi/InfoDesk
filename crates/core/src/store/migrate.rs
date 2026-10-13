@@ -4,7 +4,7 @@ use super::schema::SCHEMA;
 use crate::error::Result;
 
 /// 現在のスキーマ版。`MIGRATIONS` の最後の版と一致させる。
-pub const SCHEMA_VERSION: i32 = 4;
+pub const SCHEMA_VERSION: i32 = 5;
 
 /// (適用後の版, SQL)。版の順に並べる。版1は Plan 1 のスキーマ全体。
 const MIGRATIONS: &[(i32, &str)] = &[
@@ -29,6 +29,26 @@ const MIGRATIONS: &[(i32, &str)] = &[
          );",
     ),
     (4, "ALTER TABLE items ADD COLUMN image_url TEXT;"),
+    (
+        5,
+        "ALTER TABLE items ADD COLUMN read_changed_at TEXT;
+         ALTER TABLE items ADD COLUMN starred_changed_at TEXT;
+         CREATE TABLE IF NOT EXISTS sync_ops (
+             id INTEGER PRIMARY KEY,
+             item_id INTEGER NOT NULL,
+             field TEXT NOT NULL,
+             value INTEGER NOT NULL,
+             at TEXT NOT NULL,
+             uploaded INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE TABLE IF NOT EXISTS sync_files (
+             name TEXT PRIMARY KEY,
+             kind TEXT NOT NULL,
+             drive_id TEXT,
+             sha256 TEXT,
+             updated_at TEXT NOT NULL
+         );",
+    ),
 ];
 
 fn user_version(conn: &Connection) -> Result<i32> {
@@ -140,8 +160,32 @@ mod tests {
         )
         .unwrap();
         migrate(&conn).unwrap();
-        assert_eq!(version(&conn), 4);
+        assert!(version(&conn) >= 4);
         assert!(has_column(&conn, "items", "image_url"));
+        let title: String = conn
+            .query_row("SELECT title FROM items", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "残る記事");
+    }
+
+    #[test]
+    fn version_5_adds_sync_columns_and_tables_and_keeps_items() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute_batch("ALTER TABLE items ADD COLUMN image_url TEXT; PRAGMA user_version = 4;")
+            .unwrap();
+        conn.execute(
+            "INSERT INTO items(source_id, source_name, category, url, title, excerpt, fetched_at) \
+             VALUES (NULL, 'S', 'tech_jp', 'https://e.com/1', '残る記事', '', '2026-10-09T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(version(&conn), 5);
+        assert!(has_column(&conn, "items", "read_changed_at"));
+        assert!(has_column(&conn, "items", "starred_changed_at"));
+        assert!(has_column(&conn, "sync_ops", "uploaded"));
+        assert!(has_column(&conn, "sync_files", "drive_id"));
         let title: String = conn
             .query_row("SELECT title FROM items", [], |r| r.get(0))
             .unwrap();

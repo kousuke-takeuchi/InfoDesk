@@ -142,6 +142,7 @@ pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("schedule.monthly_time", "08:00"),
     ("app.launch_at_login", "false"),
     ("app.stay_resident", "true"),
+    ("sync.enabled", "false"),
 ];
 
 const SEEDED_KEY: &str = "seeded";
