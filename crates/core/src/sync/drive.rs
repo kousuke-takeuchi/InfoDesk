@@ -56,7 +56,7 @@ impl MemoryDrive {
         files.values().map(|(f, _)| f.name.clone()).collect()
     }
 
-    /// Place a file as if another device had uploaded it.
+    /// Upsert by name (another device's file).
     pub fn put(&self, name: &str, bytes: Vec<u8>) {
         let mut files = self.files.lock().unwrap();
         let existing = files

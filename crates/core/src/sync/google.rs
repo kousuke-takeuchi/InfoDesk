@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 
@@ -21,8 +22,28 @@ impl GoogleDrive {
         Self::with_base("https://www.googleapis.com", token)
     }
     pub fn with_base(base: &str, token: Arc<dyn AccessToken>) -> Self {
+        Self::with_timeouts(
+            base,
+            token,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
+        )
+    }
+    /// `connect` bounds connection setup; `read` bounds each wait for data, so a
+    /// stalled connection cannot hang a sync.
+    pub fn with_timeouts(
+        base: &str,
+        token: Arc<dyn AccessToken>,
+        connect: Duration,
+        read: Duration,
+    ) -> Self {
+        let http = reqwest::Client::builder()
+            .connect_timeout(connect)
+            .read_timeout(read)
+            .build()
+            .expect("reqwest client");
         Self {
-            http: reqwest::Client::new(),
+            http,
             base: base.trim_end_matches('/').to_string(),
             token,
         }
@@ -36,20 +57,36 @@ const FIELDS: &str = "id,name,modifiedTime,size";
 struct ApiFile {
     id: String,
     name: String,
-    #[serde(default)]
-    modified_time: String,
+    modified_time: Option<String>,
     size: Option<String>,
 }
 
-impl From<ApiFile> for RemoteFile {
-    fn from(f: ApiFile) -> Self {
-        RemoteFile {
+impl TryFrom<ApiFile> for RemoteFile {
+    type Error = DriveError;
+    fn try_from(f: ApiFile) -> Result<Self, DriveError> {
+        let modified_time = f
+            .modified_time
+            .ok_or_else(|| DriveError::Other(format!("file {} has no modifiedTime", f.id)))?;
+        Ok(RemoteFile {
             id: f.id,
             name: f.name,
-            modified_time: f.modified_time,
+            modified_time,
             size: f.size.and_then(|s| s.parse().ok()),
-        }
+        })
     }
+}
+
+fn transport(e: reqwest::Error) -> DriveError {
+    DriveError::Retryable(e.to_string())
+}
+
+/// A short error description: Google's `error.message` when present, else the
+/// body truncated to 200 characters.
+fn error_text(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
+        .unwrap_or_else(|| body.chars().take(200).collect())
 }
 
 #[derive(serde::Deserialize)]
@@ -107,7 +144,7 @@ impl GoogleDrive {
                 .bearer_auth(&token)
                 .send()
                 .await
-                .map_err(|e| DriveError::Retryable(e.to_string()))?;
+                .map_err(transport)?;
             let status = resp.status();
             if status.is_success() || (allow_404 && status.as_u16() == 404) {
                 return Ok(resp);
@@ -128,7 +165,7 @@ impl GoogleDrive {
                 {
                     DriveError::Retryable(format!("HTTP {code}"))
                 } else {
-                    DriveError::Other(format!("HTTP {code}: {body}"))
+                    DriveError::Other(format!("HTTP {code}: {}", error_text(&body)))
                 },
             );
         }
@@ -136,10 +173,7 @@ impl GoogleDrive {
     }
 
     async fn parse_file(resp: reqwest::Response) -> Result<RemoteFile, DriveError> {
-        resp.json::<ApiFile>()
-            .await
-            .map(Into::into)
-            .map_err(|e| DriveError::Other(e.to_string()))
+        resp.json::<ApiFile>().await.map_err(transport)?.try_into()
     }
 }
 
@@ -167,11 +201,10 @@ impl DriveStore for GoogleDrive {
                     http.get(with_query(&url, &q))
                 })
                 .await?;
-            let parsed: ListResponse = resp
-                .json()
-                .await
-                .map_err(|e| DriveError::Other(e.to_string()))?;
-            out.extend(parsed.files.into_iter().map(RemoteFile::from));
+            let parsed: ListResponse = resp.json().await.map_err(transport)?;
+            for f in parsed.files {
+                out.push(f.try_into()?);
+            }
             match parsed.next_page_token {
                 Some(t) if !t.is_empty() => page = Some(t),
                 _ => return Ok(out),
@@ -186,10 +219,7 @@ impl DriveStore for GoogleDrive {
                 http.get(with_query(&url, &[("alt", "media")]))
             })
             .await?;
-        resp.bytes()
-            .await
-            .map(|b| b.to_vec())
-            .map_err(|e| DriveError::Retryable(e.to_string()))
+        resp.bytes().await.map(|b| b.to_vec()).map_err(transport)
     }
 
     async fn create(
@@ -281,6 +311,10 @@ mod tests {
             .and(query_param("spaces", "appDataFolder"))
             .and(query_param("pageSize", "1000"))
             .and(query_param("pageToken", "p2"))
+            .and(query_param(
+                "fields",
+                "nextPageToken,files(id,name,modifiedTime,size)",
+            ))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"files":[file_json("c","c.json")]})),
@@ -308,6 +342,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/upload/drive/v3/files"))
             .and(query_param("uploadType", "multipart"))
+            .and(query_param("fields", "id,name,modifiedTime,size"))
             .respond_with(ResponseTemplate::new(200).set_body_json(file_json("n", "x.bin")))
             .mount(&s)
             .await;
@@ -454,6 +489,57 @@ mod tests {
             dead.download("a").await,
             Err(DriveError::Retryable(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn stalled_response_times_out_as_retryable() {
+        let s = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(3)))
+            .mount(&s)
+            .await;
+        let d = GoogleDrive::with_timeouts(
+            &s.uri(),
+            Tok::new(),
+            Duration::from_secs(1),
+            Duration::from_millis(200),
+        );
+        assert!(matches!(
+            d.download("a").await,
+            Err(DriveError::Retryable(_))
+        ));
+        assert!(matches!(d.list().await, Err(DriveError::Retryable(_))));
+    }
+
+    #[tokio::test]
+    async fn bad_json_is_retryable_and_missing_modified_time_is_other() {
+        let s = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/drive/v3/files"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&s)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/upload/drive/v3/files/abc"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"id":"abc","name":"x"})),
+            )
+            .mount(&s)
+            .await;
+        let d = GoogleDrive::with_base(&s.uri(), Tok::new());
+        assert!(matches!(d.list().await, Err(DriveError::Retryable(_))));
+        assert!(matches!(
+            d.update("abc", vec![1], "application/json").await,
+            Err(DriveError::Other(m)) if m.contains("modifiedTime")
+        ));
+    }
+
+    #[test]
+    fn error_text_prefers_message_and_truncates() {
+        assert_eq!(error_text(r#"{"error":{"message":"nope"}}"#), "nope");
+        let long = "x".repeat(500);
+        assert_eq!(error_text(&long).chars().count(), 200);
     }
 
     #[tokio::test]
