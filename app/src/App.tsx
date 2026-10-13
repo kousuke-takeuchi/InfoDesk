@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, EVENTS } from "./api";
 import { Sidebar, type Selection, type View } from "./components/Sidebar";
 import { ErrorLine } from "./components/ErrorLine";
@@ -7,7 +7,11 @@ import { FeedView } from "./views/FeedView";
 import { SettingsView, type SettingsTab } from "./views/SettingsView";
 import { ChatPanel } from "./chat/ChatPanel";
 import type { ChatAttachment, ChatPeriod, ChatScope } from "./chat/context";
+import { ShortcutHelp } from "./components/ShortcutHelp";
+import { useShortcuts, type ViewActions } from "./hooks/useShortcuts";
+import { useStaleRefresh } from "./hooks/useStaleRefresh";
 import { useTauriEvent } from "./hooks/useTauriEvent";
+import { stepSelection } from "./lib/shortcuts";
 import { categoryLabel, errorMessage, type AppStatus, type SidebarCounts, type Topic } from "./types";
 
 function sameAttachment(a: ChatAttachment, b: ChatAttachment): boolean {
@@ -87,10 +91,37 @@ export default function App() {
       .catch((e) => setActionError(errorMessage(e)));
   }, []);
 
-  const select = (s: Selection) => {
+  const select = useCallback((s: Selection) => {
     setSelection(s);
     setInSettings(false);
-  };
+  }, []);
+
+  // ウィンドウが戻ったときや日付が変わったときに、表示中のビュー・件数・状態を取り直す。
+  // ビューは refreshTick の変化で再取得する。
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refreshAll = useCallback(() => {
+    refreshStatus();
+    refreshCounts();
+    setRefreshTick((t) => t + 1);
+  }, [refreshStatus, refreshCounts]);
+  useStaleRefresh(refreshAll);
+
+  const [helpOpen, setHelpOpen] = useState(false);
+  const viewActions = useRef<ViewActions>({});
+  useShortcuts(inSettings, {
+    collect: () => {
+      if (!status.collecting) collectNow();
+      refreshAll();
+    },
+    digest: () => switchView("digest"),
+    feed: () => switchView("feed"),
+    settings: openSettings,
+    chat: () => setChatOpen((o) => !o),
+    help: () => setHelpOpen(true),
+    sidebarPrev: () => select(stepSelection(selection, topics, -1)),
+    sidebarNext: () => select(stepSelection(selection, topics, 1)),
+    selectAll: () => select({ kind: "all" }),
+  }, viewActions);
 
   const toggleChat = useCallback(() => setChatOpen((o) => !o), []);
   const askChat = useCallback((a: ChatAttachment) => {
@@ -122,11 +153,11 @@ export default function App() {
             </div>
           )}
           {view === "digest" && (
-            <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
+            <DigestView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView} actions={viewActions} refreshTick={refreshTick}
               chatOpen={chatOpen} onToggleChat={toggleChat} onAskChat={askChat} onPeriodChange={setChatPeriod} />
           )}
           {view === "feed" && (
-            <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView}
+            <FeedView selection={selection} topics={topics} status={status} view={view} onSwitchView={switchView} actions={viewActions} refreshTick={refreshTick}
               onOpenSources={openSettings}
               chatOpen={chatOpen} onToggleChat={toggleChat} onAskChat={askChat} onPeriodChange={setChatPeriod} />
           )}
@@ -138,6 +169,7 @@ export default function App() {
             onRemoveAttachment={removeAttachment} onClose={() => setChatOpen(false)} onOpenSettings={openLlmSettings} />
         )}
       </main>
+      {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

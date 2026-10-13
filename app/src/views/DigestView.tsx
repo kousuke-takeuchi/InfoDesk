@@ -5,6 +5,7 @@ import { ChatToggle } from "../components/ChatToggle";
 import { ErrorLine } from "../components/ErrorLine";
 import { Segmented, ViewSwitch } from "../components/Segmented";
 import type { Selection, View } from "../components/Sidebar";
+import type { ViewActionsRef } from "../hooks/useShortcuts";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import type { ChatAttachment, ChatPeriod } from "../chat/context";
 import { localDateString, periodHeading } from "../lib/dates";
@@ -26,6 +27,10 @@ interface Props {
   status: AppStatus;
   view: View;
   onSwitchView: (v: View) => void;
+  /** ショートカットのうち、この画面で処理するものを登録する。 */
+  actions?: ViewActionsRef;
+  /** 増えるたびに取り直す (ウィンドウ復帰・日付変更)。 */
+  refreshTick?: number;
   chatOpen: boolean;
   onToggleChat: () => void;
   onAskChat: (a: ChatAttachment) => void;
@@ -81,7 +86,7 @@ function References({ ids, onOpen }: { ids: number[]; onOpen: (id: number) => vo
   );
 }
 
-export function DigestView({ selection, topics, status, view, onSwitchView, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
+export function DigestView({ selection, topics, status, view, onSwitchView, actions, refreshTick = 0, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
   const [period, setPeriod] = useState<Period>("day");
   // 取得結果と依頼中の scope は、どの条件のものかを一緒に持つ。条件が変わった描画では
   // 即座に無効になるので、前の期間のセクションが新しい見出しの下に残らない。
@@ -152,6 +157,20 @@ export function DigestView({ selection, topics, status, view, onSwitchView, chat
   useTauriEvent(EVENTS.digests, () => load(true));
   // 収集で item_count が変わる。生成ジョブの完了ではないので、依頼中の印は外さない。
   useTauriEvent(EVENTS.items, () => { load(false); loadStats(); });
+  const lastTick = useRef(refreshTick);
+  useEffect(() => {
+    if (lastTick.current === refreshTick) return;
+    lastTick.current = refreshTick;
+    load(false);
+    loadStats();
+  }, [refreshTick, load, loadStats]);
+  useEffect(() => {
+    if (!actions) return;
+    actions.current = {
+      periodDay: () => setPeriod("day"), periodWeek: () => setPeriod("week"), periodMonth: () => setPeriod("month"),
+    };
+    return () => { actions.current = {}; };
+  }, [actions]);
 
   const fail = (e: unknown) => setError(errorMessage(e));
   const request = (scopes: DigestScope[]) => {

@@ -5,6 +5,7 @@ import { ChatToggle } from "../components/ChatToggle";
 import { ErrorLine } from "../components/ErrorLine";
 import { Segmented, ViewSwitch } from "../components/Segmented";
 import type { Selection, View } from "../components/Sidebar";
+import type { ViewActionsRef } from "../hooks/useShortcuts";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import { relativeTime } from "../lib/dates";
 import { buildItemFilter, FEED_RANGES, type FeedRange, type FeedState } from "../lib/filters";
@@ -17,6 +18,10 @@ interface Props {
   status: AppStatus;
   view: View;
   onSwitchView: (v: View) => void;
+  /** ショートカットのうち、この画面で処理するものを登録する。 */
+  actions?: ViewActionsRef;
+  /** 増えるたびに取り直す (ウィンドウ復帰・日付変更)。 */
+  refreshTick?: number;
   /** 設定のソース一覧を開く。 */
   onOpenSources: () => void;
   chatOpen: boolean;
@@ -43,7 +48,7 @@ function Thumbnail({ src, onOpen }: { src: string; onOpen(): void }) {
   );
 }
 
-export function FeedView({ selection, topics, status, view, onSwitchView, onOpenSources, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
+export function FeedView({ selection, topics, status, view, onSwitchView, actions, refreshTick = 0, onOpenSources, chatOpen, onToggleChat, onAskChat, onPeriodChange }: Props) {
   const [range, setRange] = useState<FeedRange>("week");
   const [sourceId, setSourceId] = useState<number | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -125,6 +130,19 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
   }, [load]);
   useEffect(() => { api.listSources().then(setSources).catch(() => setSources([])); }, []);
   useTauriEvent(EVENTS.items, load);
+  const lastTick = useRef(refreshTick);
+  useEffect(() => {
+    if (lastTick.current === refreshTick) return;
+    lastTick.current = refreshTick;
+    load();
+  }, [refreshTick, load]);
+
+  // キーボードで選んでいる記事。再取得で行が入れ替わっても、同じ id が残っていれば保つ。
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selectedRef = useRef<number | null>(null);
+  selectedRef.current = selectedId;
+  const searchInput = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef(new Map<number, HTMLElement>());
 
   // 操作後の再取得はバックエンドが出す items-changed に任せる。
   const run = (p: Promise<unknown>) => {
@@ -132,6 +150,36 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
   };
   const now = new Date();
   const shown = items?.length ?? 0;
+
+  const itemsRef = useRef<Item[] | null>(null);
+  itemsRef.current = items;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const move = (dir: 1 | -1) => {
+    const list = itemsRef.current;
+    if (!list || list.length === 0) return;
+    const i = list.findIndex((x) => x.id === selectedRef.current);
+    const next = list[i < 0 ? 0 : Math.min(Math.max(i + dir, 0), list.length - 1)];
+    selectedRef.current = next.id;
+    setSelectedId(next.id);
+    rowRefs.current.get(next.id)?.scrollIntoView?.({ block: "nearest" });
+  };
+  const current = () => itemsRef.current?.find((x) => x.id === selectedRef.current) ?? null;
+  useEffect(() => {
+    if (!actions) return;
+    actions.current = {
+      periodDay: () => setRange("today"), periodWeek: () => setRange("week"), periodMonth: () => setRange("month"),
+      next: () => move(1), prev: () => move(-1),
+      open: () => { const it = current(); if (it) run(api.openItem(it.id)); },
+      toggleRead: () => { const it = current(); if (it) run(api.setRead(it.id, !it.read)); },
+      toggleStar: () => { const it = current(); if (it) run(api.setStarred(it.id, !it.starred)); },
+      search: () => searchInput.current?.focus(),
+      markAllRead: () => run(api.markAllRead(buildItemFilter(stateRef.current, new Date()))),
+    };
+    return () => { actions.current = {}; };
+    // move / current / run は ref と setState だけを使うので、登録は一度でよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actions]);
 
   return (
     <>
@@ -150,6 +198,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
         <label className="search">
           <Search size={14} />
           <input
+            ref={searchInput}
             placeholder="検索"
             aria-label="検索"
             value={input}
@@ -194,7 +243,8 @@ export function FeedView({ selection, topics, status, view, onSwitchView, onOpen
           <div className="state-box"><span>条件に一致する記事がありません</span></div>
         )}
         {items?.map((it) => (
-          <article key={it.id} className={`item-row ${it.read ? "read" : ""}`}>
+          <article key={it.id} className={`item-row ${it.read ? "read" : ""} ${it.id === selectedId ? "selected" : ""}`}
+            ref={(el) => { if (el) rowRefs.current.set(it.id, el); else rowRefs.current.delete(it.id); }}>
             <div className="unread">{!it.read && <i aria-label="未読" />}</div>
             <div className="content">
               <button className="title" onClick={() => run(api.openItem(it.id))}>{it.title}</button>
