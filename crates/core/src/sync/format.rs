@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 
-use chrono::{DateTime, Datelike, NaiveDate, Timelike, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Timelike, Utc};
 use flate2::{Compression, GzBuilder, read::GzDecoder};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
@@ -156,7 +156,9 @@ pub fn digest_file_name(p: Period, start: NaiveDate) -> String {
     format!("digest-{}-{}.json.gz", p.as_str(), start.format(DATE_FMT))
 }
 
+/// Callers keep `seq` within 1 to 9999 so the name stays 4 digits.
 pub fn ops_file_name(device: &str, at: DateTime<Utc>, seq: u32) -> String {
+    debug_assert!(seq <= 9999);
     format!(
         "ops-{device}-{:04}{:02}{:02}T{:02}{:02}{:02}{:03}Z-{seq:04}.json",
         at.year(),
@@ -180,9 +182,8 @@ pub fn parse_file_name(name: &str) -> Option<FileKind> {
         .strip_prefix("day-")
         .and_then(|r| r.strip_suffix(".json.gz"))
     {
-        return NaiveDate::parse_from_str(rest, DATE_FMT)
-            .ok()
-            .map(FileKind::Day);
+        let d = NaiveDate::parse_from_str(rest, DATE_FMT).ok()?;
+        return (day_file_name(d) == name).then_some(FileKind::Day(d));
     }
     if let Some(rest) = name
         .strip_prefix("digest-")
@@ -191,7 +192,7 @@ pub fn parse_file_name(name: &str) -> Option<FileKind> {
         let (p, date) = rest.split_once('-')?;
         let period = Period::parse(p)?;
         let date = NaiveDate::parse_from_str(date, DATE_FMT).ok()?;
-        return Some(FileKind::Digest(period, date));
+        return (digest_file_name(period, date) == name).then_some(FileKind::Digest(period, date));
     }
     if let Some(rest) = name
         .strip_prefix("ops-")
@@ -215,7 +216,8 @@ pub fn parse_file_name(name: &str) -> Option<FileKind> {
 
 fn is_ops_stamp(s: &str) -> bool {
     let b = s.as_bytes();
-    b.len() == OPS_STAMP_LEN
+    NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%S%3fZ").is_ok()
+        && b.len() == OPS_STAMP_LEN
         && b[8] == b'T'
         && b[OPS_STAMP_LEN - 1] == b'Z'
         && b[..8].iter().all(u8::is_ascii_digit)
@@ -252,11 +254,28 @@ pub fn sha256_hex(b: &[u8]) -> String {
         .collect()
 }
 
-/// True when `a` beats `b`: newer `at`, or the larger `device` on a tie.
-pub fn wins(a: &Stamp, b: &Stamp) -> bool {
-    (a.at.as_str(), a.device.as_str()) > (b.at.as_str(), b.device.as_str())
+/// Normalizes an op from another client: `at` becomes UTC `op_time` text.
+/// Returns `None` for an unparsable `at` or an empty `device`.
+pub fn normalize_op(op: &Op) -> Option<Op> {
+    if op.device.is_empty() {
+        return None;
+    }
+    let at = DateTime::parse_from_rfc3339(&op.at)
+        .ok()?
+        .with_timezone(&Utc);
+    Some(Op {
+        at: op_time(at),
+        ..op.clone()
+    })
 }
 
+/// True when `a` beats `b`: newer `at`, then larger `device`, then `value == true`.
+/// Callers must pass normalized ops (see `normalize_op`).
+pub fn wins(a: &Stamp, b: &Stamp) -> bool {
+    (a.at.as_str(), a.device.as_str(), a.value) > (b.at.as_str(), b.device.as_str(), b.value)
+}
+
+/// Callers must pass normalized ops (see `normalize_op`).
 pub fn apply_op(state: &mut BTreeMap<i64, ItemState>, op: &Op) {
     let entry = state.entry(op.item_id).or_default();
     let slot = match op.field {
@@ -403,5 +422,71 @@ mod tests {
             apply_op(&mut backward, o);
         }
         assert_eq!(forward, backward);
+    }
+
+    #[test]
+    fn normalize_op_makes_foreign_times_sortable() {
+        let mac = op(1, Field::Read, true, "2026-10-13T00:00:01.500Z", "mac");
+        let cases = [
+            ("2026-10-13T00:00:02Z", true),
+            ("2026-10-13T09:00:03+09:00", true),
+            ("2026-10-13T00:00:01.400123Z", false),
+            ("2026-10-13T09:00:01.400+09:00", false),
+        ];
+        for (at, beats_mac) in cases {
+            let phone = normalize_op(&op(1, Field::Read, false, at, "phone")).unwrap();
+            assert!(
+                phone.at.ends_with('Z') && phone.at.len() == 24,
+                "{}",
+                phone.at
+            );
+            let mut s = BTreeMap::new();
+            apply_op(&mut s, &mac);
+            apply_op(&mut s, &phone);
+            assert_eq!(!s[&1].read.as_ref().unwrap().value, beats_mac, "{at}");
+        }
+        assert_eq!(
+            normalize_op(&op(1, Field::Read, true, "2026-10-13T09:00:03+09:00", "p"))
+                .unwrap()
+                .at,
+            "2026-10-13T00:00:03.000Z"
+        );
+    }
+
+    #[test]
+    fn normalize_op_rejects_garbage() {
+        assert!(normalize_op(&op(1, Field::Read, true, "9999", "p")).is_none());
+        assert!(normalize_op(&op(1, Field::Read, true, "", "p")).is_none());
+        assert!(normalize_op(&op(1, Field::Read, true, "2026-10-13T00:00:00Z", "")).is_none());
+    }
+
+    #[test]
+    fn full_ties_are_commutative() {
+        let t = "2026-10-13T00:00:01.000Z";
+        let a = op(1, Field::Read, true, t, "d");
+        let b = op(1, Field::Read, false, t, "d");
+        let mut ab = BTreeMap::new();
+        apply_op(&mut ab, &a);
+        apply_op(&mut ab, &b);
+        let mut ba = BTreeMap::new();
+        apply_op(&mut ba, &b);
+        apply_op(&mut ba, &a);
+        assert_eq!(ab, ba);
+        assert!(ab[&1].read.as_ref().unwrap().value);
+    }
+
+    #[test]
+    fn non_canonical_names_are_rejected() {
+        for n in [
+            "day-2026-13-01.json.gz",
+            "day-2026-1-5.json.gz",
+            "digest-year-2026-10-01.json.gz",
+            "digest-week-2026-1-5.json.gz",
+            "ops-x-20261013T010203456Z.json",
+            "ops-x-20261013T0102034Z-0001.json",
+            "ops-x-20261399T999999999Z-0001.json",
+        ] {
+            assert_eq!(parse_file_name(n), None, "{n}");
+        }
     }
 }
