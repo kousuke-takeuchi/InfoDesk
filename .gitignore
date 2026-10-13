@@ -6,3 +6,4 @@ app/dist/
 agent/node_modules/
 agent/dist/
 scripts/screenshots/out/
+app/src-tauri/google-oauth.json

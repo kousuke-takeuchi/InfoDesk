@@ -5,6 +5,7 @@ mod reader;
 mod scheduler;
 mod sidecar;
 mod state;
+mod sync;
 mod tray;
 
 use std::sync::Arc;
