@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
 use rusqlite::types::Value;
@@ -7,7 +7,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 use super::items::keyword_clause;
 use super::{Store, ts};
 use crate::error::{Error, Result};
-use crate::sync::format::{Field, ItemRecord, ItemState, Op, Stamp, op_time, wins};
+use crate::sync::format::{Field, ItemRecord, ItemState, Op, Stamp, normalize_op, op_time, wins};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncFileRow {
@@ -57,6 +57,36 @@ fn day_bounds(d: NaiveDate, tz: FixedOffset) -> Result<(DateTime<Utc>, DateTime<
     Ok((local(d)?, local(next)?))
 }
 
+fn changed_by_col(field: Field) -> &'static str {
+    match field {
+        Field::Read => "read_changed_by",
+        Field::Starred => "starred_changed_by",
+    }
+}
+
+/// `sync.device_id` を (なければ作って) 返す。
+fn device_id_in(conn: &Connection) -> Result<String> {
+    let cur: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'sync.device_id'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match cur {
+        Some(v) if !v.is_empty() => Ok(v),
+        _ => {
+            let v = uuid::Uuid::new_v4().to_string();
+            conn.execute(
+                "INSERT INTO settings(key, value) VALUES ('sync.device_id', ?1) \
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![v],
+            )?;
+            Ok(v)
+        }
+    }
+}
+
 /// 呼び出し側のトランザクションの中で使う `set_flag`。
 pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool) -> Result<()> {
     let (col, at_col) = match field {
@@ -74,9 +104,11 @@ pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool)
         return Ok(());
     }
     let now = op_time(Utc::now());
+    let device = device_id_in(conn)?;
+    let by_col = changed_by_col(field);
     conn.execute(
-        &format!("UPDATE items SET {col} = ?2, {at_col} = ?3 WHERE id = ?1"),
-        params![id, value, now],
+        &format!("UPDATE items SET {col} = ?2, {at_col} = ?3, {by_col} = ?4 WHERE id = ?1"),
+        params![id, value, now, device],
     )?;
     conn.execute(
         "INSERT INTO sync_ops(item_id, field, value, at) VALUES (?1, ?2, ?3, ?4)",
@@ -157,27 +189,32 @@ impl Store {
         Ok(())
     }
 
-    /// 他の端末の操作を取り込む。記事がない、または負けたときは false。`sync_ops` には記録しない。
+    /// 他の端末の操作を取り込む。`true` は印 (時刻と端末) が動いたことを表し、値が変わらないこともある。
+    /// 記事がない、不正な操作、または負けたときは false。`sync_ops` には記録しない。
     pub fn apply_remote_op(&self, op: &Op, local_device: &str) -> Result<bool> {
+        let Some(op) = normalize_op(op) else {
+            return Ok(false);
+        };
         let (col, at_col) = match op.field {
             Field::Read => ("read", "read_changed_at"),
             Field::Starred => ("starred", "starred_changed_at"),
         };
-        let current: Option<(bool, Option<String>)> = self
+        let by_col = changed_by_col(op.field);
+        let current: Option<(bool, Option<String>, Option<String>)> = self
             .conn
             .query_row(
-                &format!("SELECT {col}, {at_col} FROM items WHERE id = ?1"),
+                &format!("SELECT {col}, {at_col}, {by_col} FROM items WHERE id = ?1"),
                 params![op.item_id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?;
-        let Some((value, changed_at)) = current else {
+        let Some((value, changed_at, changed_by)) = current else {
             return Ok(false);
         };
         let current = Stamp {
             value,
             at: changed_at.unwrap_or_default(),
-            device: local_device.to_string(),
+            device: changed_by.unwrap_or_else(|| local_device.to_string()),
         };
         let incoming = Stamp {
             value: op.value,
@@ -188,16 +225,31 @@ impl Store {
             return Ok(false);
         }
         self.conn.execute(
-            &format!("UPDATE items SET {col} = ?2, {at_col} = ?3 WHERE id = ?1"),
-            params![op.item_id, op.value, op.at],
+            &format!("UPDATE items SET {col} = ?2, {at_col} = ?3, {by_col} = ?4 WHERE id = ?1"),
+            params![op.item_id, op.value, op.at, op.device],
         )?;
         Ok(true)
     }
 
+    /// 送信済みで `older_than` より前の `sync_ops` を消し、消した行数を返す。
+    pub fn prune_uploaded_ops(&self, older_than: &str) -> Result<usize> {
+        Ok(self.conn.execute(
+            "DELETE FROM sync_ops WHERE uploaded = 1 AND at < ?1",
+            params![older_than],
+        )?)
+    }
+
     /// 操作の時刻が付いている記事の状態。`item_ids` が None なら全件。
-    pub fn local_state_stamps(&self, item_ids: Option<&[i64]>) -> Result<BTreeMap<i64, ItemState>> {
+    /// 端末が記録されていない印には `device` を使う。
+    pub fn local_state_stamps(
+        &self,
+        item_ids: Option<&[i64]>,
+        device: &str,
+    ) -> Result<BTreeMap<i64, ItemState>> {
+        let filter: Option<HashSet<i64>> = item_ids.map(|ids| ids.iter().copied().collect());
         let mut stmt = self.conn.prepare(
-            "SELECT id, read, read_changed_at, starred, starred_changed_at FROM items \
+            "SELECT id, read, read_changed_at, read_changed_by, starred, starred_changed_at, \
+             starred_changed_by FROM items \
              WHERE read_changed_at IS NOT NULL OR starred_changed_at IS NOT NULL",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -205,29 +257,30 @@ impl Store {
                 r.get::<_, i64>(0)?,
                 r.get::<_, bool>(1)?,
                 r.get::<_, Option<String>>(2)?,
-                r.get::<_, bool>(3)?,
-                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, bool>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<String>>(6)?,
             ))
         })?;
-        let device = self.get_setting("sync.device_id")?.unwrap_or_default();
         let mut out = BTreeMap::new();
         for row in rows {
-            let (id, read, read_at, starred, starred_at) = row?;
-            if item_ids.is_some_and(|ids| !ids.contains(&id)) {
+            let (id, read, read_at, read_by, starred, starred_at, starred_by) = row?;
+            if filter.as_ref().is_some_and(|ids| !ids.contains(&id)) {
                 continue;
             }
-            let stamp = |value, at: Option<String>| {
+            let stamp = |value, at: Option<String>, by: Option<String>| {
                 at.map(|at| Stamp {
                     value,
                     at,
-                    device: device.clone(),
+                    device: by.unwrap_or_else(|| device.to_string()),
                 })
             };
             out.insert(
                 id,
                 ItemState {
-                    read: stamp(read, read_at),
-                    starred: stamp(starred, starred_at),
+                    read: stamp(read, read_at, read_by),
+                    starred: stamp(starred, starred_at, starred_by),
                 },
             );
         }
@@ -427,10 +480,14 @@ mod tests {
         };
         assert!(s.apply_remote_op(&op, "mac").unwrap());
         assert!(s.get_item(id).unwrap().unwrap().starred);
-        let stamps = s.local_state_stamps(None).unwrap();
+        let stamps = s.local_state_stamps(None, "mac").unwrap();
         assert_eq!(stamps[&id].starred.as_ref().unwrap().at, op.at);
         assert!(stamps[&id].read.is_none());
-        assert!(s.local_state_stamps(Some(&[id + 100])).unwrap().is_empty());
+        assert!(
+            s.local_state_stamps(Some(&[id + 100]), "mac")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -447,12 +504,95 @@ mod tests {
     }
 
     #[test]
+    fn remote_op_is_normalized_before_storing() {
+        let s = store();
+        let id = insert_item(&s, "https://a/1");
+        let op = Op {
+            item_id: id,
+            field: Field::Read,
+            value: true,
+            at: "2999-01-01T09:00:00+09:00".into(),
+            device: "phone".into(),
+        };
+        assert!(s.apply_remote_op(&op, "mac").unwrap());
+        let stamps = s.local_state_stamps(None, "mac").unwrap();
+        assert_eq!(
+            stamps[&id].read.as_ref().unwrap().at,
+            "2999-01-01T00:00:00.000Z"
+        );
+    }
+
+    #[test]
+    fn remote_op_with_empty_device_is_rejected() {
+        let s = store();
+        let id = insert_item(&s, "https://a/1");
+        let op = Op {
+            item_id: id,
+            field: Field::Read,
+            value: true,
+            at: "2999-01-01T00:00:00.000Z".into(),
+            device: String::new(),
+        };
+        assert!(!s.apply_remote_op(&op, "mac").unwrap());
+        assert!(!s.get_item(id).unwrap().unwrap().read);
+    }
+
+    #[test]
+    fn changed_by_tracks_the_device_of_each_change() {
+        let s = store();
+        let id = insert_item(&s, "https://a/1");
+        let (me, _) = s.ensure_sync_ids().unwrap();
+        s.set_read(id, true).unwrap();
+        let op = Op {
+            item_id: id,
+            field: Field::Starred,
+            value: true,
+            at: "2999-01-01T00:00:00.000Z".into(),
+            device: "phone".into(),
+        };
+        assert!(s.apply_remote_op(&op, &me).unwrap());
+        let st = s.local_state_stamps(None, "fallback").unwrap();
+        assert_eq!(st[&id].read.as_ref().unwrap().device, me);
+        assert_eq!(st[&id].starred.as_ref().unwrap().device, "phone");
+    }
+
+    #[test]
+    fn stamps_fall_back_to_given_device_when_unrecorded() {
+        let s = store();
+        let id = insert_item(&s, "https://a/1");
+        s.conn
+            .execute(
+                "UPDATE items SET read_changed_at = '2000-01-01T00:00:00.000Z' WHERE id = ?1",
+                [id],
+            )
+            .unwrap();
+        let st = s.local_state_stamps(None, "fallback").unwrap();
+        assert_eq!(st[&id].read.as_ref().unwrap().device, "fallback");
+    }
+
+    #[test]
+    fn prune_uploaded_ops_removes_only_old_uploaded_rows() {
+        let s = store();
+        let id = insert_item(&s, "https://a/1");
+        s.set_read(id, true).unwrap();
+        s.set_starred(id, true).unwrap();
+        let ops = s.pending_local_ops("mac").unwrap();
+        s.mark_ops_uploaded(&[ops[0].0]).unwrap();
+        assert_eq!(s.prune_uploaded_ops("2000-01-01T00:00:00.000Z").unwrap(), 0);
+        assert_eq!(s.prune_uploaded_ops("2999-01-01T00:00:00.000Z").unwrap(), 1);
+        assert_eq!(s.pending_local_ops("mac").unwrap().len(), 1);
+    }
+
+    #[test]
     fn sync_ids_are_created_once() {
         let s = store();
         let a = s.ensure_sync_ids().unwrap();
         let b = s.ensure_sync_ids().unwrap();
         assert_eq!(a, b);
         assert_ne!(a.0, a.1);
+        for id in [&a.0, &a.1] {
+            assert_eq!(uuid::Uuid::parse_str(id).unwrap().get_version_num(), 4);
+        }
     }
 
     #[test]

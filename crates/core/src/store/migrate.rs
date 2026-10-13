@@ -33,6 +33,8 @@ const MIGRATIONS: &[(i32, &str)] = &[
         5,
         "ALTER TABLE items ADD COLUMN read_changed_at TEXT;
          ALTER TABLE items ADD COLUMN starred_changed_at TEXT;
+         ALTER TABLE items ADD COLUMN read_changed_by TEXT;
+         ALTER TABLE items ADD COLUMN starred_changed_by TEXT;
          CREATE TABLE IF NOT EXISTS sync_ops (
              id INTEGER PRIMARY KEY,
              item_id INTEGER NOT NULL,
@@ -181,9 +183,11 @@ mod tests {
         )
         .unwrap();
         migrate(&conn).unwrap();
-        assert_eq!(version(&conn), 5);
+        assert_eq!(version(&conn), SCHEMA_VERSION);
         assert!(has_column(&conn, "items", "read_changed_at"));
         assert!(has_column(&conn, "items", "starred_changed_at"));
+        assert!(has_column(&conn, "items", "read_changed_by"));
+        assert!(has_column(&conn, "items", "starred_changed_by"));
         assert!(has_column(&conn, "sync_ops", "uploaded"));
         assert!(has_column(&conn, "sync_files", "drive_id"));
         let title: String = conn
