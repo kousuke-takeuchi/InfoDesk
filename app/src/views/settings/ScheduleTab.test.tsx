@@ -6,7 +6,7 @@ import { setupIpc } from "../../test/ipc";
 import type { AppStatus } from "../../types";
 
 const settings = {
-  "schedule.collect_interval_hours": "3", "schedule.daily_time": "07:00", "schedule.weekly_day": "mon",
+  "schedule.collect_interval_minutes": "180", "schedule.daily_time": "07:00", "schedule.weekly_day": "mon",
   "schedule.weekly_time": "07:30", "schedule.monthly_time": "08:00", "app.launch_at_login": "false", "app.stay_resident": "true",
 };
 const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: "2026-10-06T03:00:00Z", last_error: null };
@@ -21,11 +21,15 @@ describe("ScheduleTab", () => {
   it("shows schedule settings and saves them", async () => {
     const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined, set_launch_at_login: () => undefined, collect_now: () => undefined, retry_pending_digests: () => undefined });
     render(<ScheduleTab status={status} />);
-    expect(await screen.findByLabelText("収集間隔")).toHaveValue("3");
+    expect(await screen.findByLabelText("収集間隔")).toHaveValue("180");
     expect(screen.getByText(/次回の収集/)).toBeInTheDocument();
 
-    await userEvent.selectOptions(screen.getByLabelText("収集間隔"), "6");
-    expect(ipc.last("set_setting")).toEqual({ key: "schedule.collect_interval_hours", value: "6" });
+    expect(screen.getAllByRole("option", { name: /おき$/ }).map((o) => [o.getAttribute("value"), o.textContent])).toEqual([
+      ["1", "1分おき"], ["5", "5分おき"], ["15", "15分おき"], ["30", "30分おき"],
+      ["60", "1時間おき"], ["180", "3時間おき"], ["360", "6時間おき"], ["720", "12時間おき"],
+    ]);
+    await userEvent.selectOptions(screen.getByLabelText("収集間隔"), "5");
+    expect(ipc.last("set_setting")).toEqual({ key: "schedule.collect_interval_minutes", value: "5" });
 
     const daily = screen.getByLabelText("日次要約の時刻");
     await userEvent.clear(daily);
@@ -163,15 +167,31 @@ describe("ScheduleTab", () => {
   });
 
   it("shows a stored interval outside the option list as itself and sends nothing until another is picked", async () => {
-    const ipc = setupIpc({ get_settings: () => ({ ...settings, "schedule.collect_interval_hours": "2" }), set_setting: () => undefined });
+    const ipc = setupIpc({ get_settings: () => ({ ...settings, "schedule.collect_interval_minutes": "120" }), set_setting: () => undefined });
     render(<ScheduleTab status={status} />);
     const interval = await screen.findByLabelText("収集間隔");
-    expect(interval).toHaveValue("2");
+    expect(interval).toHaveValue("120");
     expect(screen.getByRole("option", { name: "2時間おき" })).toHaveProperty("selected", true);
     expect(ipc.count("set_setting")).toBe(0);
     await userEvent.selectOptions(interval, screen.getByRole("option", { name: "1時間おき" }));
-    expect(ipc.last("set_setting")).toEqual({ key: "schedule.collect_interval_hours", value: "1" });
+    expect(ipc.last("set_setting")).toEqual({ key: "schedule.collect_interval_minutes", value: "60" });
     expect(ipc.count("set_setting")).toBe(1);
+  });
+
+  it("labels a stored interval that is not a whole number of hours in minutes", async () => {
+    setupIpc({ get_settings: () => ({ ...settings, "schedule.collect_interval_minutes": "90" }), set_setting: () => undefined });
+    render(<ScheduleTab status={status} />);
+    expect(await screen.findByLabelText("収集間隔")).toHaveValue("90");
+    expect(screen.getByRole("option", { name: "90分おき" })).toHaveProperty("selected", true);
+  });
+
+  it("falls back to the old hours setting, converted to minutes, when minutes is unset", async () => {
+    const { "schedule.collect_interval_minutes": _unused, ...rest } = settings;
+    void _unused;
+    setupIpc({ get_settings: () => ({ ...rest, "schedule.collect_interval_hours": "6" }), set_setting: () => undefined });
+    render(<ScheduleTab status={status} />);
+    expect(await screen.findByLabelText("収集間隔")).toHaveValue("360");
+    expect(screen.getByRole("option", { name: "6時間おき" })).toHaveProperty("selected", true);
   });
 
   it("shows a stored weekday outside the option list as its raw value", async () => {

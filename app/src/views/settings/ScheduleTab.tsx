@@ -5,8 +5,14 @@ import { formatClock, localDateString } from "../../lib/dates";
 import type { AppStatus } from "../../types";
 import { SettingField, useSettingsState, withStoredOption } from "./shared";
 
-const intervalLabel = (h: string) => `${h}時間おき`;
-const INTERVALS = ["1", "3", "6", "12"].map((h) => ({ id: h, label: intervalLabel(h) }));
+const intervalLabel = (m: string) => {
+  const n = Number(m);
+  return n >= 60 && n % 60 === 0 ? `${n / 60}時間おき` : `${m}分おき`;
+};
+const INTERVALS = [
+  ["1", "1分おき"], ["5", "5分おき"], ["15", "15分おき"], ["30", "30分おき"],
+  ["60", "1時間おき"], ["180", "3時間おき"], ["360", "6時間おき"], ["720", "12時間おき"],
+].map(([id, label]) => ({ id, label }));
 const WEEKDAYS = [["mon", "月曜"], ["tue", "火曜"], ["wed", "水曜"], ["thu", "木曜"], ["fri", "金曜"], ["sat", "土曜"], ["sun", "日曜"]].map(([id, label]) => ({ id, label }));
 
 /** 次回の収集時刻。今日 (ローカル日付) なら HH:MM、別の日なら M/D HH:MM。 */
@@ -33,6 +39,9 @@ export function ScheduleTab({ status }: { status: AppStatus }) {
   const { settings, loadError, actionError, busy, act, save } = useSettingsState();
   if (!settings) return <ErrorLine message={loadError} />;
   const g = (k: string) => settings[k] ?? "";
+  // 分の設定が未設定なら、旧設定 (時間) を分に直して表示する。
+  const hours = Number(g("schedule.collect_interval_hours"));
+  const interval = g("schedule.collect_interval_minutes") || (Number.isInteger(hours) && hours > 0 ? String(hours * 60) : "");
   const timeField = (id: string, label: string, key: string, hint?: string) => (
     <SettingField id={id} label={label} width={120} hint={hint} value={g(key)} validate={validateTime} normalize={normalizeTime} onSave={(v) => save(key, v)} />
   );
@@ -44,8 +53,8 @@ export function ScheduleTab({ status }: { status: AppStatus }) {
         <h2>収集</h2>
         <div className="setting-row">
           <div className="label"><label htmlFor="interval">収集間隔</label></div>
-          <select id="interval" className="field" style={{ width: 180 }} value={g("schedule.collect_interval_hours")} onChange={(e) => save("schedule.collect_interval_hours", e.target.value)}>
-            {withStoredOption(INTERVALS, g("schedule.collect_interval_hours"), intervalLabel).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          <select id="interval" className="field" style={{ width: 180 }} value={interval} onChange={(e) => save("schedule.collect_interval_minutes", e.target.value)}>
+            {withStoredOption(INTERVALS, interval, intervalLabel).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
         </div>
         <div className="setting-row">
@@ -56,7 +65,7 @@ export function ScheduleTab({ status }: { status: AppStatus }) {
       </section>
       <section className="section">
         <h2>要約の生成</h2>
-        <p className="desc">日次の時刻に前日の日次要約を確定し、現在の週次と月次を作り直します。当日の日次要約は収集のたびに更新されます。</p>
+        <p className="desc">日次の時刻に前日の日次要約を確定し、現在の週次と月次を作り直します。収集では要約を作り直しません。</p>
         {timeField("daily-time", "日次要約の時刻", "schedule.daily_time", "HH:MM")}
         <div className="setting-row">
           <div className="label"><label htmlFor="weekly-day">週次要約の曜日</label><span className="hint">日次要約から生成</span></div>

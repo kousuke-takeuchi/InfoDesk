@@ -135,6 +135,7 @@ pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("node.bin", "node"),
     ("summary.top_n", "20"),
     ("schedule.collect_interval_hours", "3"),
+    ("schedule.collect_interval_minutes", "180"),
     ("schedule.daily_time", "07:00"),
     ("schedule.weekly_day", "mon"),
     ("schedule.weekly_time", "07:30"),
@@ -150,7 +151,14 @@ const SEEDED_KEY: &str = "seeded";
 pub fn seed_defaults(store: &Store) -> Result<usize> {
     for (key, value) in DEFAULT_SETTINGS {
         if store.get_setting(key)?.is_none() {
-            store.set_setting(key, value)?;
+            // 旧設定 (時間) だけを持つ既存ユーザーの間隔を、分の設定に引き継ぐ。
+            let migrated = (*key == "schedule.collect_interval_minutes")
+                .then(|| store.get_setting("schedule.collect_interval_hours"))
+                .transpose()?
+                .flatten()
+                .and_then(|h| h.trim().parse::<i64>().ok())
+                .map(|h| (h.clamp(1, 24 * 7) * 60).to_string());
+            store.set_setting(key, migrated.as_deref().unwrap_or(value))?;
         }
     }
     if store.get_setting(SEEDED_KEY)?.is_some() {
@@ -166,6 +174,31 @@ pub fn seed_defaults(store: &Store) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn minutes_interval_is_seeded_from_an_existing_hours_setting() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .set_setting("schedule.collect_interval_hours", "6")
+            .unwrap();
+        seed_defaults(&store).unwrap();
+        assert_eq!(
+            store
+                .get_setting("schedule.collect_interval_minutes")
+                .unwrap()
+                .as_deref(),
+            Some("360")
+        );
+        let fresh = Store::open_in_memory().unwrap();
+        seed_defaults(&fresh).unwrap();
+        assert_eq!(
+            fresh
+                .get_setting("schedule.collect_interval_minutes")
+                .unwrap()
+                .as_deref(),
+            Some("180")
+        );
+    }
 
     #[test]
     fn seeds_once_and_covers_every_category() {

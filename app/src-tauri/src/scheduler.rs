@@ -49,13 +49,17 @@ fn parse_weekday(s: Option<String>) -> Weekday {
 
 impl ScheduleConfig {
     /// 設定から読む。壊れた値や未設定は既定値 (3時間、7:00、月曜 7:30、1日 8:00)。
+    ///
+    /// 収集間隔は `schedule.collect_interval_minutes` (1〜10080分) を優先し、なければ
+    /// 旧設定 `schedule.collect_interval_hours` (1〜168時間) を分に直して使う。
     pub fn from_settings(get: impl Fn(&str) -> Option<String>) -> Self {
-        let hours = get("schedule.collect_interval_hours")
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(3)
-            .clamp(1, 24 * 7);
+        let parse = |key: &str| get(key).and_then(|v| v.trim().parse::<i64>().ok());
+        let minutes = parse("schedule.collect_interval_minutes")
+            .or_else(|| parse("schedule.collect_interval_hours").map(|h| h.clamp(1, 24 * 7) * 60))
+            .unwrap_or(180)
+            .clamp(1, 24 * 7 * 60);
         Self {
-            collect_interval: Duration::hours(hours),
+            collect_interval: Duration::minutes(minutes),
             daily_time: parse_time(get("schedule.daily_time"), (7, 0)),
             weekly_day: parse_weekday(get("schedule.weekly_day")),
             weekly_time: parse_time(get("schedule.weekly_time"), (7, 30)),
@@ -135,21 +139,32 @@ pub fn due_jobs(now: DateTime<FixedOffset>, cfg: &ScheduleConfig, last: &LastRun
 /// 同じジョブや再試行を繰り返さない間隔。
 pub const RECENT_ATTEMPT: Duration = Duration::minutes(15);
 
-/// 最後の試行から `RECENT_ATTEMPT` 未満のジョブを除く。失敗し続けるジョブを
-/// 毎分繰り返さないため。
+/// 最後の試行からの待ち時間未満のジョブを除く。失敗し続けるジョブを繰り返さないため。
+/// 待ち時間は `RECENT_ATTEMPT`。収集だけは収集間隔がそれより短ければ収集間隔にする。
 pub fn filter_recent(
     due: Vec<Job>,
     attempts: &HashMap<Job, DateTime<Utc>>,
     now: DateTime<Utc>,
+    cfg: &ScheduleConfig,
 ) -> Vec<Job> {
     due.into_iter()
         .filter(|job| {
-            attempts
-                .get(job)
-                .is_none_or(|at| now - *at >= RECENT_ATTEMPT)
+            let window = match job {
+                Job::Collect => RECENT_ATTEMPT.min(cfg.collect_interval),
+                _ => RECENT_ATTEMPT,
+            };
+            attempts.get(job).is_none_or(|at| now - *at >= window)
         })
         .collect()
 }
+
+/// 保留の要約の再試行を今すべきか。前回から `RECENT_ATTEMPT` 以上空いていれば真。
+pub fn retry_due(last_retry_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+    last_retry_at.is_none_or(|at| now - at >= RECENT_ATTEMPT)
+}
+
+/// `run_loop` の評価間隔。
+const TICK: StdDuration = StdDuration::from_secs(15);
 
 fn previous_month(first_of_month: NaiveDate) -> NaiveDate {
     period_start(Period::Month, first_of_month - Duration::days(1))
@@ -229,12 +244,13 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
     }
 }
 
-/// 起動直後と60秒ごとに `due_jobs` を評価する。
+/// 起動直後と15秒ごとに `due_jobs` を評価する。
 ///
-/// 同じジョブは `RECENT_ATTEMPT` 以内に再実行しない。保留の再試行は、ジョブを
-/// 実行しなかった評価でだけ、`RECENT_ATTEMPT` に1回まで行う。
+/// 同じジョブは `filter_recent` の待ち時間内に再実行しない。収集中に収集の時刻が来ても
+/// 黙って見送る。保留の再試行は、ジョブの有無にかかわらず、実行したジョブの後に
+/// `RECENT_ATTEMPT` に1回まで行う。
 pub async fn run_loop(app: AppHandle) {
-    let mut ticker = tokio::time::interval(StdDuration::from_secs(60));
+    let mut ticker = tokio::time::interval(TICK);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut attempts: HashMap<Job, DateTime<Utc>> = HashMap::new();
     let mut last_retry_at: Option<DateTime<Utc>> = None;
@@ -249,13 +265,17 @@ pub async fn run_loop(app: AppHandle) {
         state.update_status(|s| s.next_collect_at = Some(next_collect_at(now, &cfg, &last)));
         let now_utc = now.with_timezone(&Utc);
         attempts.retain(|_, at| now_utc - *at < RECENT_ATTEMPT);
-        let due = filter_recent(due_jobs(now, &cfg, &last), &attempts, now_utc);
+        let due = filter_recent(due_jobs(now, &cfg, &last), &attempts, now_utc, &cfg);
         let today = now.date_naive();
         for job in &due {
+            // 収集中の収集は黙って見送る。試行として記録せず、終わり次第次の評価で拾う。
+            if *job == Job::Collect && jobs::is_collecting(&state) {
+                continue;
+            }
             attempts.insert(job.clone(), now_utc);
             run_job(&state, job, today).await;
         }
-        if due.is_empty() && last_retry_at.is_none_or(|at| now_utc - at >= RECENT_ATTEMPT) {
+        if retry_due(last_retry_at, now_utc) {
             last_retry_at = Some(now_utc);
             let _ = jobs::retry_pending(&state).await;
         }
@@ -465,14 +485,66 @@ mod tests {
             Job::Monthly(d("2026-09-01")),
         ];
         assert_eq!(
-            filter_recent(due, &attempts, now),
+            filter_recent(due, &attempts, now, &cfg()),
             vec![
                 Job::Daily(d("2026-10-05")),
                 Job::Weekly(d("2026-09-28")),
                 Job::Monthly(d("2026-09-01")),
             ]
         );
-        assert!(filter_recent(Vec::new(), &attempts, now).is_empty());
+        assert!(filter_recent(Vec::new(), &attempts, now, &cfg()).is_empty());
+    }
+
+    #[test]
+    fn collect_recent_window_is_capped_by_the_interval() {
+        let now: DateTime<Utc> = "2026-10-06T00:00:00Z".parse().unwrap();
+        let one_min = ScheduleConfig::from_settings(|k| match k {
+            "schedule.collect_interval_minutes" => Some("1".into()),
+            _ => None,
+        });
+        let mut attempts = HashMap::new();
+        attempts.insert(Job::Collect, now - Duration::seconds(61));
+        attempts.insert(Job::Daily(d("2026-10-05")), now - Duration::seconds(61));
+        let due = vec![Job::Collect, Job::Daily(d("2026-10-05"))];
+        // 1分間隔なら収集は1分後に再実行でき、他のジョブは15分のまま。
+        assert_eq!(
+            filter_recent(due.clone(), &attempts, now, &one_min),
+            vec![Job::Collect]
+        );
+        attempts.insert(Job::Collect, now - Duration::seconds(30));
+        assert!(filter_recent(due, &attempts, now, &one_min).is_empty());
+        // 3時間間隔なら従来どおり15分。
+        let mut attempts = HashMap::new();
+        attempts.insert(Job::Collect, now - Duration::minutes(14));
+        assert!(filter_recent(vec![Job::Collect], &attempts, now, &cfg()).is_empty());
+    }
+
+    #[test]
+    fn pending_retry_runs_at_most_once_per_window() {
+        let now: DateTime<Utc> = "2026-10-06T00:00:00Z".parse().unwrap();
+        assert!(retry_due(None, now));
+        assert!(!retry_due(Some(now - Duration::minutes(14)), now));
+        assert!(retry_due(Some(now - Duration::minutes(15)), now));
+    }
+
+    #[test]
+    fn minutes_setting_wins_over_hours_and_falls_back() {
+        let with = |minutes: Option<&'static str>, hours: Option<&'static str>| {
+            ScheduleConfig::from_settings(|k| match k {
+                "schedule.collect_interval_minutes" => minutes.map(String::from),
+                "schedule.collect_interval_hours" => hours.map(String::from),
+                _ => None,
+            })
+            .collect_interval
+        };
+        assert_eq!(with(Some("5"), Some("6")), Duration::minutes(5));
+        assert_eq!(with(None, Some("6")), Duration::hours(6));
+        assert_eq!(with(Some("abc"), Some("6")), Duration::hours(6));
+        assert_eq!(with(Some(""), Some("2")), Duration::hours(2));
+        assert_eq!(with(Some("0"), Some("6")), Duration::minutes(1));
+        assert_eq!(with(Some("999999"), None), Duration::minutes(10080));
+        assert_eq!(with(None, None), Duration::minutes(180));
+        assert_eq!(with(Some("x"), Some("y")), Duration::minutes(180));
     }
 
     struct FixedLlm(Result<&'static str, &'static str>);

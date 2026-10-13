@@ -186,7 +186,7 @@ pub fn is_collecting(state: &AppState) -> bool {
     state.status().collecting
 }
 
-/// 収集、記事要約、当日の日次要約。収集中なら拒否する (`last_error` は変えない)。
+/// 収集と記事要約。日次要約は作らない (スケジュールの日次ジョブが作る)。収集中なら拒否する (`last_error` は変えない)。
 pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
     {
         let mut status = state.status.lock().expect("status lock");
@@ -255,7 +255,6 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
     if let Some(e) = &totals.error {
         state.update_status(|s| s.last_error = Some(e.clone()));
     }
-    run_digests(state, Period::Day, today, &all_category_scopes(), true).await?;
     Ok(summary)
 }
 
@@ -290,6 +289,13 @@ mod tests {
             Arc::new(move |_, _| Ok(Box::new(Mock1(reply.clone())) as Box<dyn LlmProvider>));
     }
 
+    /// 収集の後に当日の日次要約を作る。収集自体は要約を作らないので、保留の要約を用意する。
+    async fn collect_with_digest(state: &AppState) {
+        run_collect(state).await.unwrap();
+        let today = Local::now().date_naive();
+        let _ = run_digests(state, Period::Day, today, &all_category_scopes(), true).await;
+    }
+
     /// 全ソースを無効にし、wiremock のRSS 1件だけ有効にする。
     async fn one_rss_source(state: &AppState, server: &MockServer, status: u16) -> i64 {
         Mock::given(method("GET")).and(path("/feed"))
@@ -313,7 +319,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn collect_fetches_summarizes_and_builds_today_digest() {
+    async fn collect_fetches_and_summarizes_items_without_building_a_digest() {
         let server = MockServer::start().await;
         let (mut state, events) = test_state();
         one_rss_source(&state, &server, 200).await;
@@ -328,24 +334,31 @@ mod tests {
             .unwrap();
         assert_eq!(items[0].ai_summary.as_deref(), Some("日本語の要約。"));
         let today = Local::now().date_naive();
-        let digest = state
-            .with_store(|s| {
-                s.get_digest(
-                    Period::Day,
-                    today,
-                    &DigestScope::Category(Category::Medcare),
-                )
-            })
-            .unwrap()
-            .unwrap();
-        assert_eq!(digest.body, "日本語の要約。");
+        for period in [Period::Day, Period::Week, Period::Month] {
+            assert!(
+                state
+                    .with_store(|s| s.get_digest(
+                        period,
+                        today,
+                        &DigestScope::Category(Category::Medcare)
+                    ))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(
+            state
+                .with_store(|s| s.pending_digests())
+                .unwrap()
+                .is_empty()
+        );
         let st = state.status();
         assert!(!st.collecting && !st.summarizing && !st.digesting);
         assert!(st.last_collect_at.is_some());
         assert_eq!(st.last_error, None);
         let ev = events.lock().unwrap();
         assert!(ev.contains(&EVENT_ITEMS.to_string()));
-        assert!(ev.contains(&EVENT_DIGESTS.to_string()));
+        assert!(!ev.contains(&EVENT_DIGESTS.to_string()));
     }
 
     #[tokio::test]
@@ -362,6 +375,15 @@ mod tests {
             .with_store(|s| s.query_items(&ItemFilter::default()))
             .unwrap();
         assert_eq!(items[0].ai_summary, None);
+        // 収集は要約を作らないので、保留の要約は日次の生成で作る。
+        assert!(
+            state
+                .with_store(|s| s.pending_digests())
+                .unwrap()
+                .is_empty()
+        );
+        let today = Local::now().date_naive();
+        let _ = run_digests(&state, Period::Day, today, &all_category_scopes(), true).await;
         let pending = state.with_store(|s| s.pending_digests()).unwrap();
         assert_eq!(pending.len(), 1);
         assert!(
@@ -397,7 +419,7 @@ mod tests {
         let (mut state, _) = test_state();
         one_rss_source(&state, &server, 500).await;
         use_mock(&mut state, Ok("x"));
-        run_collect(&state).await.unwrap();
+        collect_with_digest(&state).await;
         assert_eq!(
             state.status().last_error.as_deref(),
             Some(ALL_SOURCES_FAILED)
@@ -440,7 +462,7 @@ mod tests {
         let (mut state, _) = test_state();
         one_rss_source(&state, &server, 200).await;
         use_mock(&mut state, Err("down"));
-        run_collect(&state).await.unwrap();
+        collect_with_digest(&state).await;
         assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 1);
 
         use_mock(&mut state, Ok("復旧"));
@@ -520,7 +542,7 @@ mod tests {
         let server = MockServer::start().await;
         two_rss_sources(state, &server).await;
         use_mock(state, Err("down"));
-        run_collect(state).await.unwrap();
+        collect_with_digest(state).await;
         assert_eq!(state.with_store(|s| s.pending_digests()).unwrap().len(), 2);
         assert!(state.status().last_error.is_some());
         server
@@ -574,7 +596,7 @@ mod tests {
         let (mut state, _) = test_state();
         one_rss_source(&state, &server, 200).await;
         use_mock(&mut state, Err("down"));
-        run_collect(&state).await.unwrap();
+        collect_with_digest(&state).await;
         // 3回目の失敗で failed になる。
         retry_pending(&state).await.unwrap();
         retry_pending(&state).await.unwrap();
@@ -691,13 +713,13 @@ mod tests {
         let (mut state, _) = test_state();
         one_rss_source(&state, &server, 200).await;
         use_mock(&mut state, Ok("要約"));
-        run_collect(&state).await.unwrap();
+        collect_with_digest(&state).await;
         let today = Local::now().date_naive();
         let results = run_digests(&state, Period::Day, today, &all_category_scopes(), false)
             .await
             .unwrap();
         assert_eq!(results.len(), 7);
-        // medcare は収集時に生成済みなので None (再生成しない)。他は記事なしで None。
+        // medcare は直前の生成で作成済みなので None (再生成しない)。他は記事なしで None。
         assert!(results.iter().all(|(_, o)| o.is_none()));
         let results = run_digests(
             &state,
