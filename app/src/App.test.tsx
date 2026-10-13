@@ -347,6 +347,20 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "RSSを追加" })).toBeInTheDocument();
     });
 
+    it("ignores shortcuts while the add-RSS dialog is open", async () => {
+      const ipc = setupIpc(handlers({ list_sources: () => [], source_item_counts: () => ({}) }));
+      await ready();
+      await press(",", { metaKey: true });
+      await userEvent.click(await screen.findByRole("button", { name: "RSSを追加" }));
+      const dialog = screen.getByRole("dialog", { name: "RSSフィードを追加" });
+      expect(dialog).toHaveAttribute("aria-modal", "true");
+      await press("r", { ctrlKey: true }, dialog);
+      await press("?", { shiftKey: true }, dialog);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(ipc.count("collect_now")).toBe(0);
+      expect(screen.queryByRole("dialog", { name: "ショートカット" })).toBeNull();
+    });
+
     it("1 and 2 switch between digest and feed", async () => {
       setupIpc(feedHandlers());
       await ready();
@@ -392,21 +406,30 @@ describe("App", () => {
       setupIpc(feedHandlers());
       await goFeed();
       const scroll = vi.fn();
+      const original = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
       Element.prototype.scrollIntoView = scroll;
-      expect(selected()).toBeNull();
-      await press("j");
-      expect(selected()).toHaveTextContent("記事1");
-      expect(scroll).toHaveBeenLastCalledWith({ block: "nearest" });
-      await press("j");
-      expect(selected()).toHaveTextContent("記事2");
-      await press("j");
-      await press("j");
-      expect(selected()).toHaveTextContent("記事3");
-      await press("k");
-      expect(selected()).toHaveTextContent("記事2");
-      await press("k");
-      await press("k");
-      expect(selected()).toHaveTextContent("記事1");
+      try {
+        expect(selected()).toBeNull();
+        await press("j");
+        expect(selected()).toHaveTextContent("記事1");
+        expect(scroll).toHaveBeenLastCalledWith({ block: "nearest" });
+        await press("j");
+        expect(selected()).toHaveTextContent("記事2");
+        await press("j");
+        await press("j");
+        expect(selected()).toHaveTextContent("記事3");
+        await press("k");
+        expect(selected()).toHaveTextContent("記事2");
+        await press("k");
+        await press("k");
+        expect(selected()).toHaveTextContent("記事1");
+        // Caps Lock 中の大文字でも動く。
+        await press("J");
+        expect(selected()).toHaveTextContent("記事2");
+      } finally {
+        if (original) Object.defineProperty(Element.prototype, "scrollIntoView", original);
+        else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
     });
 
     it("Enter opens, u toggles read, s toggles star, Shift+A marks all read", async () => {
@@ -510,6 +533,11 @@ describe("App", () => {
         await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
         await waitFor(() => expect(ipc.last("get_digests").date).toBe("2026-10-14"));
         expect(ipc.last("digest_stats").date).toBe("2026-10-14");
+        await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+        // 日付の変化と refreshTick の両方で取り直さない (1組だけ)。
+        const onNewDay = (cmd: string) => ipc.calls.filter((c) => c.cmd === cmd && c.args.date === "2026-10-14").length;
+        expect(onNewDay("get_digests")).toBe(1);
+        expect(onNewDay("digest_stats")).toBe(1);
       } finally {
         vi.useRealTimers();
       }

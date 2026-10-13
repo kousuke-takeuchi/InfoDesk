@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::error::AppResult;
 use crate::jobs;
-use crate::state::AppState;
+use crate::state::{AppState, ErrorOrigin};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DigestView {
@@ -128,7 +128,7 @@ pub fn regenerate_digest(
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         if let Err(e) = jobs::run_digests(&state, period, date, &scopes, true).await {
-            state.update_status(|s| s.last_error = Some(e.message));
+            state.update_status(|s| s.set_error(ErrorOrigin::Job, e.message));
         }
     });
     Ok(())
@@ -145,7 +145,7 @@ pub fn collect_now(app: AppHandle) -> AppResult<()> {
         if let Err(e) = jobs::run_collect(&state).await
             && e.message != jobs::COLLECT_ALREADY_RUNNING
         {
-            state.update_status(|s| s.last_error = Some(e.message));
+            state.update_status(|s| s.set_error(ErrorOrigin::Collect, e.message));
         }
     });
     Ok(())
@@ -157,7 +157,7 @@ pub fn retry_pending_digests(app: AppHandle) -> AppResult<()> {
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         if let Err(e) = jobs::retry_all(&state).await {
-            state.update_status(|s| s.last_error = Some(e.message));
+            state.update_status(|s| s.set_error(ErrorOrigin::Job, e.message));
         }
     });
     Ok(())

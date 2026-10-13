@@ -22,4 +22,24 @@ describe("ShortcutHelp", () => {
     await userEvent.click(screen.getByRole("button", { name: "閉じる" }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps Tab and Shift+Tab inside the dialog", async () => {
+    render(<><button>外のボタン</button><ShortcutHelp onClose={() => {}} /></>);
+    const close = screen.getByRole("button", { name: "閉じる" });
+    expect(close).toHaveFocus();
+    await userEvent.tab();
+    expect(close).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(close).toHaveFocus();
+  });
+
+  it("returns focus to the element that had it before opening", () => {
+    const { rerender } = render(<><button>前のボタン</button></>);
+    const before = screen.getByRole("button", { name: "前のボタン" });
+    before.focus();
+    rerender(<><button>前のボタン</button><ShortcutHelp onClose={() => {}} /></>);
+    expect(screen.getByRole("button", { name: "閉じる" })).toHaveFocus();
+    rerender(<><button>前のボタン</button></>);
+    expect(before).toHaveFocus();
+  });
 });

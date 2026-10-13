@@ -53,7 +53,8 @@ export function matchShortcut(e: KeyInfo, ctx: ShortcutContext): ShortcutAction 
   } else if (!e.altKey) {
     if (e.key === "?") action = "help";
     else if (e.key === "A" && e.shiftKey) action = "markAllRead";
-    else if (!e.shiftKey) action = PLAIN[e.key] ?? null;
+    // Caps Lock 中は Shift なしでも大文字が届くので、1文字のキーは小文字にして引く。
+    else if (!e.shiftKey) action = PLAIN[e.key.length === 1 ? e.key.toLowerCase() : e.key] ?? null;
   }
   if (action === "open" && isActivatable(e.target)) return null;
   if (action && ctx.inSettings && !IN_SETTINGS.has(action)) return null;

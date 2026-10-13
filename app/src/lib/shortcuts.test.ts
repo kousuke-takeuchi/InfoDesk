@@ -16,6 +16,17 @@ describe("matchShortcut", () => {
     expect(matchShortcut(key(k), CTX)).toBe(action);
   });
 
+  it("maps letters typed with Caps Lock on (upper case without shift)", () => {
+    expect(matchShortcut(key("J"), CTX)).toBe("next");
+    expect(matchShortcut(key("K"), CTX)).toBe("prev");
+    expect(matchShortcut(key("U"), CTX)).toBe("toggleRead");
+    expect(matchShortcut(key("S"), CTX)).toBe("toggleStar");
+    expect(matchShortcut(key("D"), CTX)).toBe("periodDay");
+    // Shift 付きの大文字は別のキー (Shift+A 以外は何もしない)。
+    expect(matchShortcut(key("J", { shiftKey: true }), CTX)).toBeNull();
+    expect(matchShortcut(key("Enter"), CTX)).toBe("open");
+  });
+
   it("maps Shift+A and ? with shift", () => {
     expect(matchShortcut(key("A", { shiftKey: true }), CTX)).toBe("markAllRead");
     expect(matchShortcut(key("?", { shiftKey: true }), CTX)).toBe("help");

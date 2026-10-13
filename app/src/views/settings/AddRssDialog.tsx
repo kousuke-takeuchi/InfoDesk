@@ -36,7 +36,7 @@ export function AddRssDialog({ onClose, onAdded }: { onClose: () => void; onAdde
 
   return (
     <div className="overlay" onClick={dismiss}>
-      <form className="dialog" role="dialog" aria-label="RSSフィードを追加" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+      <form className="dialog" role="dialog" aria-modal="true" aria-label="RSSフィードを追加" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h2>RSSフィードを追加</h2>
         <div className="row">
           <label htmlFor="rss-url">フィードURL</label>

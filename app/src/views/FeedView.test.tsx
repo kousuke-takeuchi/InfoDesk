@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { FeedView } from "./FeedView";
 import { emitEvent, setupIpc } from "../test/ipc";
 import type { AppStatus, Item } from "../types";
+import type { Selection } from "../components/Sidebar";
+import type { ViewActionsRef } from "../hooks/useShortcuts";
 
 const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: "2026-10-06T00:00:00Z", next_collect_at: null, last_error: null };
 const item = (over: Partial<Item>): Item => ({
@@ -374,5 +376,116 @@ describe("FeedView", () => {
     expect(thumb).toBeLessThan(idx(row.querySelector(".row-actions")));
     expect(thumb).toBeLessThan(idx(row.querySelector(".star")));
     expect(row.querySelector("img.thumb")).not.toHaveAttribute("tabindex");
+  });
+
+  describe("keyboard selection", () => {
+    const rows = (...ids: number[]) => ids.map((id) => item({ id, title: `記事${id}`, url: `https://e.com/${id}` }));
+    const selected = () => document.querySelector(".item-row.selected");
+    const ALL: Selection = { kind: "all" };
+    function renderNav(initial: Item[], props: { refreshTick?: number; selection?: Selection } = {}) {
+      let list = initial;
+      const ipc = setupIpc({
+        list_items: () => list, count_items: () => list.length, list_sources: () => [],
+        set_read: () => undefined, open_item: () => undefined,
+      });
+      const actions: ViewActionsRef = { current: {} };
+      const el = (p: typeof props) => (
+        <FeedView selection={p.selection ?? ALL} topics={[]} status={status} view="feed" onSwitchView={() => {}}
+          onOpenSources={() => {}} actions={actions} refreshTick={p.refreshTick ?? 0} {...CHAT} />
+      );
+      const view = render(el(props));
+      return {
+        ipc, actions,
+        setList: (l: Item[]) => { list = l; },
+        rerender: (p: typeof props) => view.rerender(el(p)),
+        press: (a: keyof ViewActionsRef["current"]) => act(() => { actions.current[a]!(); }),
+      };
+    }
+
+    it("keeps the selected article when a refetch prepends new items", async () => {
+      const f = renderNav(rows(1, 2, 3));
+      await screen.findByText("記事1");
+      await f.press("next");
+      await f.press("next");
+      expect(selected()).toHaveTextContent("記事2");
+      f.setList(rows(9, 8, 1, 2, 3));
+      await emitEvent("items-changed");
+      await screen.findByText("記事9");
+      expect(selected()).toHaveTextContent("記事2");
+      await f.press("next");
+      expect(selected()).toHaveTextContent("記事3");
+    });
+
+    it("moves to the same position when the selected article leaves the list", async () => {
+      const f = renderNav(rows(1, 2, 3, 4));
+      await screen.findByText("記事1");
+      await f.press("next");
+      await f.press("next");
+      expect(selected()).toHaveTextContent("記事2");
+      // 未読のみで u を押した後のように、選択中の記事が一覧から消える。
+      f.setList(rows(1, 3, 4));
+      await emitEvent("items-changed");
+      await waitFor(() => expect(screen.queryByText("記事2")).toBeNull());
+      expect(selected()).toHaveTextContent("記事3");
+      await f.press("next");
+      expect(selected()).toHaveTextContent("記事4");
+      // 末尾の記事が消えたら、新しい末尾へ。
+      f.setList(rows(1, 3));
+      await emitEvent("items-changed");
+      await waitFor(() => expect(screen.queryByText("記事4")).toBeNull());
+      expect(selected()).toHaveTextContent("記事3");
+      await f.press("prev");
+      expect(selected()).toHaveTextContent("記事1");
+    });
+
+    it("clears the selection when the sidebar selection changes", async () => {
+      const f = renderNav(rows(1, 2, 3));
+      await screen.findByText("記事1");
+      await f.press("next");
+      await f.press("next");
+      f.setList(rows(5, 6, 7));
+      f.rerender({ selection: { kind: "category", category: "medcare" } });
+      await screen.findByText("記事5");
+      expect(selected()).toBeNull();
+      await f.press("next");
+      expect(selected()).toHaveTextContent("記事5");
+    });
+
+    it("refetches once each time refreshTick changes", async () => {
+      const f = renderNav(rows(1));
+      await screen.findByText("記事1");
+      await tick();
+      const before = f.ipc.count("list_items");
+      f.rerender({ refreshTick: 1 });
+      await waitFor(() => expect(f.ipc.count("list_items")).toBe(before + 1));
+      f.rerender({ refreshTick: 1 });
+      f.rerender({ refreshTick: 2 });
+      await waitFor(() => expect(f.ipc.count("list_items")).toBe(before + 2));
+      await tick();
+      expect(f.ipc.count("list_items")).toBe(before + 2);
+    });
+
+    it("moves focus off a focused button when j / k move the selection", async () => {
+      const f = renderNav(rows(1, 2));
+      await screen.findByText("記事1");
+      const button = screen.getByRole("button", { name: "未読のみ" });
+      button.focus();
+      await f.press("next");
+      expect(button).not.toHaveFocus();
+      const link = screen.getByRole("button", { name: "記事2" });
+      link.focus();
+      await f.press("next");
+      expect(link).not.toHaveFocus();
+      expect(selected()).toHaveTextContent("記事2");
+    });
+
+    it("Esc in the search field leaves it", async () => {
+      renderNav(rows(1));
+      await screen.findByText("記事1");
+      const search = screen.getByRole("textbox", { name: "検索" });
+      search.focus();
+      fireEvent.keyDown(search, { key: "Escape" });
+      expect(search).not.toHaveFocus();
+    });
   });
 });

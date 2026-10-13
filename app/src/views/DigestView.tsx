@@ -142,28 +142,23 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
       .catch((e) => { if (latestStats.current === mine) setStats({ key: loadKey, value: null, error: errorMessage(e) }); });
   }, [period, date, topicId, loadKey]);
 
+  // 条件 (日付を含む) が変わったときと refreshTick が増えたときに取り直す。
+  // 日付の変化は refreshTick と同じ描画で届くので、一つの effect にまとめて二重に取らない。
   useEffect(() => {
     loadStats();
     return () => { latestStats.current++; };
-  }, [loadStats]);
+  }, [loadStats, refreshTick]);
 
   useEffect(() => {
     setError(null);
     load(false);
     // アンマウント後や条件変更後に届いた応答を捨てる。
     return () => { latestLoad.current++; };
-  }, [load]);
+  }, [load, refreshTick]);
   // status は prop で届く。再取得は完了通知 (digests-changed) と記事の増減 (items-changed) のとき。
   useTauriEvent(EVENTS.digests, () => load(true));
   // 収集で item_count が変わる。生成ジョブの完了ではないので、依頼中の印は外さない。
   useTauriEvent(EVENTS.items, () => { load(false); loadStats(); });
-  const lastTick = useRef(refreshTick);
-  useEffect(() => {
-    if (lastTick.current === refreshTick) return;
-    lastTick.current = refreshTick;
-    load(false);
-    loadStats();
-  }, [refreshTick, load, loadStats]);
   useEffect(() => {
     if (!actions) return;
     actions.current = {

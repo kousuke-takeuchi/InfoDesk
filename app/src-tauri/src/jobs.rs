@@ -10,7 +10,7 @@ use infodesk_core::summarizer::{
 use serde::Serialize;
 
 use crate::error::AppResult;
-use crate::state::{AppState, EVENT_DIGESTS, EVENT_ITEMS};
+use crate::state::{AppState, EVENT_DIGESTS, EVENT_ITEMS, ErrorOrigin};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct CollectSummary {
@@ -114,8 +114,8 @@ pub async fn run_digests(
         Ok(())
     }
     .await;
-    if first_error.is_some() {
-        state.update_status(|s| s.last_error = first_error.clone());
+    if let Some(e) = first_error {
+        state.update_status(|s| s.set_error(ErrorOrigin::Job, e));
     }
     // `digests-changed` を受けた画面が古い `digesting` を見ないよう、先にジョブ数を戻す。
     drop(job_guard);
@@ -201,7 +201,7 @@ pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
     state.update_status(|s| {
         s.collecting = false;
         if let Err(e) = &result {
-            s.last_error = Some(e.message.clone());
+            s.set_error(ErrorOrigin::Collect, e.message.clone());
         }
     });
     result
@@ -230,22 +230,24 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
     };
     if !reports.is_empty() && reports.iter().all(|r| r.error.is_some()) {
         // 有効なソースがすべて失敗した。ソースごとのエラーは行に残っている。
-        // 最終収集時刻を前にずらし、スケジューラーが約10分後に再試行するようにする。
+        // 最終収集時刻を前にずらし、スケジューラーが約10分後 (間隔がそれより短ければ間隔どおり)
+        // に再試行するようにする。ずらした時刻が未来になることはない。
         // 新しい記事がないので、要約は作らない。
         let interval = crate::scheduler::ScheduleConfig::from_settings(|k| {
             state.with_store(|s| s.get_setting(k)).ok().flatten()
         })
         .collect_interval;
-        let retry_base = now - interval + RETRY_AFTER_ALL_FAILED;
+        let retry_base = (now - interval + RETRY_AFTER_ALL_FAILED.min(interval)).min(now);
         state
             .with_store(|s| s.set_setting("schedule.last_collect_at", &retry_base.to_rfc3339()))?;
-        state.update_status(|s| s.last_error = Some(ALL_SOURCES_FAILED.to_string()));
+        state.update_status(|s| s.set_error(ErrorOrigin::Collect, ALL_SOURCES_FAILED));
         return Ok(summary);
     }
     state.with_store(|s| s.set_setting("schedule.last_collect_at", &now.to_rfc3339()))?;
     state.update_status(|s| {
         s.last_collect_at = Some(now);
-        s.last_error = None;
+        // 要約やスケジュールのジョブのエラーは、それぞれの成功まで残す。
+        s.clear_collect_error();
     });
     state.notify(EVENT_ITEMS);
 
@@ -253,7 +255,7 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
     let (since, _) = utc_range(Period::Day, period_start(Period::Day, today), state.tz);
     let totals = run_item_summaries(state, since).await?;
     if let Some(e) = &totals.error {
-        state.update_status(|s| s.last_error = Some(e.clone()));
+        state.update_status(|s| s.set_error(ErrorOrigin::Collect, e.clone()));
     }
     Ok(summary)
 }
@@ -445,6 +447,149 @@ mod tests {
             (stored - expected).num_seconds().abs() < 60,
             "stored {stored}, expected about {expected}"
         );
+    }
+
+    fn stored_last_collect_at(state: &AppState) -> DateTime<Utc> {
+        let stored = state
+            .with_store(|s| s.get_setting("schedule.last_collect_at"))
+            .unwrap()
+            .unwrap();
+        DateTime::parse_from_rfc3339(&stored)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    #[tokio::test]
+    async fn every_source_failing_at_a_short_interval_retries_at_the_normal_cadence() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 500).await;
+        use_mock(&mut state, Ok("x"));
+        state
+            .with_store(|s| s.set_setting("schedule.collect_interval_minutes", "1"))
+            .unwrap();
+        let before = now_utc();
+        run_collect(&state).await.unwrap();
+        let after = now_utc();
+        assert_eq!(
+            state.status().last_error.as_deref(),
+            Some(ALL_SOURCES_FAILED)
+        );
+        // 間隔が10分より短いときは、間隔どおりに再試行する。最終収集時刻は未来にならない。
+        let stored = stored_last_collect_at(&state);
+        assert!(stored <= after, "stored {stored} is after {after}");
+        assert!(stored >= before, "stored {stored} is before {before}");
+    }
+
+    #[tokio::test]
+    async fn every_source_failing_never_stores_a_future_collect_time() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 500).await;
+        use_mock(&mut state, Ok("x"));
+        for minutes in ["1", "5", "10", "15"] {
+            state
+                .with_store(|s| s.set_setting("schedule.collect_interval_minutes", minutes))
+                .unwrap();
+            run_collect(&state).await.unwrap();
+            let stored = stored_last_collect_at(&state);
+            assert!(stored <= now_utc(), "interval {minutes}: stored {stored}");
+        }
+        // 15分間隔なら 10分後に再試行する (最終収集時刻は5分前)。
+        let expected = now_utc() - chrono::Duration::minutes(5);
+        let stored = stored_last_collect_at(&state);
+        assert!(
+            (stored - expected).num_seconds().abs() < 60,
+            "stored {stored}"
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_collect_clears_an_earlier_collect_error() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        // 最初の取得だけ失敗させる。
+        Mock::given(method("GET"))
+            .and(path("/feed"))
+            .respond_with(ResponseTemplate::new(500))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Ok("要約。"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(
+            state.status().last_error.as_deref(),
+            Some(ALL_SOURCES_FAILED)
+        );
+        run_collect(&state).await.unwrap();
+        assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn successful_collect_clears_an_item_summary_error_from_collect() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Err("connection refused"));
+        run_collect(&state).await.unwrap();
+        assert!(
+            state
+                .status()
+                .last_error
+                .unwrap()
+                .contains("connection refused")
+        );
+        use_mock(&mut state, Ok("要約。"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn successful_collect_keeps_a_digest_error() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Ok("要約。"));
+        run_collect(&state).await.unwrap();
+        // 日次要約の生成に失敗する。
+        use_mock(&mut state, Err("model not found"));
+        let today = Local::now().date_naive();
+        let _ = run_digests(&state, Period::Day, today, &all_category_scopes(), true).await;
+        assert!(
+            state
+                .status()
+                .last_error
+                .unwrap()
+                .contains("model not found")
+        );
+        // 次の収集が成功しても、要約のエラーは要約の成功まで残す。
+        use_mock(&mut state, Ok("要約。"));
+        run_collect(&state).await.unwrap();
+        assert!(
+            state
+                .status()
+                .last_error
+                .unwrap()
+                .contains("model not found")
+        );
+        assert_eq!(retry_pending(&state).await.unwrap(), 1);
+        assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn successful_collect_keeps_a_job_error() {
+        let server = MockServer::start().await;
+        let (mut state, _) = test_state();
+        one_rss_source(&state, &server, 200).await;
+        use_mock(&mut state, Ok("要約。"));
+        state.update_status(|s| s.set_error(ErrorOrigin::Job, "weekly failed"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(state.status().last_error.as_deref(), Some("weekly failed"));
+        // 収集のエラーで上書きされたら、それは次の成功で消える。
+        state.update_status(|s| s.set_error(ErrorOrigin::Collect, "collect failed"));
+        run_collect(&state).await.unwrap();
+        assert_eq!(state.status().last_error, None);
     }
 
     #[tokio::test]

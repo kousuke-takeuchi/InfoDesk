@@ -7,7 +7,7 @@ use infodesk_core::period::period_start;
 use tauri::{AppHandle, Manager};
 
 use crate::jobs;
-use crate::state::AppState;
+use crate::state::{AppState, ErrorOrigin};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScheduleConfig {
@@ -220,7 +220,7 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
     let outcomes = match jobs::run_digests(state, period, start, &scopes, force).await {
         Ok(outcomes) => outcomes,
         Err(e) => {
-            state.update_status(|s| s.last_error = Some(e.message));
+            state.update_status(|s| s.set_error(ErrorOrigin::Job, e.message));
             return;
         }
     };

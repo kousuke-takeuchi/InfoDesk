@@ -71,6 +71,12 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
   useEffect(() => { periodChange.current({ view: "feed", range }); }, [range]);
   const composing = useRef(false);
   const requestSeq = useRef(0);
+  // キーボードで選んでいる記事と、その行の位置。再取得で行が入れ替わっても同じ id が残っていれば保ち、
+  // 一覧から消えたら (未読のみで既読にしたときなど) 同じ位置の記事へ移る。
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selectedRef = useRef<number | null>(null);
+  selectedRef.current = selectedId;
+  const selectedIndex = useRef(0);
 
   const state: FeedState = useMemo(
     () => ({ selection, range, sourceId, unreadOnly, starredOnly, text }),
@@ -89,6 +95,7 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
   const [shownSelection, setShownSelection] = useState(selectionKey);
   if (shownSelection !== selectionKey) {
     setShownSelection(selectionKey);
+    setSelectedId(null);
     setItems(null);
     setTotal(null);
     setUnreadTotal(null);
@@ -123,24 +130,28 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
     });
   }, [state, limit]);
 
+  // 条件が変わったときと refreshTick が増えたとき (ウィンドウ復帰・日付変更) に取り直す。
   useEffect(() => {
     load();
     // アンマウント後や次の問い合わせの前に届いた応答を無効にする
     return () => { requestSeq.current += 1; };
-  }, [load]);
+  }, [load, refreshTick]);
   useEffect(() => { api.listSources().then(setSources).catch(() => setSources([])); }, []);
   useTauriEvent(EVENTS.items, load);
-  const lastTick = useRef(refreshTick);
-  useEffect(() => {
-    if (lastTick.current === refreshTick) return;
-    lastTick.current = refreshTick;
-    load();
-  }, [refreshTick, load]);
 
-  // キーボードで選んでいる記事。再取得で行が入れ替わっても、同じ id が残っていれば保つ。
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const selectedRef = useRef<number | null>(null);
-  selectedRef.current = selectedId;
+  // 再取得の後、選択中の記事の位置を合わせる。消えていれば同じ位置 (末尾を超えるなら末尾) の記事を選ぶ。
+  useEffect(() => {
+    if (!items || selectedRef.current === null) return;
+    const i = items.findIndex((x) => x.id === selectedRef.current);
+    if (i >= 0) {
+      selectedIndex.current = i;
+      return;
+    }
+    const next = items.length > 0 ? items[Math.min(selectedIndex.current, items.length - 1)] : null;
+    selectedRef.current = next?.id ?? null;
+    selectedIndex.current = next ? Math.min(selectedIndex.current, items.length - 1) : 0;
+    setSelectedId(next?.id ?? null);
+  }, [items]);
   const searchInput = useRef<HTMLInputElement>(null);
   const rowRefs = useRef(new Map<number, HTMLElement>());
 
@@ -159,9 +170,14 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
     const list = itemsRef.current;
     if (!list || list.length === 0) return;
     const i = list.findIndex((x) => x.id === selectedRef.current);
-    const next = list[i < 0 ? 0 : Math.min(Math.max(i + dir, 0), list.length - 1)];
+    const index = i < 0 ? 0 : Math.min(Math.max(i + dir, 0), list.length - 1);
+    const next = list[index];
     selectedRef.current = next.id;
+    selectedIndex.current = index;
     setSelectedId(next.id);
+    // フォーカスの残ったボタンやリンクを外す。Enter がそのボタンではなく選んだ記事を開くように。
+    const focused = document.activeElement as HTMLElement | null;
+    if (focused && (focused.tagName === "BUTTON" || focused.tagName === "A")) focused.blur();
     rowRefs.current.get(next.id)?.scrollIntoView?.({ block: "nearest" });
   };
   const current = () => itemsRef.current?.find((x) => x.id === selectedRef.current) ?? null;
@@ -206,6 +222,10 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
               setInput(e.target.value);
               // 変換中の文字列では検索しない。確定時に onCompositionEnd で反映する。
               if (!composing.current) setQuery(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              // Esc で検索欄を抜け、j / k などのショートカットへ戻る。変換中の Esc は変換の取り消しに使う。
+              if (e.key === "Escape" && !e.nativeEvent.isComposing) e.currentTarget.blur();
             }}
             onCompositionStart={() => { composing.current = true; }}
             onCompositionEnd={(e) => {

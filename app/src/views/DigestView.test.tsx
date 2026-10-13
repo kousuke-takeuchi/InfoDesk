@@ -334,7 +334,7 @@ describe("DigestView", () => {
   });
 
   it("omits the bullet list and the reference row when there is nothing to put in them", async () => {
-    let resolveItem: () => void = () => {};
+    let resolveItem: (() => void) | null = null;
     setupIpc({
       get_digests: () => [{ scope: { category: "github" }, label: "GitHub", digest: digest({ body: "全体の傾向だけ。", item_ids: [11] }), item_count: 1 }],
       get_item: (a) => new Promise((r) => { resolveItem = () => r(item(a)); }),
@@ -345,7 +345,9 @@ describe("DigestView", () => {
     // 記事が1件も読み込めていない間は「根拠記事」の行を出さない。
     expect(screen.queryByText("根拠記事")).not.toBeInTheDocument();
 
-    await act(async () => { resolveItem(); });
+    // get_item は非同期の IPC 越しに呼ばれる。呼ばれる前に解決しようとしないよう待つ。
+    await waitFor(() => expect(resolveItem).not.toBeNull());
+    await act(async () => { resolveItem!(); });
     expect(await screen.findByRole("button", { name: "記事11" })).toBeInTheDocument();
     expect(screen.getByText("根拠記事")).toBeInTheDocument();
   });

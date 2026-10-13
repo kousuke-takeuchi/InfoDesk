@@ -28,23 +28,45 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
 ];
 
+const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const close = useRef(onClose);
   close.current = onClose;
   const button = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // 閉じたら、開く前にフォーカスのあった要素へ戻す。
+    const before = document.activeElement as HTMLElement | null;
     button.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      close.current();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close.current();
+        return;
+      }
+      if (e.key !== "Tab" || !dialog.current) return;
+      // Tab はダイアログの中だけを巡る。
+      const items = Array.from(dialog.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && dialog.current.contains(active);
+      if (e.shiftKey ? !inside || active === first : !inside || active === last) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (before && before !== document.body && before.isConnected) before.focus();
+    };
   }, []);
   return (
     <div className="shortcut-backdrop" onClick={onClose}>
-      <div className="shortcut-help" role="dialog" aria-modal="true" aria-label="ショートカット" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialog} className="shortcut-help" role="dialog" aria-modal="true" aria-label="ショートカット" onClick={(e) => e.stopPropagation()}>
         <div className="shortcut-head">
           <h2>ショートカット</h2>
           <button ref={button} className="btn btn-ghost" aria-label="閉じる" onClick={onClose}><X size={14} /></button>

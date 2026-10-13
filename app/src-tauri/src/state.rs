@@ -21,6 +21,34 @@ pub struct AppStatus {
     pub last_collect_at: Option<DateTime<Utc>>,
     pub next_collect_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
+    /// `last_error` を記録した処理。収集の成功は収集のエラーだけを消す。
+    #[serde(skip)]
+    pub error_origin: ErrorOrigin,
+}
+
+/// `last_error` の出どころ。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ErrorOrigin {
+    /// 収集 (取得の失敗、全ソース失敗、収集中の記事要約の失敗)。次の収集の成功で消える。
+    Collect,
+    /// 期間要約やスケジュールのジョブなど、収集以外。それぞれの成功で消える。
+    #[default]
+    Job,
+}
+
+impl AppStatus {
+    /// エラーを出どころと一緒に記録する。`last_error` はこの関数で設定する。
+    pub fn set_error(&mut self, origin: ErrorOrigin, message: impl Into<String>) {
+        self.last_error = Some(message.into());
+        self.error_origin = origin;
+    }
+
+    /// 収集が成功したときに呼ぶ。収集が記録したエラーだけを消し、要約やジョブのエラーは残す。
+    pub fn clear_collect_error(&mut self) {
+        if self.error_origin == ErrorOrigin::Collect {
+            self.last_error = None;
+        }
+    }
 }
 
 pub type Notifier = Arc<dyn Fn(&str) + Send + Sync>;
