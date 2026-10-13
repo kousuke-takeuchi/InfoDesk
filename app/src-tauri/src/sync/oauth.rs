@@ -23,6 +23,10 @@ pub const SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata openid em
 pub const SETTING_ACCOUNT_EMAIL: &str = "sync.account_email";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 const EXPIRY_MARGIN: u64 = 60;
+const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+const REVOKE_TIMEOUT: Duration = Duration::from_secs(10);
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct OAuthConfig {
@@ -50,6 +54,19 @@ pub fn oauth_config() -> Option<OAuthConfig> {
     let id = option_env!("INFODESK_GOOGLE_CLIENT_ID")?;
     let secret = option_env!("INFODESK_GOOGLE_CLIENT_SECRET")?;
     Some(OAuthConfig::google(id.to_string(), secret.to_string()))
+}
+
+fn build_http(connect: Duration, total: Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(connect)
+        .timeout(total)
+        .build()
+        .expect("reqwest client with timeouts builds")
+}
+
+/// OAuth 通信で共通に使うクライアント (接続 10 秒、全体 30 秒)。
+pub fn http_client() -> reqwest::Client {
+    build_http(HTTP_CONNECT_TIMEOUT, HTTP_TIMEOUT)
 }
 
 fn challenge_for(verifier: &str) -> String {
@@ -86,6 +103,8 @@ pub fn auth_url(cfg: &OAuthConfig, redirect: &str, challenge: &str, state: &str)
 pub enum CallbackOutcome {
     Code(String),
     Failed(String),
+    /// state が合わない (別のページからの要求)。失敗ページを返して待ち続ける。
+    StateMismatch,
     /// コールバックではない要求 (favicon など)。待ち続ける。
     Ignore,
 }
@@ -111,14 +130,14 @@ pub fn parse_callback(request_line: &str, expected_state: &str) -> CallbackOutco
         return CallbackOutcome::Ignore;
     }
     if state.as_deref() != Some(expected_state) {
-        return CallbackOutcome::Failed("state mismatch".into());
+        return CallbackOutcome::StateMismatch;
     }
     if let Some(e) = error {
-        return CallbackOutcome::Failed(format!("Google returned an error: {e}"));
+        return CallbackOutcome::Failed(format!("Google からエラーが返されました: {e}"));
     }
     match code {
         Some(c) if !c.is_empty() => CallbackOutcome::Code(c),
-        _ => CallbackOutcome::Failed("no authorization code".into()),
+        _ => CallbackOutcome::Failed("認可コードが返されませんでした".into()),
     }
 }
 
@@ -159,12 +178,15 @@ async fn exchange_code(
         .await
         .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("token exchange failed: HTTP {}", resp.status()));
+        return Err(format!(
+            "Google のトークンを取得できませんでした (HTTP {})",
+            resp.status().as_u16()
+        ));
     }
     let t: TokenResponse = resp.json().await.map_err(|e| e.to_string())?;
     let rt = t
         .refresh_token
-        .ok_or_else(|| "Google did not return a refresh token".to_string())?;
+        .ok_or_else(|| "Google から更新用トークンが返されませんでした".to_string())?;
     Ok((rt, t.id_token.as_deref().and_then(email_from_id_token)))
 }
 
@@ -181,7 +203,16 @@ impl TokenSource {
         Self {
             cfg,
             secrets,
-            http: reqwest::Client::new(),
+            http: http_client(),
+            cache: Mutex::new(None),
+        }
+    }
+
+    fn with_client(cfg: OAuthConfig, secrets: Arc<dyn SecretStore>, http: reqwest::Client) -> Self {
+        Self {
+            cfg,
+            secrets,
+            http,
             cache: Mutex::new(None),
         }
     }
@@ -229,10 +260,13 @@ impl AccessToken for TokenSource {
                 DriveError::Other(format!("token refresh: HTTP {status}"))
             });
         }
-        let t: TokenResponse = resp
-            .json()
-            .await
-            .map_err(|e| DriveError::Other(e.to_string()))?;
+        let t: TokenResponse = resp.json().await.map_err(|e| {
+            if e.is_timeout() {
+                DriveError::Retryable(e.to_string())
+            } else {
+                DriveError::Other(e.to_string())
+            }
+        })?;
         let tok = t
             .access_token
             .ok_or_else(|| DriveError::Other("no access_token in response".into()))?;
@@ -273,32 +307,52 @@ async fn read_request_line(stream: &mut tokio::net::TcpStream) -> Option<String>
     text.lines().next().map(str::to_string)
 }
 
-/// コールバックを1回だけ待つ。5分で打ち切る。
-async fn wait_for_code(listener: TcpListener, state: &str) -> Result<String, String> {
-    let wait = async {
-        loop {
-            let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
-            let Some(line) = read_request_line(&mut stream).await else {
-                continue;
-            };
-            match parse_callback(&line, state) {
-                CallbackOutcome::Code(c) => {
-                    respond(&mut stream, "200 OK", PAGE_OK).await;
-                    return Ok(c);
-                }
-                CallbackOutcome::Failed(e) => {
-                    respond(&mut stream, "400 Bad Request", PAGE_NG).await;
-                    return Err(e);
-                }
-                CallbackOutcome::Ignore => {
-                    respond(&mut stream, "404 Not Found", "").await;
-                }
+/// コールバックを待つ。接続ごとに読み取りを `read_timeout` で打ち切り、
+/// 無言の接続・別の要求・state 違いは捨てて待ち続ける。
+async fn serve_callback(
+    listener: TcpListener,
+    state: &str,
+    read_timeout: Duration,
+) -> Result<String, String> {
+    loop {
+        let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+        let line = match tokio::time::timeout(read_timeout, read_request_line(&mut stream)).await {
+            Ok(Some(line)) => line,
+            _ => continue,
+        };
+        match parse_callback(&line, state) {
+            CallbackOutcome::Code(c) => {
+                respond(&mut stream, "200 OK", PAGE_OK).await;
+                return Ok(c);
+            }
+            CallbackOutcome::Failed(e) => {
+                respond(&mut stream, "400 Bad Request", PAGE_NG).await;
+                return Err(e);
+            }
+            CallbackOutcome::StateMismatch => {
+                respond(&mut stream, "400 Bad Request", PAGE_NG).await;
+            }
+            CallbackOutcome::Ignore => {
+                respond(&mut stream, "404 Not Found", "").await;
             }
         }
-    };
-    tokio::time::timeout(LOGIN_TIMEOUT, wait)
+    }
+}
+
+/// コールバックを待つ。5分で打ち切る。
+async fn wait_for_code(listener: TcpListener, state: &str) -> Result<String, String> {
+    tokio::time::timeout(LOGIN_TIMEOUT, serve_callback(listener, state, READ_TIMEOUT))
         .await
-        .map_err(|_| "sign-in timed out".to_string())?
+        .map_err(|_| "Google のログインがタイムアウトしました".to_string())?
+}
+
+/// 更新用トークンの失効を試みる。失敗・タイムアウトは無視する。
+async fn revoke_best_effort(http: &reqwest::Client, cfg: &OAuthConfig, token: &str) {
+    let _ = tokio::time::timeout(
+        REVOKE_TIMEOUT,
+        http.post(&cfg.revoke_url).form(&[("token", token)]).send(),
+    )
+    .await;
 }
 
 fn config_or_err() -> AppResult<OAuthConfig> {
@@ -334,9 +388,12 @@ pub async fn login(app: &AppHandle) -> AppResult<String> {
         .open_url(auth_url(&cfg, &redirect, &challenge, &state), None::<&str>)
         .map_err(|e| e.to_string())?;
     let code = wait_for_code(listener, &state).await?;
-    let (refresh, email) =
-        exchange_code(&reqwest::Client::new(), &cfg, &code, &verifier, &redirect).await?;
-    keychain().set(&refresh)?;
+    let http = http_client();
+    let (refresh, email) = exchange_code(&http, &cfg, &code, &verifier, &redirect).await?;
+    if keychain().set(&refresh).is_err() {
+        revoke_best_effort(&http, &cfg, &refresh).await;
+        return Err("キーチェーンに保存できませんでした".to_string().into());
+    }
     let email = email.unwrap_or_default();
     app.state::<AppState>()
         .with_store(|s| s.set_setting(SETTING_ACCOUNT_EMAIL, &email))?;
@@ -347,11 +404,7 @@ pub async fn login(app: &AppHandle) -> AppResult<String> {
 pub async fn logout(app: &AppHandle) {
     let secrets = keychain();
     if let (Some(cfg), Ok(Some(token))) = (oauth_config(), secrets.get()) {
-        let _ = reqwest::Client::new()
-            .post(&cfg.revoke_url)
-            .form(&[("token", token.as_str())])
-            .send()
-            .await;
+        revoke_best_effort(&http_client(), &cfg, &token).await;
     }
     let _ = secrets.delete();
     let _ = app
@@ -419,10 +472,10 @@ mod tests {
             parse_callback("GET /?code=abc&state=ok HTTP/1.1", "ok"),
             CallbackOutcome::Code("abc".into())
         );
-        assert!(matches!(
+        assert_eq!(
             parse_callback("GET /?code=abc&state=bad HTTP/1.1", "ok"),
-            CallbackOutcome::Failed(_)
-        ));
+            CallbackOutcome::StateMismatch
+        );
         assert!(matches!(
             parse_callback("GET /?error=access_denied&state=ok HTTP/1.1", "ok"),
             CallbackOutcome::Failed(_)
@@ -540,6 +593,9 @@ mod tests {
             .and(path("/token"))
             .and(body_string_contains("grant_type=authorization_code"))
             .and(body_string_contains("code_verifier=V"))
+            .and(body_string_contains(
+                "redirect_uri=http%3A%2F%2F127.0.0.1%3A1",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "access_token": "at", "refresh_token": "rt", "expires_in": 3600,
                 "id_token": format!("h.{payload}.s")
@@ -547,7 +603,7 @@ mod tests {
             .mount(&server)
             .await;
         let (rt, email) = exchange_code(
-            &reqwest::Client::new(),
+            &http_client(),
             &cfg_for(&server),
             "code",
             "V",
@@ -557,5 +613,103 @@ mod tests {
         .unwrap();
         assert_eq!(rt, "rt");
         assert_eq!(email.as_deref(), Some("me@example.com"));
+    }
+
+    #[tokio::test]
+    async fn slow_token_endpoint_is_retryable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"access_token": "at", "expires_in": 3600}))
+                    .set_delay(Duration::from_secs(2)),
+            )
+            .mount(&server)
+            .await;
+        let secrets = Arc::new(MemorySecretStore::default());
+        secrets.set("rt-1").unwrap();
+        let http = build_http(Duration::from_millis(200), Duration::from_millis(200));
+        let ts = TokenSource::with_client(cfg_for(&server), secrets, http);
+        assert!(matches!(ts.get().await, Err(DriveError::Retryable(_))));
+    }
+
+    #[tokio::test]
+    async fn revoke_posts_the_token_and_gives_up_quietly() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/revoke"))
+            .and(body_string_contains("token=rt-9"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        revoke_best_effort(&http_client(), &cfg_for(&server), "rt-9").await;
+        server.verify().await;
+
+        // An unreachable server must not panic or hang.
+        let mut cfg = cfg_for(&server);
+        cfg.revoke_url = "http://127.0.0.1:1/revoke".into();
+        revoke_best_effort(&http_client(), &cfg, "rt-9").await;
+    }
+
+    async fn spawn_listener(
+        read_timeout: Duration,
+    ) -> (u16, tokio::task::JoinHandle<Result<String, String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let h = tokio::spawn(async move { serve_callback(listener, "ST", read_timeout).await });
+        (port, h)
+    }
+
+    async fn get_path(port: u16, target: &str) -> String {
+        use tokio::io::AsyncReadExt;
+        let mut c = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        c.write_all(format!("GET {target} HTTP/1.1\r\nHost: x\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut out = String::new();
+        let _ = c.read_to_string(&mut out).await;
+        out
+    }
+
+    #[tokio::test]
+    async fn silent_connection_does_not_block_the_callback() {
+        let (port, h) = spawn_listener(Duration::from_millis(200)).await;
+        let _silent = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        let page = get_path(port, "/?code=abc&state=ST").await;
+        assert!(page.starts_with("HTTP/1.1 200"));
+        assert_eq!(h.await.unwrap(), Ok("abc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn favicon_then_callback_returns_the_code() {
+        let (port, h) = spawn_listener(Duration::from_secs(5)).await;
+        let page = get_path(port, "/favicon.ico").await;
+        assert!(page.starts_with("HTTP/1.1 404"));
+        get_path(port, "/?code=abc&state=ST").await;
+        assert_eq!(h.await.unwrap(), Ok("abc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn wrong_state_gets_failure_page_and_listener_keeps_waiting() {
+        let (port, h) = spawn_listener(Duration::from_secs(5)).await;
+        let page = get_path(port, "/?code=evil&state=BAD").await;
+        assert!(page.starts_with("HTTP/1.1 400"));
+        assert!(!h.is_finished());
+        get_path(port, "/?code=abc&state=ST").await;
+        assert_eq!(h.await.unwrap(), Ok("abc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn google_error_with_right_state_ends_the_flow() {
+        let (port, h) = spawn_listener(Duration::from_secs(5)).await;
+        get_path(port, "/?error=access_denied&state=ST").await;
+        let err = h.await.unwrap().unwrap_err();
+        assert!(err.contains("access_denied"));
     }
 }
