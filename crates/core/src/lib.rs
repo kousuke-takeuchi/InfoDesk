@@ -7,6 +7,7 @@ pub mod period;
 pub mod seed;
 pub mod store;
 pub mod summarizer;
+pub mod sync;
 
 pub use error::{Error, Result};
 pub use store::Store;
