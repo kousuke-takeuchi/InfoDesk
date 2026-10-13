@@ -13,7 +13,7 @@ flowchart TB
         end
         subgraph rust["Rust (app/src-tauri)"]
             Cmd[commands/ Tauriコマンド]
-            Sch[scheduler.rs 60秒ごとに判定]
+            Sch[scheduler.rs 15秒ごとに判定]
             Jobs[jobs.rs 収集 / 記事要約 / 期間要約]
             Rdr[reader.rs 閲覧ウィンドウ]
             Side[sidecar.rs サイドカー管理]
@@ -101,7 +101,7 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `llm/` | `mod.rs`(`LlmProvider` trait、`provider_from_settings`)、`ollama.rs`、`claude.rs`(`claude` CLIのヘッドレス実行) |
 | `page.rs` | 本文取得。内部アドレスを拒否するクライアント(`page_client`)、リダイレクトの検査、2MBと20000文字の上限 |
 | `period.rs` | 期間の開始、終了、UTC範囲。ローカル日付、週は月曜始まり |
-| `seed.rs` | `DEFAULT_SOURCES`(22件)と `DEFAULT_SETTINGS`(16キー) |
+| `seed.rs` | `DEFAULT_SOURCES`(22件)と `DEFAULT_SETTINGS`(17キー) |
 | `error.rs` | `Error` と `Result` |
 
 ### `crates/cli/src`
@@ -175,13 +175,15 @@ LLMは `LlmFactory`(`provider_from_settings`)で用途(`LlmRole::Items` / `Diges
 
 ### スケジューラー(`scheduler.rs`)
 
-- 60秒ごとに起き(`MissedTickBehavior::Delay`)、設定と最終実行の記録から「実行すべきジョブ」を計算する(`due_jobs`)。時計ではなく記録との差で判定するので、停止中に逃した分は次の起動または復帰で1回だけ補われる。
+- 15秒ごとに起き(`TICK`、`MissedTickBehavior::Delay`)、設定と最終実行の記録から「実行すべきジョブ」を計算する(`due_jobs`)。時計ではなく記録との差で判定するので、停止中に逃した分は次の起動または復帰で1回だけ補われる。
 - ジョブは `Collect`、`Daily(日)`、`Weekly(週の月曜)`、`Monthly(月の1日)`。
-- 収集: 最終収集 + 間隔(`schedule.collect_interval_hours`、1〜168時間)を過ぎたら。
+- 収集: 最終収集 + 間隔(`schedule.collect_interval_minutes`、1〜10080分。無ければ旧 `schedule.collect_interval_hours` を分に直して使う)を過ぎたら。起動時に `seed_defaults` が、分のキーが無ければ時間の値から作る。
 - 日次: 設定の時刻を過ぎたら前日を確定する。続けて現在の週次と月次を強制再生成する(`job_plan`)。
 - 週次: 設定の曜日と時刻を過ぎたら前週を生成する。月次: 1日の設定時刻を過ぎたら前月を生成する。
 - 記録するキー: `schedule.last_collect_at`、`last_daily_for`、`last_weekly_for`、`last_monthly_for`。週次と月次は生成に失敗したら記録しない(次の判定で再び対象になる)。
-- 同じジョブを15分以内に再実行しない(`RECENT_ATTEMPT`)。実行すべきジョブが無い判定のとき、15分に1回 `retry_pending` を呼ぶ。
+- 同じジョブを15分以内に再実行しない(`RECENT_ATTEMPT`)。ただし収集だけは収集間隔が15分より短ければその間隔(`filter_recent`)。`retry_pending` は他のジョブの有無にかかわらず15分に1回まで呼ぶ(`retry_due`)。
+- 収集(`jobs::collect_inner`)は当日の日次要約を作らない。日次要約は日次の時刻に前日を確定するか、「生成」「再生成」で作る。
+- 画面側は `useStaleRefresh`(`app/src/hooks/useStaleRefresh.ts`)が、ウィンドウの focus と visible、ローカル日付の変化(60秒ごとに確認)で再取得する。ショートカットは `app/src/lib/shortcuts.ts`(判定)、`hooks/useShortcuts.ts`(受け口)、`components/ShortcutHelp.tsx`(一覧)。利用者向けの表は[キーボードショートカット](../11-keyboard-shortcuts.ja.md)。
 - 手動実行: `collect_now`、`regenerate_digest`、`retry_pending_digests` は `tauri::async_runtime::spawn` して即座に返る。進行はイベントで通知する。
 
 ### 常駐とメニューバー

@@ -94,10 +94,10 @@ A failed fetch never blocks saving the article and is not recorded as a collecti
 
 Collection runs on a timer and on demand.
 
-- **Interval**: every 3 hours by default. The Schedule tab offers 1, 3, 6 or 12 hours (`schedule.collect_interval_hours`).
+- **Interval**: every 3 hours by default. The Schedule tab offers 1, 5, 15 or 30 minutes, and 1, 3, 6 or 12 hours (`schedule.collect_interval_minutes`, 1 to 10080 minutes). The scheduler checks every 15 seconds. The older `schedule.collect_interval_hours` is read only when the minutes key is missing; at launch the app seeds the minutes key from it.
 - **Collect now**: from the feed's empty state, the Schedule tab or the menu bar.
-- **After each collection**: the top articles of each category get a summary (20 per category by default, `summary.top_n`), and today's daily digest is rebuilt.
-- **Daily digest**: the previous day is finalized at 07:00 (`schedule.daily_time`).
+- **After each collection**: the top articles of each category get a summary (20 per category by default, `summary.top_n`). A collection does not rebuild any digest.
+- **Daily digest**: the previous day is finalized at 07:00 (`schedule.daily_time`). Today's digest is made only when you press **Generate** or **Regenerate**.
 - **Weekly digest**: the previous week is generated on Monday at 07:30 (`schedule.weekly_day`, `schedule.weekly_time`).
 - **Monthly digest**: the previous month is generated on the 1st at 08:00 (`schedule.monthly_time`).
 

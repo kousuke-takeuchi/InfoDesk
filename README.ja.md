@@ -40,6 +40,7 @@ InfoDesk は RSS、GitHub、Hugging Face、arXiv、Hacker News、Google News か
 - **収集**: 組み込みソース (RSS、GitHub、Hugging Face、arXiv、Hacker News、Google News)、自分で足す RSS、キーワード付きのトピック。[ソースとトピック](docs/03-sources-and-topics.ja.md)を参照。
 - **日本語ダイジェスト**: 日・週・月の要約をカテゴリー別とトピック別に作成。期間の概観、見出し、番号付きの要点、画像カードを表示。[ダイジェスト](docs/04-digests.ja.md)を参照。
 - **フィードとリーダー**: 期間、ソース、未読、スター、検索で絞り込み。記事はアプリ内の閲覧ウィンドウか既定のブラウザで開く。[フィードとリーダー](docs/05-feed-and-reader.ja.md)を参照。
+- **キーボードショートカット**: ビューの切り替え、フィードの移動、既読、スター、収集をキーボードで操作。`?` で一覧を表示。[キーボードショートカット](docs/11-keyboard-shortcuts.ja.md)を参照。
 - **AI チャット**: 収集した記事と要約について質問できる。エージェントは Node のサイドカーで動き、Ollama または `claude` CLI を使う。[AI チャット](docs/06-ai-chat.ja.md)を参照。
 - **ローカル LLM 優先**: 記事の要約もダイジェストも、既定の提供元は Ollama。[設定](docs/07-settings.ja.md)を参照。
 - **CLI**: `infodesk` コマンドでターミナルから収集、要約、ダイジェスト表示。[CLI](docs/08-cli.ja.md)を参照。
@@ -81,6 +82,7 @@ cargo run -p infodesk -- digest day
 | 08 | [CLI](docs/08-cli.ja.md) | `infodesk` コマンドとアプリの `--cli` モード |
 | 09 | [プライバシーとセキュリティ](docs/09-privacy-and-security.ja.md) | ローカルに残るもの、ネットワークに出るもの、隔離 |
 | 10 | [ロードマップ](docs/10-roadmap.ja.md) | 完了したこと、既知の制限、今後の案 |
+| 11 | [キーボードショートカット](docs/11-keyboard-shortcuts.ja.md) | すべてのショートカットと、無効になる場面 |
 
 各ページに英語版があります (`*.md`)。開発者向けのドキュメントは [`docs/internal/`](docs/internal/README.md) にあり、日本語で書かれています。設計仕様と実装計画は [`docs/superpowers/`](docs/superpowers/) にあります。
 

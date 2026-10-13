@@ -35,7 +35,7 @@ Digests are built in layers, so a long period reads from shorter ones.
 
 The provider for article summaries and for period digests are separate settings (`llm.items_provider`, `llm.digest_provider`), so you can use Ollama for the many article summaries and Claude for the digests.
 
-When digests are generated is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
+Today's digest is not built by collection: press **Generate** (or **Regenerate**) to make it. A day is finalized automatically only after it ends, at the daily time the next morning. When digests are generated is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
 
 ## 3. Category and topic digests
 
@@ -76,4 +76,4 @@ Press **Regenerate** in the heading to rebuild the visible sections. Each sectio
 | Not generated yet | There are articles but no digest | **Generate** |
 | No articles | Nothing was collected in this period | None |
 
-A failed attempt goes back to pending until the third failure, after which it is marked failed. The scheduler retries pending digests automatically, at most once every 15 minutes and only when no scheduled job is due. Failed digests are retried only when you press **Retry** (or the retry button in Settings, Schedule). A successful run recovers the digest.
+A failed attempt goes back to pending until the third failure, after which it is marked failed. The scheduler retries pending digests automatically, at most once every 15 minutes, whether or not other jobs ran. Failed digests are retried only when you press **Retry** (or the retry button in Settings, Schedule). A successful run recovers the digest.

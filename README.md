@@ -40,6 +40,7 @@ digest, a feed and a chat panel. Your data stays in a SQLite file on your Mac.
 - **Collection**: built-in sources (RSS, GitHub, Hugging Face, arXiv, Hacker News, Google News), your own RSS feeds, and topics with keywords. See [Sources and Topics](docs/03-sources-and-topics.md).
 - **Japanese digests**: day, week and month digests by category and by topic, with a period overview, a headline, numbered points and image cards. See [Digests](docs/04-digests.md).
 - **Feed and reader**: filter by period, source, unread, starred and search; open articles in an in-app reader window or the default browser. See [Feed and Reader](docs/05-feed-and-reader.md).
+- **Keyboard shortcuts**: switch views, move through the feed, read, star and collect from the keyboard; press `?` for the list. See [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md).
 - **AI chat**: ask questions about collected articles and summaries. The agent runs in a Node sidecar and can use Ollama or the `claude` CLI. See [AI Chat](docs/06-ai-chat.md).
 - **Local LLM first**: Ollama is the default provider for item summaries and digests. See [Settings](docs/07-settings.md).
 - **CLI**: the `infodesk` command collects, summarizes and prints digests from the terminal. See [CLI](docs/08-cli.md).
@@ -81,6 +82,7 @@ Read in order. Files are numbered.
 | 08 | [CLI](docs/08-cli.md) | The `infodesk` commands and the app's `--cli` mode |
 | 09 | [Privacy and Security](docs/09-privacy-and-security.md) | What stays local, what goes over the network, isolation |
 | 10 | [Roadmap](docs/10-roadmap.md) | What is done, known limits, open ideas |
+| 11 | [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md) | Every shortcut, and when shortcuts are ignored |
 
 Each page has a Japanese twin (`*.ja.md`). Developer documentation lives in [`docs/internal/`](docs/internal/README.md) and is written in Japanese. The design spec and implementation plans are under [`docs/superpowers/`](docs/superpowers/).
 

@@ -1,4 +1,4 @@
-**日本語: [10-roadmap.ja.md](10-roadmap.ja.md)** | ← [Privacy and Security](09-privacy-and-security.md)
+**日本語: [10-roadmap.ja.md](10-roadmap.ja.md)** | ← [Privacy and Security](09-privacy-and-security.md) | Next: [Keyboard Shortcuts →](11-keyboard-shortcuts.md)
 
 # Roadmap
 
@@ -17,6 +17,7 @@ The work was done in plans. Each line below is one plan.
 - **Plan 3, chat**: the right-hand chat panel, the Node agent sidecar, threads, context chips, the Ollama and Claude providers, and the tools. See [AI Chat](06-ai-chat.md).
 - **Plan 4, thumbnails and progress**: article images (feed image, then `og:image`) shown in the feed, and the chat progress display (plan, thinking, tool steps, elapsed time).
 - **Plan 5, visual digest and reader**: the period overview (bars, daily trend, topic strength), headline and numbered points with image cards, and the in-app reader window with its toolbar.
+- **Plan 6, shortcuts and freshness**: keyboard shortcuts with an in-app list (`?`), collection intervals down to 1 minute, daily digests made once a day (collection no longer rebuilds today's digest), and a refetch when the window regains focus or the date changes. See [Keyboard Shortcuts](11-keyboard-shortcuts.md).
 
 ## Known limits
 

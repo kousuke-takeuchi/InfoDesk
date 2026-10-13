@@ -11,7 +11,7 @@ InfoDeskを開発するコントリビュータ向けの内部ドキュメント
 | [feature-inventory.md](feature-inventory.md) | 機能インベントリ: 設計書の節ごとに実装済み/未実装を棚卸し |
 | [testing.md](testing.md) | テスト: 各スイートの実行方法・フィクスチャ・モックバックエンドによるスクリーンショット |
 | [../superpowers/specs/](../superpowers/specs/) | 設計書(マスタースペック): 設計判断の記録。節番号は feature-inventory.md が参照する |
-| [../superpowers/plans/](../superpowers/plans/) | 実装プラン(日付順、Plan 1〜5とその補足): 何をどの順で作ったかの履歴 |
+| [../superpowers/plans/](../superpowers/plans/) | 実装プラン(日付順、Plan 1〜6とその補足): 何をどの順で作ったかの履歴 |
 
 ## 読む順番の目安
 

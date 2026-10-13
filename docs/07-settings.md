@@ -30,10 +30,10 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 
 *The Schedule tab. Sample data from a mocked backend.*
 
-- "収集": the collection interval (1, 3, 6 or 12 hours in the menu), the next collection time, and a "collect now" button.
-- "要約の生成": the daily time, the weekly day and time, and the monthly time (on the 1st). At the daily time the previous day's digest is finalized and the current week and month are rebuilt. Today's daily digest is refreshed after every collection.
+- "収集": the collection interval (1, 5, 15 or 30 minutes, or 1, 3, 6 or 12 hours, in the menu), the next collection time, and a "collect now" button.
+- "要約の生成": the daily time, the weekly day and time, and the monthly time (on the 1st). At the daily time the previous day's digest is finalized and the current week and month are rebuilt. Today's daily digest is not rebuilt by collection; make it with **Generate** or **Regenerate**.
 - "起動": launch at login and stay resident.
-- "保留中の要約": the last error, and a button to retry digests that are pending or failed. The scheduler also retries pending digests on its own, at most once every 15 minutes when no other job is due. Failed digests are retried only with this button or the one on the digest.
+- "保留中の要約": the last error, and a button to retry digests that are pending or failed. The scheduler also retries pending digests on its own, at most once every 15 minutes, whether or not other jobs ran. Failed digests are retried only with this button or the one on the digest.
 
 A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake.
 
@@ -52,7 +52,8 @@ All settings are stored in the app database as text. Defaults are written on fir
 | `claude.bin` | `claude` | Command or absolute path of the Claude CLI. |
 | `node.bin` | `node` | Command or absolute path of Node (22 or newer) for the chat agent. |
 | `summary.top_n` | `20` | How many top articles per category get an article summary after each collection. Not shown in Settings. Must be a number. |
-| `schedule.collect_interval_hours` | `3` | Hours between collections. Values outside 1 to 168 are clamped. An invalid value falls back to 3. |
+| `schedule.collect_interval_minutes` | `180` | Minutes between collections. Values outside 1 to 10080 are clamped. An invalid value falls back to 180. |
+| `schedule.collect_interval_hours` | `3` | Legacy. Read only when the minutes key is missing (clamped to 1 to 168 hours). On launch, a missing minutes key is seeded from this value. Not shown in Settings. |
 | `schedule.daily_time` | `07:00` | Time (HH:MM) to finalize the previous day's digest. |
 | `schedule.weekly_day` | `mon` | Day of the weekly digest: `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun`. |
 | `schedule.weekly_time` | `07:30` | Time (HH:MM) of the weekly digest. |

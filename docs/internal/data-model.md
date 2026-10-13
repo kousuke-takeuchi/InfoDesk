@@ -198,7 +198,7 @@ stateDiagram-v2
 
 ### settings
 
-キーと値の文字列。値の既定は `seed.rs` の `DEFAULT_SETTINGS`(16キー)。`seed_defaults` が起動時に足りないキーだけ補う。画面とTauriコマンドが読み書きできるのは `DEFAULT_SETTINGS` にあるキーだけ(`set_setting` は未知のキーを拒否する)。
+キーと値の文字列。値の既定は `seed.rs` の `DEFAULT_SETTINGS`(17キー)。`seed_defaults` が起動時に足りないキーだけ補う。画面とTauriコマンドが読み書きできるのは `DEFAULT_SETTINGS` にあるキーだけ(`set_setting` は未知のキーを拒否する)。
 
 | キー | 既定値 | 内容 |
 |---|---|---|
@@ -211,7 +211,8 @@ stateDiagram-v2
 | `claude.bin` | `claude` | コマンド名、または存在する通常ファイルの絶対パスだけ受け付ける |
 | `node.bin` | `node` | 同上。チャットのサイドカーを動かすNode |
 | `summary.top_n` | `20` | カテゴリーごとに記事要約を付ける件数 |
-| `schedule.collect_interval_hours` | `3` | 読み取り時に1〜168へ丸める |
+| `schedule.collect_interval_minutes` | `180` | 収集の間隔(分)。読み取り時に1〜10080へ丸める |
+| `schedule.collect_interval_hours` | `3` | 旧設定。分のキーが無いときだけ読む(1〜168へ丸めて分に直す)。起動時に分のキーが無ければこの値から作る |
 | `schedule.daily_time` | `07:00` | `HH:MM`。不正なら既定 |
 | `schedule.weekly_day` | `mon` | 曜日の英語表記。不正なら月曜 |
 | `schedule.weekly_time` | `07:30` | |

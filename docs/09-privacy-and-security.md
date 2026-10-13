@@ -17,7 +17,7 @@ To report a vulnerability, see [SECURITY.md](../SECURITY.md).
 
 | What | To where | When |
 |---|---|---|
-| Feeds and source APIs | The hosts of your enabled sources (the built-in ones and any RSS feed you add) | Every collection |
+| Feeds and source APIs | The hosts of your enabled sources (the built-in ones and any RSS feed you add) | Every collection. With a 1-minute interval, every enabled source is contacted every minute and some sites may rate-limit you |
 | Article pages, for `og:image` | The article's own site | At collection, for new articles that have no feed image. Up to 512 KiB per page, 10 s timeout, 4 at a time, 60 s total budget per collection |
 | Article images | The image hosts | When the app shows a thumbnail or a card. The window loads them directly from `https:` |
 | LLM text with Ollama | The URL in `ollama.base_url`, by default `http://localhost:11434` | Summaries, digests, chat |

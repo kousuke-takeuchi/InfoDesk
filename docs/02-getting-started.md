@@ -59,7 +59,7 @@ Run it from the repository root. Then open InfoDesk from Launchpad or Finder. Th
 2. On the first run only, it adds the built-in sources and the default settings. See [Sources and Topics](03-sources-and-topics.md).
 3. The first collection starts on its own right after launch, because nothing has been collected yet. You can also press **Collect now** (the button in the empty feed, or in the menu bar). A first collection takes one to two minutes, and progress shows at the bottom of the sidebar.
 4. Summaries are attached to the top articles of each category, then the digest for today is built. Open the **Digest** view to read it.
-5. After that, collection runs on a schedule (every 3 hours by default), and the daily digest is finalized at 07:00. The schedule is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
+5. After that, collection runs on a schedule (every 3 hours by default; the interval can be as short as 1 minute), and the previous day's digest is finalized at 07:00. Today's digest is made when you press **Generate**. The schedule is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
 
 The app keeps running in the menu bar when you close the window. The "stay resident" setting turns this off.
 

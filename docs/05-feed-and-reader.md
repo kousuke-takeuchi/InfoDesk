@@ -45,6 +45,8 @@ If nothing has been collected yet, the feed shows an empty state with **Collect 
 - The star button toggles a star. Use the **Starred** filter to list them.
 - Counts in the sidebar update when you read, star or collect.
 
+Keyboard shortcuts for moving through the list, opening, reading and starring are listed in [Keyboard Shortcuts](11-keyboard-shortcuts.md). The feed and digest reload when the window regains focus or becomes visible, and when the local date changes.
+
 ## 2. Reader
 
 Articles and links open in an in-app reader window instead of your default browser. This applies wherever you open an article: the feed (title or thumbnail), digest references and image cards, and links in chat answers.
