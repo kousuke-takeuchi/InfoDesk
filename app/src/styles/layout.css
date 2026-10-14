@@ -132,3 +132,18 @@
 .shortcut-row dt { width: 120px; flex: none; }
 .shortcut-row dd { margin: 0; color: var(--text-secondary); }
 .shortcut-row kbd { font-family: var(--font); font-size: 11px; padding: 1px 6px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.dialog.nas-guide { width: 560px; max-height: 90vh; overflow-y: auto; }
+.guide-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.guide-head .desc { margin: 4px 0 0; }
+.guide-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.guide-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.guide-steps .step-num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--bg-subtle); }
+.guide-steps .step-title { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.guide-steps .desc { margin: 2px 0 0; }
+.guide-tip { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: var(--radius-md); background: var(--bg-subtle); font-size: 12px; color: var(--text-secondary); }
+.guide-tip svg { flex: none; color: var(--success); }
+.guide-actions { justify-content: space-between; align-items: center; }
+.link-btn { display: inline-flex; align-items: center; gap: 6px; }
+.nas-test-result { font-size: 12px; }
+.nas-test-result.success { color: var(--success); }
+.nas-test-result.error { color: var(--danger); }

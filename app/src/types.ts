@@ -172,4 +172,18 @@ export interface SyncStatus {
   last_sync_at: string | null;
   error: string | null;
   device_name: string;
+  /** "gdrive" か "nas"。"nas" 以外は Google ドライブとして扱う。 */
+  backend: string;
+  nas_url: string;
+  nas_user: string;
+  nas_password_set: boolean;
+  tailnet: TailnetStatus;
+}
+
+export type TailnetState = "stopped" | "needs_login" | "needs_approval" | "starting" | "running" | "failed";
+
+export interface TailnetStatus {
+  state: TailnetState;
+  name: string | null;
+  reason: string | null;
 }

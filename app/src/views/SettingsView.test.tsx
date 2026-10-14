@@ -28,7 +28,7 @@ describe("SettingsView", () => {
   });
 
   it("has the sync tab last", async () => {
-    setupIpc({ list_sources: () => [], source_item_counts: () => ({}), sync_status: () => ({ available: true, signed_in: false, account_email: null, enabled: false, syncing: false, last_sync_at: null, error: null, device_name: "Mac" }) });
+    setupIpc({ list_sources: () => [], source_item_counts: () => ({}), sync_status: () => ({ available: true, signed_in: false, account_email: null, enabled: false, syncing: false, last_sync_at: null, error: null, device_name: "Mac", backend: "gdrive", nas_url: "", nas_user: "", nas_password_set: false, tailnet: { state: "stopped", name: null, reason: null } }) });
     render(<SettingsView status={status} />);
     const tabs = screen.getByRole("group", { name: "設定のタブ" });
     expect(Array.from(tabs.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["ソース", "トピック", "LLM", "スケジュール", "同期"]);

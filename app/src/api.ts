@@ -74,6 +74,11 @@ export const api = {
   syncLogout: () => invoke<SyncStatus>("sync_logout"),
   syncSetEnabled: (enabled: boolean) => invoke<SyncStatus>("sync_set_enabled", { enabled }),
   syncSetDeviceName: (name: string) => invoke<SyncStatus>("sync_set_device_name", { name }),
+  syncSetBackend: (backend: string) => invoke<SyncStatus>("sync_set_backend", { backend }),
+  syncSetNas: (url: string, user: string, password: string | null) => invoke<SyncStatus>("sync_set_nas", { url, user, password }),
+  tailnetLogin: () => invoke<SyncStatus>("tailnet_login"),
+  tailnetLogout: () => invoke<SyncStatus>("tailnet_logout"),
+  syncTestNas: () => invoke<string>("sync_test_nas"),
   syncNow: () => invoke<void>("sync_now"),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };
