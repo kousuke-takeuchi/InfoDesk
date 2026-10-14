@@ -177,3 +177,37 @@ Mac の DB を作り直すと記事 id が変わる。`manifest.json` の `db_id
 - 計画B: モバイルアプリ (6節)。計画A の後に書く。
 
 どちらも Sonnet が実装し、Opus がレビューと修正をする。完了したら master にマージして push し、Mac のアプリを入れ直す。
+
+## 10. 保存先の選択 (Google ドライブか NAS か)
+
+利用者は同期の保存先を、Google ドライブか、自宅の NAS (Synology の WebDAV Server) から1つ選ぶ。置くファイルの名前、中身、差分の判断、既読とスターの同期 (3節から5節) は、保存先によらず同じ。違うのは、ファイルを読み書きする部分 (`DriveStore` の実装) だけである。
+
+- 設定キー `sync.backend`: `gdrive` (既定) か `nas`。
+- NAS の設定: `sync.nas.url` (WebDAV のフォルダの URL。例 `http://takeuchi-nas:5005/infodesk/`)、`sync.nas.user`。パスワードはキーチェーン (サービス `jp.infodesk.app.nas`、アカウント `password`) に置く。
+- WebDAV の操作: 一覧は `PROPFIND` (Depth: 1)、取得は `GET`、作成と更新は `PUT` (ファイル名がそのまま id になる)、削除は `DELETE` (404 は成功とみなす)。認証は Basic 認証。
+- エラー: 401 は「NAS のユーザー名かパスワードが違います」(同期を止め、設定を直すまで再試行しない)。接続できない、5xx は 5.5 と同じく次の同期で再試行する。
+- 保存先を切り替えたときは、新しい保存先に最初から書き出す (`sync_files` をすべて消し、5.2 の手順で書き出す)。前の保存先のファイルは消さない。
+
+## 11. アプリ内の Tailscale
+
+NAS には、外のネットワークからも Tailscale でつなぐ。Mac とモバイルに Tailscale のアプリを入れて常に起動しておく必要はなく、InfoDesk の中に Tailscale の端末を1台組み込む。システムの VPN は使わず、InfoDesk の通信だけが tailnet を通る。
+
+- Mac: Tailscale 公式の Go 実装 (tsnet) を C ライブラリにした libtailscale を、Rust の `libtailscale` クレート (0.2.2) から使う。ビルドに Go が要る (libtailscale が求める Go 1.25.5 を `GOTOOLCHAIN` で使う)。Tailscale の Rust 実装 (`tailscale` クレート) は、公式に「本番には使わないで」とされているので使わない。
+- 状態 (鍵など) は `~/Library/Application Support/jp.infodesk.app/tailscale/` に置く。端末名は `infodesk-mac`。
+- ログイン: 設定の同期タブで「Tailscale にログイン」を押すと、ログイン用の URL を既定のブラウザで開く。ログイン後は状態が残るので、次からは不要。ログアウトで状態を消す。
+- NAS への HTTP 通信は、libtailscale が用意する Mac 内だけの SOCKS5 プロキシを通す (`loopback()`)。ログイン用 URL と接続状態は、同じく LocalAPI から取る。
+- NAS を保存先にしたときは、通信はかならず組み込みの Tailscale を通す。tailnet の中は WireGuard で暗号化されるので、WebDAV は `http://` でよい。tailnet の外 (Tailscale を通らない宛先) には同期のデータを送らない。
+- 試作 (2026-10-14) で、組み込みの Tailscale から NAS の WebDAV (`takeuchi-nas:5005`) に届くことを確かめた。
+- モバイル: 同じく Go の tsnet を組み込んだ Flutter のパッケージを使う。候補は `tailscale` (tailscale_dart) と `tsnet_flutter`。計画B で比べて決める。
+
+## 12. NAS の準備の案内
+
+NAS 側の準備を1ページにまとめ、`docs/13-nas-setup.md` (と日本語版) に置き、同じ内容をアプリの中でも案内する (同期タブで保存先に NAS を選ぶと「NAS の準備」を開ける)。
+
+1. DSM のパッケージセンターで「WebDAV Server」を入れ、HTTP (ポート 5005) を有効にする。
+2. 共有フォルダ `infodesk` を作る。
+3. InfoDesk 用のユーザーを作り、`infodesk` だけに読み書きの権限を与える (ほかの共有フォルダは「アクセス不可」)。
+4. パッケージセンターで「Tailscale」を入れ、Tailscale にログインする。NAS の名前 (例 `takeuchi-nas`) を控える。
+5. InfoDesk の同期タブで、保存先に NAS を選び、「Tailscale にログイン」(NAS と同じ Tailscale アカウント)、URL (`http://<NAS の名前>:5005/infodesk/`)、ユーザー名、パスワードを入れて「接続を確かめる」。
+
+画面は `design.pen` の A-14 (同期タブで NAS を選んだとき) と A-15 (NAS の準備)。
