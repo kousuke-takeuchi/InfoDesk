@@ -327,16 +327,14 @@ impl Pass<'_> {
     }
 
     /// Drive holds files written for another database, whose item ids mean
-    /// other articles. Deletes every ops file and the snapshot without reading
-    /// them, and forgets their `sync_files` rows. The pass then publishes this
+    /// other articles. Deletes every file except the manifest without reading
+    /// them, and forgets all `sync_files` rows. The pass then publishes this
     /// database as if Drive were empty.
     async fn reset_for_new_database(&mut self, old_db: &str) -> Result<(), SyncError> {
-        let is_stale =
-            |n: &str| n == SNAPSHOT || matches!(parse_file_name(n), Some(FileKind::Ops { .. }));
         let on_drive: Vec<String> = self
             .remote
             .keys()
-            .filter(|n| is_stale(n))
+            .filter(|n| n.as_str() != MANIFEST)
             .cloned()
             .collect();
         for name in &on_drive {
@@ -345,15 +343,13 @@ impl Pass<'_> {
         locked(self.store, |s| {
             for kind in ["in", "out"] {
                 for row in s.sync_files(kind)? {
-                    if is_stale(&row.name) {
-                        s.delete_sync_file(&row.name)?;
-                    }
+                    s.delete_sync_file(&row.name)?;
                 }
             }
             Ok(())
         })?;
         self.report.warnings.push(format!(
-            "Drive held sync data of another database ({old_db}); deleted {} ops and snapshot files without applying them",
+            "Drive held sync data of another database ({old_db}); deleted {} files without applying them",
             on_drive.len()
         ));
         Ok(())
@@ -1785,6 +1781,9 @@ mod tests {
             })
             .unwrap(),
         );
+        drive.put("day-2026-01-01.json.gz", b"old".to_vec());
+        drive.put("digest-day-2026-01-01.json.gz", b"old".to_vec());
+        drive.put("unknown-file.bin", b"old".to_vec());
         // Rows left from the old database's files.
         m.lock()
             .unwrap()
@@ -1815,6 +1814,21 @@ mod tests {
         assert!(snap.state[&id].read.is_none());
         assert!(snap.state[&id].starred.as_ref().unwrap().value);
         assert_eq!(manifest_of(&drive).await.db_id, "db1");
+        for gone in [
+            "day-2026-01-01.json.gz",
+            "digest-day-2026-01-01.json.gz",
+            "unknown-file.bin",
+        ] {
+            assert!(!names.contains(&gone.to_string()), "{gone} {names:?}");
+        }
+        let manifest = manifest_of(&drive).await;
+        assert!(!manifest.files.contains_key("day-2026-01-01.json.gz"));
+        assert!(!manifest.files.contains_key("digest-day-2026-01-01.json.gz"));
+        assert!(
+            names.iter().any(|n| n.starts_with("day-2026-10-")),
+            "{names:?}"
+        );
+        assert!(names.iter().any(|n| n.starts_with("meta")), "{names:?}");
     }
 
     #[tokio::test]
