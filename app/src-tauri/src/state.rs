@@ -86,12 +86,15 @@ pub struct AppState {
     pub drive_cache: Mutex<Option<Arc<dyn infodesk_core::sync::drive::DriveStore>>>,
     /// 同期を非同期に起動する関数。起動時に設定する (テストでは未設定)。
     sync_launcher: Mutex<Option<SyncLauncher>>,
+    /// アプリ内の Tailscale 端末。テストでは偽物に差し替える。
+    pub tailnet: Arc<dyn crate::tailnet::Tailnet>,
 }
 
 pub type SyncLauncher = Arc<dyn Fn() + Send + Sync>;
 
 impl AppState {
     pub fn new(store: Store, notify: Notifier) -> Self {
+        let tailnet = Arc::new(crate::tailnet::EmbeddedTailnet::new(notify.clone()));
         Self {
             store: Mutex::new(store),
             http: infodesk_core::collector::http_client().expect("http client"),
@@ -110,6 +113,7 @@ impl AppState {
             drive_factory: Arc::new(crate::sync::google_drive),
             drive_cache: Mutex::new(None),
             sync_launcher: Mutex::new(None),
+            tailnet,
         }
     }
 

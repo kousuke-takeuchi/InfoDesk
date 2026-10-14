@@ -6,6 +6,9 @@ mod scheduler;
 mod sidecar;
 mod state;
 mod sync;
+// Task 3 wires this into sync; until then most of it is unused.
+#[allow(dead_code)]
+mod tailnet;
 mod tray;
 
 use std::sync::Arc;
@@ -34,7 +37,18 @@ pub fn run() {
                     tray::refresh(&handle);
                 }
             });
-            app.manage(AppState::new(store, notify));
+            let tailnet = Arc::new(tailnet::EmbeddedTailnet::new(notify.clone()));
+            let opener = app.handle().clone();
+            tailnet.configure(
+                app.path().app_data_dir()?.join("tailscale"),
+                Arc::new(move |url: &str| {
+                    let _ =
+                        tauri_plugin_opener::OpenerExt::opener(&opener).open_url(url, None::<&str>);
+                }),
+            );
+            let mut state = AppState::new(store, notify);
+            state.tailnet = tailnet;
+            app.manage(state);
             app.state::<AppState>().load_persisted();
             sync::init_status(&app.state::<AppState>());
             let handle = app.handle().clone();
@@ -130,6 +144,7 @@ pub fn run() {
             }
             if let tauri::RunEvent::Exit = event {
                 app.state::<AppState>().chat.stop();
+                app.state::<AppState>().tailnet.stop();
             }
         });
 }
