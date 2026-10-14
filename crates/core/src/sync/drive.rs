@@ -19,6 +19,8 @@ pub enum DriveError {
     Retryable(String),
     #[error("Google の再ログインが必要です")]
     AuthExpired,
+    #[error("NAS のユーザー名かパスワードが違います")]
+    BadCredentials,
     #[error("Google ドライブのエラー: {0}")]
     Other(String),
 }
