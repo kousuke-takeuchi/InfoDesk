@@ -7,7 +7,10 @@ use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 use super::items::keyword_clause;
 use super::{Store, ts};
 use crate::error::{Error, Result};
-use crate::sync::format::{Field, ItemRecord, ItemState, Op, Stamp, normalize_op, op_time, wins};
+use crate::model::Period;
+use crate::sync::format::{
+    Field, ItemRecord, ItemState, Op, Stamp, normalize_op, op_time, sha256_hex, wins,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncFileRow {
@@ -16,6 +19,17 @@ pub struct SyncFileRow {
     pub drive_id: Option<String>,
     pub sha256: Option<String>,
     pub updated_at: String,
+    /// Cheap fingerprint of the inputs an 'out' file was built from. A pass
+    /// skips building the file while it matches.
+    pub fingerprint: Option<String>,
+}
+
+/// Items fetched on one local day: a fingerprint of everything that goes into
+/// the day file, and the item ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DayFingerprint {
+    pub fingerprint: String,
+    pub ids: Vec<i64>,
 }
 
 fn field_name(f: Field) -> &'static str {
@@ -40,6 +54,7 @@ fn row_to_sync_file(r: &Row) -> rusqlite::Result<SyncFileRow> {
         drive_id: r.get(2)?,
         sha256: r.get(3)?,
         updated_at: r.get(4)?,
+        fingerprint: r.get(5)?,
     })
 }
 
@@ -231,6 +246,19 @@ impl Store {
         Ok(true)
     }
 
+    /// `apply_remote_op` for each op inside one transaction. Returns how many applied.
+    pub fn apply_remote_ops(&self, ops: &[Op], local_device: &str) -> Result<usize> {
+        let tx = self.conn.unchecked_transaction()?;
+        let mut applied = 0;
+        for op in ops {
+            if self.apply_remote_op(op, local_device)? {
+                applied += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(applied)
+    }
+
     /// 送信済みで `older_than` より前の `sync_ops` を消し、消した行数を返す。
     pub fn prune_uploaded_ops(&self, older_than: &str) -> Result<usize> {
         Ok(self.conn.execute(
@@ -349,11 +377,125 @@ impl Store {
         Ok(days.into_iter().collect())
     }
 
+    /// Fingerprints of the day files for items fetched on or after `since` (tz date).
+    ///
+    /// Each row contributes every `ItemRecord` column, with the long texts
+    /// (`excerpt`, `ai_summary`) reduced to their length and a prefix, in the
+    /// day file's order. `salt` is mixed in for inputs outside the items table
+    /// (the topics version, since `topic_ids` come from topic keywords). One
+    /// query for the whole window, no gzip.
+    pub fn day_fingerprints(
+        &self,
+        since: NaiveDate,
+        tz: FixedOffset,
+        salt: &str,
+    ) -> Result<BTreeMap<NaiveDate, DayFingerprint>> {
+        let (start, _) = day_bounds(since, tz)?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id, fetched_at, \
+             id || char(31) || url || char(31) || title || char(31) || \
+             length(excerpt) || char(31) || substr(excerpt, 1, 64) || char(31) || \
+             coalesce(length(ai_summary), -1) || char(31) || \
+             coalesce(substr(ai_summary, 1, 64), '') || char(31) || \
+             coalesce(image_url, '') || char(31) || coalesce(source_id, '') || char(31) || \
+             source_name || char(31) || category || char(31) || coalesce(score, '') || \
+             char(31) || coalesce(published_at, '') || char(31) || fetched_at \
+             FROM items WHERE fetched_at >= ?1 ORDER BY fetched_at, id",
+        )?;
+        let rows = stmt.query_map(params![ts(&start)], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut acc: BTreeMap<NaiveDate, (String, Vec<i64>)> = BTreeMap::new();
+        for row in rows {
+            let (id, fetched_at, line) = row?;
+            let t = DateTime::parse_from_rfc3339(&fetched_at)
+                .map_err(|e| Error::Invalid(format!("bad fetched_at {fetched_at}: {e}")))?;
+            let entry = acc
+                .entry(t.with_timezone(&tz).date_naive())
+                .or_insert_with(|| (format!("{salt}\u{1e}"), Vec::new()));
+            entry.0.push_str(&line);
+            entry.0.push('\u{1e}');
+            entry.1.push(id);
+        }
+        Ok(acc
+            .into_iter()
+            .map(|(d, (text, ids))| {
+                (
+                    d,
+                    DayFingerprint {
+                        fingerprint: sha256_hex(text.as_bytes()),
+                        ids,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    /// Per (period, period_start) with at least one finished digest since
+    /// `since`: a string of each finished digest's scope, id, `created_at`
+    /// and body length. `created_at` moves on every regeneration.
+    pub fn done_digest_keys(
+        &self,
+        since: NaiveDate,
+    ) -> Result<BTreeMap<(&'static str, NaiveDate), String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT period, period_start, \
+             scope || char(31) || id || char(31) || status || char(31) || created_at || \
+             char(31) || length(body) \
+             FROM digests WHERE status = 'done' AND period_start >= ?1 \
+             ORDER BY period, period_start, scope",
+        )?;
+        let rows = stmt.query_map(params![since.format("%Y-%m-%d").to_string()], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut out: BTreeMap<(&'static str, NaiveDate), String> = BTreeMap::new();
+        for row in rows {
+            let (period, start, line) = row?;
+            let period = Period::parse(&period)
+                .ok_or_else(|| Error::Invalid(format!("unknown period {period}")))?;
+            let start = NaiveDate::parse_from_str(&start, "%Y-%m-%d")
+                .map_err(|e| Error::Invalid(format!("bad period_start {start}: {e}")))?;
+            let text = out.entry((period.as_str(), start)).or_default();
+            text.push_str(&line);
+            text.push('\u{1e}');
+        }
+        Ok(out)
+    }
+
+    /// Count and largest id of the items fetched in [since, until).
+    pub fn items_count_and_max_id(
+        &self,
+        since: &DateTime<Utc>,
+        until: &DateTime<Utc>,
+    ) -> Result<(i64, i64)> {
+        Ok(self.conn.query_row(
+            "SELECT count(*), coalesce(max(id), 0) FROM items \
+             WHERE fetched_at >= ?1 AND fetched_at < ?2",
+            params![ts(since), ts(until)],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?)
+    }
+
+    /// Hash of every topic's id, name and keywords.
+    pub fn topics_version(&self) -> Result<String> {
+        let topics = self.list_topics()?;
+        Ok(sha256_hex(&serde_json::to_vec(&topics)?))
+    }
+
     pub fn sync_file(&self, name: &str) -> Result<Option<SyncFileRow>> {
         Ok(self
             .conn
             .query_row(
-                "SELECT name, kind, drive_id, sha256, updated_at FROM sync_files WHERE name = ?1",
+                "SELECT name, kind, drive_id, sha256, updated_at, fingerprint FROM sync_files \
+                 WHERE name = ?1",
                 params![name],
                 row_to_sync_file,
             )
@@ -362,12 +504,19 @@ impl Store {
 
     pub fn put_sync_file(&self, row: &SyncFileRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO sync_files(name, kind, drive_id, sha256, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5) \
+            "INSERT INTO sync_files(name, kind, drive_id, sha256, updated_at, fingerprint) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
              ON CONFLICT(name) DO UPDATE SET kind = excluded.kind, \
              drive_id = excluded.drive_id, sha256 = excluded.sha256, \
-             updated_at = excluded.updated_at",
-            params![row.name, row.kind, row.drive_id, row.sha256, row.updated_at],
+             updated_at = excluded.updated_at, fingerprint = excluded.fingerprint",
+            params![
+                row.name,
+                row.kind,
+                row.drive_id,
+                row.sha256,
+                row.updated_at,
+                row.fingerprint
+            ],
         )?;
         Ok(())
     }
@@ -380,7 +529,7 @@ impl Store {
 
     pub fn sync_files(&self, kind: &str) -> Result<Vec<SyncFileRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT name, kind, drive_id, sha256, updated_at FROM sync_files \
+            "SELECT name, kind, drive_id, sha256, updated_at, fingerprint FROM sync_files \
              WHERE kind = ?1 ORDER BY name",
         )?;
         let rows = stmt.query_map(params![kind], row_to_sync_file)?;
@@ -488,6 +637,29 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn remote_ops_apply_in_one_batch_and_count_winners() {
+        let s = store();
+        let a = insert_item(&s, "https://a/1");
+        let b = insert_item(&s, "https://a/2");
+        s.set_read(b, true).unwrap();
+        let op = |item_id, value, at: &str| Op {
+            item_id,
+            field: Field::Read,
+            value,
+            at: at.into(),
+            device: "phone".into(),
+        };
+        let ops = [
+            op(a, true, "2999-01-01T00:00:00.000Z"),
+            op(b, false, "2000-01-01T00:00:00.000Z"),
+            op(999, true, "2999-01-01T00:00:00.000Z"),
+        ];
+        assert_eq!(s.apply_remote_ops(&ops, "mac").unwrap(), 1);
+        assert!(s.get_item(a).unwrap().unwrap().read);
+        assert!(s.get_item(b).unwrap().unwrap().read);
     }
 
     #[test]
@@ -634,6 +806,7 @@ mod tests {
             drive_id: Some("d1".into()),
             sha256: None,
             updated_at: "2026-10-13T00:00:00Z".into(),
+            fingerprint: Some("f1".into()),
         };
         s.put_sync_file(&row).unwrap();
         let row2 = SyncFileRow {

@@ -1,20 +1,20 @@
 //! One sync pass: import remote ops, upload local ops, write changed files,
 //! compact, apply retention, and write the manifest last.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
 
 use super::drive::{DriveError, DriveStore, RemoteFile};
 use super::format::{
-    CategoryMeta, DayFile, DigestFile, DigestRecord, FileEntry, FileKind, ItemState, Manifest,
-    MetaFile, Op, OpsFile, SCHEMA, SourceMeta, StateSnapshot, TopicMeta, apply_op, day_file_name,
-    digest_file_name, gunzip_json, gzip_json, normalize_op, op_time, ops_file_name,
+    CategoryMeta, DayFile, DigestFile, DigestRecord, Field, FileEntry, FileKind, ItemState,
+    Manifest, MetaFile, Op, OpsFile, SCHEMA, SourceMeta, StateSnapshot, TopicMeta, apply_op,
+    day_file_name, digest_file_name, gunzip_json, gzip_json, normalize_op, op_time, ops_file_name,
     parse_file_name, sha256_hex,
 };
 use crate::model::{Category, DigestStatus, Period};
-use crate::period::period_start;
+use crate::period::{period_end, period_start, utc_range};
 use crate::store::Store;
 use crate::store::SyncFileRow;
 
@@ -58,6 +58,10 @@ pub struct SyncReport {
     pub uploaded_ops: usize,
     pub written_files: Vec<String>,
     pub deleted_files: Vec<String>,
+    /// Meta, day and digest files serialized and gzipped in this pass.
+    pub built_files: usize,
+    /// Problems that did not stop the pass, such as unreadable remote files.
+    pub warnings: Vec<String>,
 }
 
 /// True when today's `daily_time` has passed and the last compaction was before it.
@@ -89,27 +93,75 @@ fn locked<T>(
     st(f(&guard))
 }
 
-struct Output {
-    name: String,
-    bytes: Vec<u8>,
-}
-
-struct Built {
-    outputs: Vec<Output>,
-    /// Ids of items fetched inside the day retention window.
-    retained_ids: HashSet<i64>,
-}
-
 fn date_str(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
 }
 
-fn build_outputs(store: &Store, input: &SyncInput) -> crate::Result<Built> {
+enum Job {
+    Day(NaiveDate),
+    Digest(Period, NaiveDate),
+}
+
+/// A day or digest file this pass may write, with the fingerprint of its inputs.
+struct Planned {
+    name: String,
+    fingerprint: String,
+    job: Job,
+}
+
+/// Everything decided under one short lock before any file is built.
+struct Plan {
+    meta: MetaFile,
+    jobs: Vec<Planned>,
+    /// Ids of items fetched inside the day retention window.
+    retained_ids: HashSet<i64>,
+    out_rows: HashMap<String, SyncFileRow>,
+}
+
+/// Digest periods kept on Drive: the last 60 days, and weeks and months
+/// starting inside the last 400 days.
+fn digest_starts(today: NaiveDate) -> Vec<(Period, NaiveDate)> {
+    let day_cut = today - Duration::days(DAY_RETENTION - 1);
+    let long_cut = today - Duration::days(LONG_RETENTION - 1);
+    let mut starts: Vec<(Period, NaiveDate)> = (0..DAY_RETENTION)
+        .map(|i| (Period::Day, day_cut + Duration::days(i)))
+        .collect();
+    for period in [Period::Week, Period::Month] {
+        let mut set = BTreeSet::new();
+        let mut d = long_cut;
+        while d <= today {
+            let s = period_start(period, d);
+            if s >= long_cut {
+                set.insert(s);
+            }
+            d += Duration::days(1);
+        }
+        starts.extend(set.into_iter().map(|s| (period, s)));
+    }
+    starts
+}
+
+/// Reads the cheap inputs for every output file. A handful of queries; no
+/// file is built here.
+///
+/// Fingerprints:
+/// - meta: the hash of its JSON (two small queries; only the gzip is skipped).
+/// - day: `Store::day_fingerprints`, salted with the topics version because
+///   `topic_ids` come from topic keywords.
+/// - digest: the topics version, each finished digest's scope, id,
+///   `created_at` and body length (`created_at` moves on every regeneration),
+///   and the stats inputs. `digest_stats` counts items in the period and the
+///   one before it. Items are only ever added with `fetched_at` = now, so a
+///   closed period's counts are fixed; for the open period (the one holding
+///   today) we add the item count and largest id over [previous start, end).
+///   The "open"/"closed" marker differs, so a period is rebuilt once when it
+///   closes and picks up items added since the last pass.
+fn plan(store: &Store, input: &SyncInput) -> crate::Result<Plan> {
     let today = input.now.with_timezone(&input.tz).date_naive();
     let day_cut = today - Duration::days(DAY_RETENTION - 1);
     let long_cut = today - Duration::days(LONG_RETENTION - 1);
-    let mut outputs = Vec::new();
-
+    let topics = store.list_topics()?;
+    let topics_version = store.topics_version()?;
     let meta = MetaFile {
         categories: Category::ALL
             .iter()
@@ -118,8 +170,7 @@ fn build_outputs(store: &Store, input: &SyncInput) -> crate::Result<Built> {
                 label: c.label_ja().to_string(),
             })
             .collect(),
-        topics: store
-            .list_topics()?
+        topics: topics
             .into_iter()
             .map(|t| TopicMeta {
                 id: t.id,
@@ -136,76 +187,92 @@ fn build_outputs(store: &Store, input: &SyncInput) -> crate::Result<Built> {
             })
             .collect(),
     };
-    outputs.push(Output {
-        name: META.to_string(),
-        bytes: super::format::gzip_json(&meta)?,
-    });
 
+    let mut jobs = Vec::new();
     let mut retained_ids = HashSet::new();
-    for date in store.days_with_items(day_cut, input.tz)? {
-        let items = store.items_fetched_on(date, input.tz)?;
-        retained_ids.extend(items.iter().map(|i| i.id));
-        let file = DayFile {
-            date: date_str(date),
-            items,
-        };
-        outputs.push(Output {
+    for (date, day) in store.day_fingerprints(day_cut, input.tz, &topics_version)? {
+        retained_ids.extend(day.ids);
+        jobs.push(Planned {
             name: day_file_name(date),
-            bytes: gzip_json(&file)?,
+            fingerprint: day.fingerprint,
+            job: Job::Day(date),
         });
     }
 
-    let mut starts: Vec<(Period, NaiveDate)> = Vec::new();
-    for i in 0..DAY_RETENTION {
-        starts.push((Period::Day, day_cut + Duration::days(i)));
-    }
-    for period in [Period::Week, Period::Month] {
-        let mut set = BTreeSet::new();
-        let mut d = long_cut;
-        while d <= today {
-            let s = period_start(period, d);
-            if s >= long_cut {
-                set.insert(s);
-            }
-            d += Duration::days(1);
-        }
-        starts.extend(set.into_iter().map(|s| (period, s)));
-    }
-    for (period, start) in starts {
-        let entries: Vec<DigestRecord> = store
-            .list_digests(period, start)?
-            .into_iter()
-            .filter(|d| d.status == DigestStatus::Done)
-            .map(|d| {
-                Ok(DigestRecord {
-                    scope: serde_json::to_value(&d.scope)?,
-                    body: d.body,
-                    status: d.status.as_str().to_string(),
-                    item_ids: d.item_ids,
-                    provider: d.provider,
-                    created_at: op_time(d.created_at),
-                })
-            })
-            .collect::<crate::Result<_>>()?;
-        if entries.is_empty() {
+    let digests = store.done_digest_keys(long_cut)?;
+    for (period, start) in digest_starts(today) {
+        let Some(rows) = digests.get(&(period.as_str(), start)) else {
             continue;
-        }
-        let stats = store.digest_stats(period, start, input.tz, None)?;
-        let file = DigestFile {
-            period: period.as_str().to_string(),
-            period_start: date_str(start),
-            stats: Some(serde_json::to_value(stats)?),
-            entries,
         };
-        outputs.push(Output {
+        let end = period_end(period, start);
+        let window = if start <= today && today < end {
+            let prev = period_start(period, start - Duration::days(1));
+            let (since, _) = utc_range(period, prev, input.tz);
+            let (_, until) = utc_range(period, start, input.tz);
+            let (count, max_id) = store.items_count_and_max_id(&since, &until)?;
+            format!("open:{count}:{max_id}")
+        } else {
+            "closed".to_string()
+        };
+        let text = format!("{topics_version}\u{1e}{window}\u{1e}{rows}");
+        jobs.push(Planned {
             name: digest_file_name(period, start),
-            bytes: gzip_json(&file)?,
+            fingerprint: sha256_hex(text.as_bytes()),
+            job: Job::Digest(period, start),
         });
     }
-    Ok(Built {
-        outputs,
+
+    let out_rows = store
+        .sync_files("out")?
+        .into_iter()
+        .map(|r| (r.name.clone(), r))
+        .collect();
+    Ok(Plan {
+        meta,
+        jobs,
         retained_ids,
+        out_rows,
     })
+}
+
+fn build_day(store: &Store, date: NaiveDate, tz: FixedOffset) -> crate::Result<DayFile> {
+    Ok(DayFile {
+        date: date_str(date),
+        items: store.items_fetched_on(date, tz)?,
+    })
+}
+
+fn build_digest(
+    store: &Store,
+    period: Period,
+    start: NaiveDate,
+    tz: FixedOffset,
+) -> crate::Result<Option<DigestFile>> {
+    let entries: Vec<DigestRecord> = store
+        .list_digests(period, start)?
+        .into_iter()
+        .filter(|d| d.status == DigestStatus::Done)
+        .map(|d| {
+            Ok(DigestRecord {
+                scope: serde_json::to_value(&d.scope)?,
+                body: d.body,
+                status: d.status.as_str().to_string(),
+                item_ids: d.item_ids,
+                provider: d.provider,
+                created_at: op_time(d.created_at),
+            })
+        })
+        .collect::<crate::Result<_>>()?;
+    if entries.is_empty() {
+        return Ok(None);
+    }
+    let stats = store.digest_stats(period, start, tz, None)?;
+    Ok(Some(DigestFile {
+        period: period.as_str().to_string(),
+        period_start: date_str(start),
+        stats: Some(serde_json::to_value(stats)?),
+        entries,
+    }))
 }
 
 /// Sort key for an ops file name: the UTC stamp, then the whole name.
@@ -216,6 +283,22 @@ fn ops_sort_key(name: &str) -> (String, String) {
         .unwrap_or("")
         .to_string();
     (stamp, name.to_string())
+}
+
+fn local_ops(local: BTreeMap<i64, ItemState>) -> impl Iterator<Item = Op> {
+    local.into_iter().flat_map(|(item_id, item)| {
+        [(Field::Read, item.read), (Field::Starred, item.starred)]
+            .into_iter()
+            .filter_map(move |(field, stamp)| {
+                stamp.map(|stamp| Op {
+                    item_id,
+                    field,
+                    value: stamp.value,
+                    at: stamp.at,
+                    device: stamp.device,
+                })
+            })
+    })
 }
 
 struct Pass<'a> {
@@ -229,11 +312,13 @@ struct Pass<'a> {
 
 impl Pass<'_> {
     /// Writes `bytes` unless the recorded hash already matches the Drive copy.
+    /// `fingerprint` is stored with the 'out' row.
     async fn write_out(
         &mut self,
         name: &str,
         bytes: Vec<u8>,
         mime: &str,
+        fingerprint: Option<&str>,
     ) -> Result<bool, SyncError> {
         let sha = sha256_hex(&bytes);
         let existing = self.remote.get(name).cloned();
@@ -243,6 +328,13 @@ impl Pass<'_> {
             && r.sha256.as_deref() == Some(sha.as_str())
             && r.drive_id.as_deref() == Some(f.id.as_str())
         {
+            if r.fingerprint.as_deref() != fingerprint {
+                let updated = SyncFileRow {
+                    fingerprint: fingerprint.map(str::to_string),
+                    ..r.clone()
+                };
+                locked(self.store, |s| s.put_sync_file(&updated))?;
+            }
             self.hashes.insert(name.to_string(), sha);
             return Ok(false);
         }
@@ -256,12 +348,31 @@ impl Pass<'_> {
             drive_id: Some(file.id.clone()),
             sha256: Some(sha.clone()),
             updated_at: self.now_s.clone(),
+            fingerprint: fingerprint.map(str::to_string),
         };
         locked(self.store, |s| s.put_sync_file(&record))?;
         self.remote.insert(name.to_string(), file);
         self.hashes.insert(name.to_string(), sha);
         self.report.written_files.push(name.to_string());
         Ok(true)
+    }
+
+    /// True when the 'out' row's fingerprint matches and the file it names is
+    /// still on Drive. Its recorded hash then feeds the manifest.
+    fn unchanged(&mut self, rows: &HashMap<String, SyncFileRow>, name: &str, fp: &str) -> bool {
+        let (Some(row), Some(file)) = (rows.get(name), self.remote.get(name)) else {
+            return false;
+        };
+        let fresh = row.kind == "out"
+            && row.fingerprint.as_deref() == Some(fp)
+            && row.drive_id.as_deref() == Some(file.id.as_str());
+        match (&row.sha256, fresh) {
+            (Some(sha), true) => {
+                self.hashes.insert(name.to_string(), sha.clone());
+                true
+            }
+            _ => false,
+        }
     }
 
     async fn delete_remote(&mut self, name: &str) -> Result<(), SyncError> {
@@ -274,10 +385,20 @@ impl Pass<'_> {
         locked(self.store, |s| s.delete_sync_file(name))
     }
 
-    async fn download_ops(&self, name: &str) -> Result<(Vec<u8>, Option<OpsFile>), SyncError> {
+    /// Downloads an ops file. An unparsable one is reported as a warning and
+    /// returned as `None`.
+    async fn download_ops(&mut self, name: &str) -> Result<(Vec<u8>, Option<OpsFile>), SyncError> {
         let id = self.remote[name].id.clone();
         let bytes = self.drive.download(&id).await?;
-        let parsed = serde_json::from_slice::<OpsFile>(&bytes).ok();
+        let parsed = match serde_json::from_slice::<OpsFile>(&bytes) {
+            Ok(f) => Some(f),
+            Err(e) => {
+                self.report
+                    .warnings
+                    .push(format!("unreadable ops file {name}: {e}"));
+                None
+            }
+        };
         Ok((bytes, parsed))
     }
 
@@ -313,15 +434,7 @@ impl Pass<'_> {
             if let Some(file) = parsed {
                 let ops: Vec<Op> = file.ops.iter().filter_map(normalize_op).collect();
                 imported = ops.len();
-                applied = locked(self.store, |s| {
-                    let mut n = 0;
-                    for op in &ops {
-                        if s.apply_remote_op(op, &input.device_id)? {
-                            n += 1;
-                        }
-                    }
-                    Ok(n)
-                })?;
+                applied = locked(self.store, |s| s.apply_remote_ops(&ops, &input.device_id))?;
             }
             let row = SyncFileRow {
                 name: name.clone(),
@@ -329,6 +442,7 @@ impl Pass<'_> {
                 drive_id: Some(self.remote[&name].id.clone()),
                 sha256: Some(sha.clone()),
                 updated_at: self.now_s.clone(),
+                fingerprint: None,
             };
             locked(self.store, |s| s.put_sync_file(&row))?;
             self.hashes.insert(name, sha);
@@ -351,7 +465,7 @@ impl Pass<'_> {
                 ops: part.iter().map(|(_, op)| op.clone()).collect(),
             };
             let bytes = st(serde_json::to_vec(&file).map_err(Into::into))?;
-            self.write_out(&name, bytes, MIME_JSON).await?;
+            self.write_out(&name, bytes, MIME_JSON, None).await?;
             let ids: Vec<i64> = part.iter().map(|(id, _)| *id).collect();
             locked(self.store, |s| s.mark_ops_uploaded(&ids))?;
             self.report.uploaded_ops += ids.len();
@@ -359,12 +473,65 @@ impl Pass<'_> {
         Ok(())
     }
 
+    /// Writes meta, day and digest files whose inputs changed. The store lock
+    /// is taken once for the plan and once per file built, never for the whole
+    /// build and never across an await.
     async fn write_outputs(&mut self, input: &SyncInput) -> Result<HashSet<i64>, SyncError> {
-        let built = locked(self.store, |s| build_outputs(s, input))?;
-        for out in built.outputs {
-            self.write_out(&out.name, out.bytes, MIME_GZ).await?;
+        let plan = locked(self.store, |s| plan(s, input))?;
+
+        let meta_json = st(serde_json::to_vec(&plan.meta).map_err(Into::into))?;
+        let meta_fp = sha256_hex(&meta_json);
+        if !self.unchanged(&plan.out_rows, META, &meta_fp) {
+            let bytes = st(gzip_json(&plan.meta))?;
+            self.report.built_files += 1;
+            self.write_out(META, bytes, MIME_GZ, Some(&meta_fp)).await?;
         }
-        Ok(built.retained_ids)
+
+        for job in &plan.jobs {
+            if self.unchanged(&plan.out_rows, &job.name, &job.fingerprint) {
+                continue;
+            }
+            let bytes = match job.job {
+                Job::Day(date) => {
+                    let file = locked(self.store, |s| build_day(s, date, input.tz))?;
+                    st(gzip_json(&file))?
+                }
+                Job::Digest(period, start) => {
+                    let file = locked(self.store, |s| build_digest(s, period, start, input.tz))?;
+                    let Some(file) = file else { continue };
+                    st(gzip_json(&file))?
+                }
+            };
+            self.report.built_files += 1;
+            self.write_out(&job.name, bytes, MIME_GZ, Some(&job.fingerprint))
+                .await?;
+        }
+        Ok(plan.retained_ids)
+    }
+
+    /// Reads the snapshot. `Ok(None)` when there is none; an unreadable one is
+    /// reported and treated as empty (the Mac DB and its stamps still hold the
+    /// state), with `true` meaning it must be rewritten.
+    async fn read_snapshot(&mut self) -> Result<Option<(StateSnapshot, bool)>, SyncError> {
+        let Some(f) = self.remote.get(SNAPSHOT).cloned() else {
+            return Ok(None);
+        };
+        let bytes = self.drive.download(&f.id).await?;
+        match gunzip_json::<StateSnapshot>(&bytes) {
+            Ok(snap) => Ok(Some((snap, false))),
+            Err(e) => {
+                self.report.warnings.push(format!(
+                    "unreadable {SNAPSHOT}, rebuilt from local state: {e}"
+                ));
+                Ok(Some((
+                    StateSnapshot {
+                        covers: Vec::new(),
+                        state: BTreeMap::new(),
+                    },
+                    true,
+                )))
+            }
+        }
     }
 
     async fn compact(
@@ -376,18 +543,25 @@ impl Pass<'_> {
         locked(self.store, |s| s.prune_uploaded_ops(&cutoff))?;
 
         let names = self.ops_names();
+        let existing = self.read_snapshot().await?;
         if names.is_empty() {
-            return Ok(());
-        }
-        let mut state: BTreeMap<i64, ItemState> = match self.remote.get(SNAPSHOT).cloned() {
-            Some(f) => {
-                let bytes = self.drive.download(&f.id).await?;
-                let snap: StateSnapshot = gunzip_json(&bytes)
-                    .map_err(|e| SyncError::Store(format!("unreadable snapshot: {e}")))?;
-                snap.state
+            // No new ops: only re-apply retention to a readable snapshot, and
+            // rewrite it only if that removed something.
+            match existing {
+                None => return Ok(()),
+                Some((mut snap, false)) => {
+                    let before = snap.state.len();
+                    snap.state.retain(|id, _| retained.contains(id));
+                    if snap.state.len() != before {
+                        self.write_out(SNAPSHOT, st(gzip_json(&snap))?, MIME_GZ, None)
+                            .await?;
+                    }
+                    return Ok(());
+                }
+                Some((_, true)) => {}
             }
-            None => BTreeMap::new(),
-        };
+        }
+        let mut state = existing.map(|(s, _)| s.state).unwrap_or_default();
         let mut covers = Vec::new();
         for name in &names {
             let (_, parsed) = self.download_ops(name).await?;
@@ -397,35 +571,20 @@ impl Pass<'_> {
             }
             covers.push(name.clone());
         }
+        // The Mac's own stamps, including ones whose `sync_ops` row was pruned.
         let ids: Vec<i64> = retained.iter().copied().collect();
         let local = locked(self.store, |s| {
             s.local_state_stamps(Some(&ids), &input.device_id)
         })?;
-        for (item_id, item) in local {
-            for (field, stamp) in [
-                (super::format::Field::Read, item.read),
-                (super::format::Field::Starred, item.starred),
-            ] {
-                if let Some(stamp) = stamp {
-                    apply_op(
-                        &mut state,
-                        &Op {
-                            item_id,
-                            field,
-                            value: stamp.value,
-                            at: stamp.at,
-                            device: stamp.device,
-                        },
-                    );
-                }
-            }
+        for op in local_ops(local) {
+            apply_op(&mut state, &op);
         }
         state.retain(|id, _| retained.contains(id));
         let snapshot = StateSnapshot {
             covers: covers.clone(),
             state,
         };
-        self.write_out(SNAPSHOT, st(gzip_json(&snapshot))?, MIME_GZ)
+        self.write_out(SNAPSHOT, st(gzip_json(&snapshot))?, MIME_GZ, None)
             .await?;
         for name in covers {
             self.delete_remote(&name).await?;
@@ -720,6 +879,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(second.uploaded_ops, 0);
+        assert_eq!(second.imported_ops, 0, "own ops files are not imported");
         assert_eq!(
             drive
                 .names()
@@ -948,6 +1108,395 @@ mod tests {
             serde_json::from_slice(&read_file(&drive, "manifest.json").await.unwrap()).unwrap();
         assert!(manifest.files.contains_key("day-2026-08-15.json.gz"));
         assert!(!manifest.files.contains_key("day-2026-08-14.json.gz"));
+    }
+
+    async fn snapshot_of(drive: &MemoryDrive) -> StateSnapshot {
+        gunzip_json(&read_file(drive, SNAPSHOT).await.unwrap()).unwrap()
+    }
+
+    async fn manifest_of(drive: &MemoryDrive) -> Manifest {
+        serde_json::from_slice(&read_file(drive, MANIFEST).await.unwrap()).unwrap()
+    }
+
+    fn ids_of(state: &BTreeMap<i64, ItemState>) -> Vec<i64> {
+        state.keys().copied().collect()
+    }
+
+    /// Marks every pending local op uploaded and prunes it, so the stamp lives
+    /// only on the item row.
+    fn drop_journal(m: &Mutex<Store>) {
+        let s = m.lock().unwrap();
+        let ids: Vec<i64> = s
+            .pending_local_ops("mac")
+            .unwrap()
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect();
+        s.mark_ops_uploaded(&ids).unwrap();
+        s.prune_uploaded_ops("2999-01-01T00:00:00.000Z").unwrap();
+        assert!(s.pending_local_ops("mac").unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn unreadable_snapshot_is_treated_as_empty_and_reported() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        m.lock().unwrap().set_read(id1, true).unwrap();
+        let drive = MemoryDrive::new();
+        drive.put(SNAPSHOT, b"not gzip".to_vec());
+        put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id1,
+                Field::Starred,
+                true,
+                "2999-01-01T00:00:00.000Z",
+                "phone",
+            )],
+        );
+        let report = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert!(
+            report.warnings.iter().any(|w| w.contains(SNAPSHOT)),
+            "{:?}",
+            report.warnings
+        );
+        assert!(!drive.names().iter().any(|n| n.starts_with("ops-")));
+        let snap = snapshot_of(&drive).await;
+        assert!(snap.state[&id1].read.as_ref().unwrap().value);
+        assert!(snap.state[&id1].starred.as_ref().unwrap().value);
+        assert!(drive.names().contains(&MANIFEST.to_string()));
+    }
+
+    #[tokio::test]
+    async fn compaction_keeps_mac_stamps_without_a_journal_row() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let id2 = add_item(&m, "https://a/2", "2026-10-13T02:00:00Z");
+        m.lock().unwrap().set_read(id1, true).unwrap();
+        drop_journal(&m);
+        let at1 = m.lock().unwrap().local_state_stamps(None, "mac").unwrap()[&id1]
+            .read
+            .clone()
+            .unwrap()
+            .at;
+        let drive = MemoryDrive::new();
+        put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id2,
+                Field::Read,
+                true,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        let report = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert_eq!(report.uploaded_ops, 0);
+        let snap = snapshot_of(&drive).await;
+        let r1 = snap.state[&id1].read.as_ref().expect("mac stamp kept");
+        assert!(r1.value);
+        assert_eq!(r1.at, at1);
+        assert!(snap.state[&id2].read.as_ref().unwrap().value);
+    }
+
+    #[tokio::test]
+    async fn failed_snapshot_write_keeps_ops_files_and_skips_the_manifest() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        m.lock().unwrap().set_read(id1, true).unwrap();
+        let drive = MemoryDrive::new();
+        let phone = put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id1,
+                Field::Starred,
+                true,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        *drive.fail_on_name.lock().unwrap() = Some(SNAPSHOT.into());
+        let err = run_sync(&m, &drive, &input(NOW, true)).await.unwrap_err();
+        assert!(matches!(err, SyncError::Drive(DriveError::Retryable(_))));
+        let names = drive.names();
+        let mac: Vec<&String> = names.iter().filter(|n| n.starts_with("ops-mac-")).collect();
+        assert_eq!(mac.len(), 1, "{names:?}");
+        assert!(names.contains(&phone));
+        assert!(!names.contains(&SNAPSHOT.to_string()));
+        assert!(!names.contains(&MANIFEST.to_string()));
+        let s = m.lock().unwrap();
+        assert_eq!(s.sync_file(&phone).unwrap().unwrap().kind, "in");
+        assert_eq!(s.sync_file(mac[0]).unwrap().unwrap().kind, "out");
+    }
+
+    #[tokio::test]
+    async fn failed_ops_upload_leaves_local_ops_pending() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        m.lock().unwrap().set_read(id1, true).unwrap();
+        let drive = MemoryDrive::new();
+        *drive.fail_on_name.lock().unwrap() = Some("ops-mac-".into());
+        assert!(run_sync(&m, &drive, &input(NOW, false)).await.is_err());
+        assert_eq!(m.lock().unwrap().pending_local_ops("mac").unwrap().len(), 1);
+        assert!(!drive.names().iter().any(|n| n.starts_with("ops-")));
+        let ok = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!(ok.uploaded_ops, 1);
+    }
+
+    #[tokio::test]
+    async fn compaction_drops_items_outside_retention_and_unknown_ids() {
+        let m = setup();
+        let old = add_item(&m, "https://a/old", "2026-08-01T01:00:00Z");
+        let recent = add_item(&m, "https://a/new", "2026-10-13T01:00:00Z");
+        let drive = MemoryDrive::new();
+        put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![
+                op(old, Field::Read, true, "2026-10-13T11:00:00.000Z", "phone"),
+                op(
+                    99_999,
+                    Field::Read,
+                    true,
+                    "2026-10-13T11:00:00.000Z",
+                    "phone",
+                ),
+                op(
+                    recent,
+                    Field::Read,
+                    true,
+                    "2026-10-13T11:00:00.000Z",
+                    "phone",
+                ),
+            ],
+        );
+        run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert_eq!(ids_of(&snapshot_of(&drive).await.state), vec![recent]);
+    }
+
+    #[tokio::test]
+    async fn manifest_lists_ops_files_and_the_snapshot_with_their_hashes() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        m.lock().unwrap().set_read(id1, true).unwrap();
+        let drive = MemoryDrive::new();
+        let phone = put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id1,
+                Field::Starred,
+                true,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        async fn check(drive: &MemoryDrive) -> Manifest {
+            let manifest = manifest_of(drive).await;
+            assert_eq!(manifest.files.len(), drive.names().len() - 1);
+            for (name, entry) in &manifest.files {
+                let bytes = read_file(drive, name).await.unwrap();
+                assert_eq!(entry.sha256, sha256_hex(&bytes), "{name}");
+            }
+            manifest
+        }
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        let first = check(&drive).await;
+        assert!(first.files.contains_key(&phone));
+        assert!(first.files.keys().any(|n| n.starts_with("ops-mac-")));
+
+        run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", true))
+            .await
+            .unwrap();
+        let second = check(&drive).await;
+        assert!(second.files.contains_key(SNAPSHOT));
+        assert!(!second.files.keys().any(|n| n.starts_with("ops-")));
+    }
+
+    #[tokio::test]
+    async fn retention_keeps_the_60th_digest_day_and_drops_old_months() {
+        let m = setup();
+        let drive = MemoryDrive::new();
+        drive.put("digest-day-2026-08-15.json.gz", b"x".to_vec());
+        drive.put("digest-month-2025-08-01.json.gz", b"x".to_vec());
+        drive.put("digest-month-2025-10-01.json.gz", b"x".to_vec());
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        let names = drive.names();
+        assert!(names.contains(&"digest-day-2026-08-15.json.gz".to_string()));
+        assert!(!names.contains(&"digest-month-2025-08-01.json.gz".to_string()));
+        assert!(names.contains(&"digest-month-2025-10-01.json.gz".to_string()));
+    }
+
+    fn save_day_digest(m: &Mutex<Store>, day: u32, ids: Vec<i64>, now: &str) {
+        m.lock()
+            .unwrap()
+            .save_digest_done(
+                &NewDigest {
+                    period: Period::Day,
+                    period_start: NaiveDate::from_ymd_opt(2026, 10, day).unwrap(),
+                    scope: DigestScope::Category(Category::TechJp),
+                    body: "body".into(),
+                    item_ids: ids,
+                    provider: "p".into(),
+                },
+                &at(now),
+            )
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn unchanged_second_pass_builds_nothing() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-12T03:00:00Z");
+        let id2 = add_item(&m, "https://a/2", "2026-10-13T03:00:00Z");
+        save_day_digest(&m, 12, vec![id1], NOW);
+        save_day_digest(&m, 13, vec![id2], NOW);
+        let drive = MemoryDrive::new();
+        let first = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!(first.built_files, 5);
+        let again = run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", false))
+            .await
+            .unwrap();
+        assert_eq!(again.built_files, 0);
+        assert_eq!(again.written_files, vec![MANIFEST]);
+        check_manifest_hashes(&drive).await;
+    }
+
+    async fn check_manifest_hashes(drive: &MemoryDrive) {
+        let manifest = manifest_of(drive).await;
+        assert_eq!(manifest.files.len(), drive.names().len() - 1);
+        for (name, entry) in &manifest.files {
+            let bytes = read_file(drive, name).await.unwrap();
+            assert_eq!(entry.sha256, sha256_hex(&bytes), "{name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn changed_summary_rebuilds_only_that_day() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-12T03:00:00Z");
+        add_item(&m, "https://a/2", "2026-10-13T03:00:00Z");
+        let drive = MemoryDrive::new();
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        m.lock().unwrap().set_ai_summary(id1, "要約").unwrap();
+        let again = run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", false))
+            .await
+            .unwrap();
+        assert_eq!(again.built_files, 1);
+        assert_eq!(
+            again.written_files,
+            vec!["day-2026-10-12.json.gz", MANIFEST]
+        );
+        let day: DayFile =
+            gunzip_json(&read_file(&drive, "day-2026-10-12.json.gz").await.unwrap()).unwrap();
+        assert_eq!(day.items[0].ai_summary.as_deref(), Some("要約"));
+        check_manifest_hashes(&drive).await;
+    }
+
+    #[tokio::test]
+    async fn new_item_rebuilds_its_day_and_the_open_digest_only() {
+        let m = setup();
+        let id1 = add_item(&m, "https://a/1", "2026-10-12T03:00:00Z");
+        let id2 = add_item(&m, "https://a/2", "2026-10-13T03:00:00Z");
+        save_day_digest(&m, 12, vec![id1], NOW);
+        save_day_digest(&m, 13, vec![id2], NOW);
+        let drive = MemoryDrive::new();
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        add_item(&m, "https://a/3", "2026-10-13T12:00:30Z");
+        let again = run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", false))
+            .await
+            .unwrap();
+        assert_eq!(
+            again.written_files,
+            vec![
+                "day-2026-10-13.json.gz",
+                "digest-day-2026-10-13.json.gz",
+                MANIFEST
+            ]
+        );
+        assert_eq!(again.built_files, 2);
+    }
+
+    #[tokio::test]
+    async fn topic_change_rebuilds_meta_and_every_day() {
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-12T03:00:00Z");
+        add_item(&m, "https://a/2", "2026-10-13T03:00:00Z");
+        let drive = MemoryDrive::new();
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        m.lock()
+            .unwrap()
+            .add_topic("Rust", &["Rust".to_string()])
+            .unwrap();
+        let again = run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", false))
+            .await
+            .unwrap();
+        assert_eq!(again.built_files, 3);
+    }
+
+    #[tokio::test]
+    async fn unparsable_ops_files_are_reported() {
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = MemoryDrive::new();
+        let bad = ops_file_name("phone", at("2026-10-13T11:00:00Z"), 1);
+        drive.put(&bad, b"{not json".to_vec());
+        let first = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(
+            first.warnings.iter().any(|w| w.contains(&bad)),
+            "{:?}",
+            first.warnings
+        );
+        let second = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(second.warnings.is_empty(), "{:?}", second.warnings);
+        let compact = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert!(
+            compact.warnings.iter().any(|w| w.contains(&bad)),
+            "{:?}",
+            compact.warnings
+        );
+        assert!(
+            drive.names().contains(&bad),
+            "unreadable ops are not deleted"
+        );
+    }
+
+    #[tokio::test]
+    async fn snapshot_is_refiltered_for_retention_without_new_ops() {
+        let m = setup();
+        let old = add_item(&m, "https://a/old", "2026-08-01T01:00:00Z");
+        let recent = add_item(&m, "https://a/new", "2026-10-13T01:00:00Z");
+        let mut state = BTreeMap::new();
+        for id in [old, recent, 99_999] {
+            apply_op(
+                &mut state,
+                &op(id, Field::Read, true, "2026-10-01T00:00:00.000Z", "phone"),
+            );
+        }
+        let drive = MemoryDrive::new();
+        drive.put(
+            SNAPSHOT,
+            gzip_json(&StateSnapshot {
+                covers: vec!["ops-phone-x.json".into()],
+                state,
+            })
+            .unwrap(),
+        );
+        let first = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert!(first.written_files.contains(&SNAPSHOT.to_string()));
+        let snap = snapshot_of(&drive).await;
+        assert_eq!(ids_of(&snap.state), vec![recent]);
+        assert_eq!(snap.covers, vec!["ops-phone-x.json"]);
+        let second = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert!(!second.written_files.contains(&SNAPSHOT.to_string()));
     }
 
     #[test]

@@ -42,6 +42,9 @@ pub trait DriveStore: Send + Sync {
 pub struct MemoryDrive {
     files: Mutex<BTreeMap<String, (RemoteFile, Vec<u8>)>>,
     pub fail_next: Mutex<Option<DriveError>>,
+    /// When set, the next `create` or `update` of a file whose name starts with
+    /// this prefix fails with a retryable error, and the prefix is cleared.
+    pub fail_on_name: Mutex<Option<String>>,
     counter: Mutex<u64>,
 }
 
@@ -92,6 +95,15 @@ impl MemoryDrive {
             None => Ok(()),
         }
     }
+
+    fn check_fail_name(&self, name: &str) -> Result<(), DriveError> {
+        let mut prefix = self.fail_on_name.lock().unwrap();
+        if prefix.as_deref().is_some_and(|p| name.starts_with(p)) {
+            *prefix = None;
+            return Err(DriveError::Retryable(format!("injected failure: {name}")));
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -118,6 +130,7 @@ impl DriveStore for MemoryDrive {
         _mime: &str,
     ) -> Result<RemoteFile, DriveError> {
         self.check_fail()?;
+        self.check_fail_name(name)?;
         let id = format!("id{:06}", self.tick());
         let file = RemoteFile {
             id: id.clone(),
@@ -136,6 +149,15 @@ impl DriveStore for MemoryDrive {
         _mime: &str,
     ) -> Result<RemoteFile, DriveError> {
         self.check_fail()?;
+        let name = self
+            .files
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|(f, _)| f.name.clone());
+        if let Some(name) = name {
+            self.check_fail_name(&name)?;
+        }
         let modified_time = self.pseudo_time();
         let mut files = self.files.lock().unwrap();
         let entry = files
@@ -164,6 +186,19 @@ mod tests {
         *d.fail_next.lock().unwrap() = Some(DriveError::Retryable("x".into()));
         assert!(matches!(d.list().await, Err(DriveError::Retryable(_))));
         assert!(d.list().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn fail_on_name_hits_only_the_matching_write_once() {
+        let d = MemoryDrive::new();
+        let a = d.create("a.json", b"1".to_vec(), "x").await.unwrap();
+        *d.fail_on_name.lock().unwrap() = Some("a.".into());
+        assert!(d.create("b.json", b"1".to_vec(), "x").await.is_ok());
+        assert!(matches!(
+            d.update(&a.id, b"2".to_vec(), "x").await,
+            Err(DriveError::Retryable(_))
+        ));
+        assert!(d.update(&a.id, b"2".to_vec(), "x").await.is_ok());
     }
 
     #[tokio::test]

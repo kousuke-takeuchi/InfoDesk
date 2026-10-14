@@ -48,7 +48,8 @@ const MIGRATIONS: &[(i32, &str)] = &[
              kind TEXT NOT NULL,
              drive_id TEXT,
              sha256 TEXT,
-             updated_at TEXT NOT NULL
+             updated_at TEXT NOT NULL,
+             fingerprint TEXT
          );",
     ),
 ];
