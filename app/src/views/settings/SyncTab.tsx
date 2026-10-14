@@ -1,7 +1,8 @@
-import { BookOpen } from "lucide-react";
+import { BookOpen, CircleAlert, CircleCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, EVENTS } from "../../api";
 import { ErrorLine } from "../../components/ErrorLine";
+import { Segmented } from "../../components/Segmented";
 import { Toggle } from "../../components/Toggle";
 import { useTauriEvent } from "../../hooks/useTauriEvent";
 import { formatClock } from "../../lib/dates";
@@ -11,6 +12,7 @@ import { isImeEnter, SettingField, type ActionResult } from "./shared";
 
 const SYNC_FAILED = "同期できませんでした";
 const STORAGE_DESC = "収集した記事とダイジェストを置く場所。スマホの InfoDesk も同じ場所から読めます。";
+/** Rust の `sync::NAS_CHECK_OK` と同じ文字列。成功の判定はこの文字列との一致に頼っているので、変えるときは両方そろえる。 */
 const NAS_CHECK_OK = "読み書きできました";
 const MASK = "••••••••";
 
@@ -55,6 +57,8 @@ export function SyncTab() {
 
   const [guideOpen, setGuideOpen] = useState(false);
   const [nasTest, setNasTest] = useState<{ text: string; ok: boolean } | null>(null);
+  const [confirmForget, setConfirmForget] = useState(false);
+  const closeGuide = useCallback(() => setGuideOpen(false), []);
 
   const ticket = useRef(0);
 
@@ -78,6 +82,9 @@ export function SyncTab() {
       .finally(() => { inFlight.current.delete(name); setBusy(new Set(inFlight.current)); });
   }, []);
 
+  const tailnetFailed = status?.tailnet.state === "failed";
+  useEffect(() => { if (!tailnetFailed) setConfirmForget(false); }, [tailnetFailed]);
+
   if (!status) return <ErrorLine message={loadError} />;
   const isNas = status.backend === "nas";
   const usable = isNas || status.available;
@@ -85,9 +92,10 @@ export function SyncTab() {
   const canSync = isNas ? tailnetRunning && status.nas_url !== "" : status.signed_in;
   const chooseBackend = (backend: string) => {
     if ((backend === "nas") === isNas) return;
+    setNasTest(null);
     void run("backend", () => api.syncSetBackend(backend)).then((r) => { if (r.ok && backend === "nas" && status.nas_url === "") setGuideOpen(true); });
   };
-  const saveNas = (name: string, url: string, user: string, password: string | null) => run(name, () => api.syncSetNas(url, user, password));
+  const saveNas = (name: string, url: string, user: string, password: string | null) => run(name, () => api.syncSetNas(url, user, password)).then((r) => { if (r.ok) setNasTest(null); return r; });
   return (
     <>
       <ErrorLine message={loadError} />
@@ -97,10 +105,8 @@ export function SyncTab() {
         <p className="desc">{STORAGE_DESC}</p>
         <div className="setting-row">
           <div className="label"><span>保存先</span></div>
-          <div className="segmented">
-            <button aria-pressed={!isNas} disabled={busy.has("backend")} onClick={() => chooseBackend("gdrive")}>Google ドライブ</button>
-            <button aria-pressed={isNas} disabled={busy.has("backend")} onClick={() => chooseBackend("nas")}>NAS (WebDAV)</button>
-          </div>
+          <Segmented ariaLabel="保存先" value={isNas ? "nas" : "gdrive"} onChange={chooseBackend}
+            options={[{ id: "gdrive", label: "Google ドライブ" }, { id: "nas", label: "NAS (WebDAV)" }]} />
         </div>
         {isNas ? (
           <>
@@ -114,11 +120,24 @@ export function SyncTab() {
                 {tailnetText(status.tailnet)}
               </span>
               {tailnetRunning ? (
-                <button className="btn" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogout())}>ログアウト</button>
+                <button className="btn" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogout())}>{busy.has("tailnet") ? "ログアウト中…" : "ログアウト"}</button>
               ) : (
                 <button className="btn btn-primary" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogin())}>Tailscale にログイン</button>
               )}
             </div>
+            {tailnetFailed && (
+              <div className="setting-row">
+                {confirmForget ? (
+                  <div className="cell-confirm">
+                    <span>Tailscale にもう一度ログインが必要になります。消しますか?</span>
+                    <button className="btn btn-danger" disabled={busy.has("forget")} onClick={() => { void run("forget", () => api.tailnetForget()).then(() => setConfirmForget(false)); }}>消す</button>
+                    <button className="btn" onClick={() => setConfirmForget(false)}>やめる</button>
+                  </div>
+                ) : (
+                  <button className="btn" onClick={() => setConfirmForget(true)}>この Mac の Tailscale の状態を消す</button>
+                )}
+              </div>
+            )}
             <SettingField id="nas-url" label="NAS の URL" hint="WebDAV のフォルダ。例: http://takeuchi-nas:5005/infodesk/" value={status.nas_url} width={360}
               onSave={(v) => saveNas("nas-url", v, status.nas_user, null)} />
             <SettingField id="nas-user" label="ユーザー名" value={status.nas_user}
@@ -126,8 +145,12 @@ export function SyncTab() {
             <PasswordField isSet={status.nas_password_set} onSave={(pw) => saveNas("nas-password", status.nas_url, status.nas_user, pw)} />
             <div className="setting-row">
               <div className="label"><span>接続を確かめる</span><span className="hint">NAS に一時ファイルを書いて読み、消します</span></div>
-              {nasTest && <span className={`nas-test-result ${nasTest.ok ? "success" : "error"}`} data-testid="nas-test-result">{nasTest.text}</span>}
-              <button className="btn" disabled={busy.has("test")} onClick={() => run("test", () => api.syncTestNas().then((text) => { setNasTest({ text, ok: text === NAS_CHECK_OK }); }))}>確かめる</button>
+              {nasTest && (
+                <span className={`nas-test-result ${nasTest.ok ? "success" : "error"}`} data-testid="nas-test-result">
+                  {nasTest.ok ? <CircleCheck size={14} /> : <CircleAlert size={14} />}{nasTest.text}
+                </span>
+              )}
+              <button className="btn" disabled={busy.has("test")} onClick={() => run("test", () => api.syncTestNas().then((text) => { setNasTest({ text, ok: text === NAS_CHECK_OK }); }))}>{busy.has("test") ? "確かめています…" : "確かめる"}</button>
             </div>
             <button className="link-btn" onClick={() => setGuideOpen(true)}><BookOpen size={14} />NAS の準備を見る (初めての方へ)</button>
           </>
@@ -159,7 +182,7 @@ export function SyncTab() {
             <h2>同期</h2>
             <div className="setting-row">
               <div className="label"><span>同期する</span><span className="hint">収集のあと、ダイジェストを作ったあと、⌘R のときに同期します</span></div>
-              <Toggle checked={status.enabled} ariaLabel="同期する" disabled={!canSync || busy.has("enabled")} onChange={(v) => run("enabled", () => api.syncSetEnabled(v))} />
+              <Toggle checked={status.enabled} ariaLabel="同期する" disabled={(!canSync && !status.enabled) || busy.has("enabled")} onChange={(v) => run("enabled", () => api.syncSetEnabled(v))} />
             </div>
             <SettingField id="device-name" label="この Mac の名前" hint="スマホの同期の記録に出ます" value={status.device_name}
               onSave={(v) => run("name", () => api.syncSetDeviceName(v))} />
@@ -176,7 +199,7 @@ export function SyncTab() {
           </section>
         </>
       )}
-      {guideOpen && <NasGuideDialog onClose={() => setGuideOpen(false)} />}
+      {guideOpen && <NasGuideDialog onClose={closeGuide} />}
     </>
   );
 }

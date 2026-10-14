@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SyncTab } from "./SyncTab";
+import { useRef } from "react";
+import { useShortcuts, type ViewActions } from "../../hooks/useShortcuts";
 import { emitEvent, setupIpc } from "../../test/ipc";
 import { EVENTS } from "../../api";
 import type { SyncStatus } from "../../types";
@@ -54,7 +56,7 @@ describe("SyncTab", () => {
     render(<SyncTab />);
     expect(await screen.findByText("このビルドでは同期を使えません")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Google でログイン" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "NAS (WebDAV)" })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "保存先" })).getByRole("button", { name: "NAS (WebDAV)" })).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("この Mac の名前")).not.toBeInTheDocument();
   });
@@ -252,7 +254,7 @@ describe("SyncTab", () => {
     setupIpc({ sync_status: () => ({ ...out, backend: "google" }) });
     render(<SyncTab />);
     expect(await screen.findByRole("button", { name: "Google でログイン" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Google ドライブ" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("group", { name: "保存先" })).getByRole("button", { name: "Google ドライブ" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("heading", { name: "保存先に置く期間" })).toBeInTheDocument();
     expect(screen.queryByLabelText("NAS の URL")).not.toBeInTheDocument();
   });
@@ -260,7 +262,7 @@ describe("SyncTab", () => {
   it("switches the backend and opens the guide the first time NAS is chosen with an empty URL", async () => {
     const ipc = setupIpc({ sync_status: () => out, sync_set_backend: ({ backend }) => ({ ...out, backend }) });
     render(<SyncTab />);
-    await userEvent.click(await screen.findByRole("button", { name: "NAS (WebDAV)" }));
+    await userEvent.click(within(await screen.findByRole("group", { name: "保存先" })).getByRole("button", { name: "NAS (WebDAV)" }));
     expect(ipc.last("sync_set_backend")).toEqual({ backend: "nas" });
     expect(await screen.findByRole("dialog", { name: "NAS の準備" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "閉じる" }));
@@ -271,7 +273,7 @@ describe("SyncTab", () => {
   it("does not open the guide when the URL is already set", async () => {
     setupIpc({ sync_status: () => ({ ...nas, backend: "gdrive" }), sync_set_backend: ({ backend }) => ({ ...nas, backend }) });
     render(<SyncTab />);
-    await userEvent.click(await screen.findByRole("button", { name: "NAS (WebDAV)" }));
+    await userEvent.click(within(await screen.findByRole("group", { name: "保存先" })).getByRole("button", { name: "NAS (WebDAV)" }));
     expect(await screen.findByLabelText("NAS の URL")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -279,7 +281,7 @@ describe("SyncTab", () => {
   it("switches back to Google Drive", async () => {
     const ipc = setupIpc({ sync_status: () => nas, sync_set_backend: ({ backend }) => ({ ...nas, backend }) });
     render(<SyncTab />);
-    await userEvent.click(await screen.findByRole("button", { name: "Google ドライブ" }));
+    await userEvent.click(within(await screen.findByRole("group", { name: "保存先" })).getByRole("button", { name: "Google ドライブ" }));
     expect(ipc.last("sync_set_backend")).toEqual({ backend: "gdrive" });
     expect(await screen.findByRole("button", { name: "Google でログイン" })).toBeInTheDocument();
   });
@@ -374,5 +376,103 @@ describe("SyncTab", () => {
     setupIpc({ sync_status: () => ({ ...nas, tailnet: { state: "needs_login", name: null, reason: null } }) });
     render(<SyncTab />);
     expect(await screen.findByRole("button", { name: "今すぐ同期" })).toBeDisabled();
+  });
+
+  it("lets you turn sync off when tailscale dropped while it was enabled", async () => {
+    const dropped = { ...nas, enabled: true, tailnet: { state: "needs_login" as const, name: null, reason: null } };
+    const ipc = setupIpc({ sync_status: () => dropped, sync_set_enabled: ({ enabled }) => ({ ...dropped, enabled }) });
+    render(<SyncTab />);
+    const toggle = await screen.findByRole("switch", { name: "同期する" });
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    expect(ipc.last("sync_set_enabled")).toEqual({ enabled: false });
+    await waitFor(() => expect(screen.getByRole("switch", { name: "同期する" })).toBeDisabled());
+  });
+
+  it("clears the connection result when the URL is saved", async () => {
+    setupIpc({ sync_status: () => nas, sync_test_nas: () => "読み書きできました", sync_set_nas: ({ url }) => ({ ...nas, nas_url: url }) });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "確かめる" }));
+    await screen.findByTestId("nas-test-result");
+    const url = screen.getByLabelText("NAS の URL");
+    await userEvent.clear(url);
+    await userEvent.type(url, "http://x:5005/d/{enter}");
+    await waitFor(() => expect(screen.queryByTestId("nas-test-result")).not.toBeInTheDocument());
+  });
+
+  it("clears the connection result when the backend changes", async () => {
+    setupIpc({ sync_status: () => nas, sync_test_nas: () => "認証できません", sync_set_backend: ({ backend }) => ({ ...nas, backend }) });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "確かめる" }));
+    await screen.findByTestId("nas-test-result");
+    await userEvent.click(within(screen.getByRole("group", { name: "保存先" })).getByRole("button", { name: "Google ドライブ" }));
+    await userEvent.click(await within(screen.getByRole("group", { name: "保存先" })).findByRole("button", { name: "NAS (WebDAV)" }));
+    expect(screen.queryByTestId("nas-test-result")).not.toBeInTheDocument();
+  });
+
+  it("shows a check icon on success and an alert icon on failure", async () => {
+    let result = "読み書きできました";
+    setupIpc({ sync_status: () => nas, sync_test_nas: () => result });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "確かめる" }));
+    expect((await screen.findByTestId("nas-test-result")).querySelector("svg.lucide-circle-check")).not.toBeNull();
+    result = "認証できません";
+    await userEvent.click(screen.getByRole("button", { name: "確かめる" }));
+    await waitFor(() => expect(screen.getByTestId("nas-test-result").querySelector("svg.lucide-circle-alert")).not.toBeNull());
+  });
+
+  it("shows busy labels while the connection test and tailnet logout run", async () => {
+    const test = deferred<string>();
+    const logout = deferred();
+    setupIpc({ sync_status: () => nas, sync_test_nas: () => test.promise, tailnet_logout: () => logout.promise });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "確かめる" }));
+    expect(screen.getByRole("button", { name: "確かめています…" })).toBeDisabled();
+    await act(async () => test.resolve("読み書きできました"));
+    expect(await screen.findByRole("button", { name: "確かめる" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "ログアウト" }));
+    expect(screen.getByRole("button", { name: "ログアウト中…" })).toBeDisabled();
+    await act(async () => logout.resolve(nas));
+    expect(await screen.findByRole("button", { name: "ログアウト" })).toBeEnabled();
+  });
+
+  it("forgets the local tailscale state after a confirm when it failed", async () => {
+    const failed = { ...nas, tailnet: { state: "failed" as const, name: null, reason: "boom" } };
+    const ipc = setupIpc({ sync_status: () => failed, tailnet_forget: () => ({ ...nas, tailnet: { state: "needs_login" as const, name: null, reason: null } }) });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "この Mac の Tailscale の状態を消す" }));
+    expect(ipc.count("tailnet_forget")).toBe(0);
+    expect(screen.getByText("Tailscale にもう一度ログインが必要になります。消しますか?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "やめる" }));
+    expect(screen.queryByRole("button", { name: "消す" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "この Mac の Tailscale の状態を消す" }));
+    await userEvent.click(screen.getByRole("button", { name: "消す" }));
+    expect(ipc.count("tailnet_forget")).toBe(1);
+    expect(await screen.findByText("ログインしてください")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "この Mac の Tailscale の状態を消す" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer forget unless the tailnet failed", async () => {
+    setupIpc({ sync_status: () => nas });
+    render(<SyncTab />);
+    await screen.findByLabelText("NAS の URL");
+    expect(screen.queryByRole("button", { name: "この Mac の Tailscale の状態を消す" })).not.toBeInTheDocument();
+  });
+
+  it("suppresses global shortcuts while the guide is open", async () => {
+    const collect = vi.fn();
+    function Harness() {
+      const ref = useRef<ViewActions>({});
+      useShortcuts(true, { collect }, ref);
+      return <SyncTab />;
+    }
+    setupIpc({ sync_status: () => nas });
+    render(<Harness />);
+    await screen.findByLabelText("NAS の URL");
+    await userEvent.keyboard("{Control>}r{/Control}");
+    expect(collect).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "NAS の準備を見る (初めての方へ)" }));
+    await userEvent.keyboard("{Control>}r{/Control}");
+    expect(collect).toHaveBeenCalledTimes(1);
   });
 });

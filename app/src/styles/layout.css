@@ -144,6 +144,6 @@
 .guide-tip svg { flex: none; color: var(--success); }
 .guide-actions { justify-content: space-between; align-items: center; }
 .link-btn { display: inline-flex; align-items: center; gap: 6px; }
-.nas-test-result { font-size: 12px; }
+.nas-test-result { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 .nas-test-result.success { color: var(--success); }
 .nas-test-result.error { color: var(--danger); }
