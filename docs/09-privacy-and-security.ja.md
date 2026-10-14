@@ -47,7 +47,10 @@ Claude は CLI 経由で使うので、InfoDesk は Claude の認証情報を保
 保存先に NAS を選んだとき ([NAS の準備](13-nas-setup.ja.md)を参照):
 
 - NAS へは、InfoDesk の中の Tailscale の端末だけを通ります。システムの VPN は使わないので、Mac のほかのアプリには影響せず、Tailscale のアプリも要りません。
-- Tailscale の `log.tailscale.com` へのログのアップロードは、環境変数 `TS_NO_LOGS_NO_SUPPORT` で止めています。アプリの中の Go のランタイムは読み込み時に環境を読むので、InfoDesk は起動時にこの変数を付けて自分を1回再起動します。その再起動に失敗したら、Tailscale は起動しません。
+- 同期のデータは tailnet の中の端末にだけ送ります。端末のプロキシは、知らないホスト (LAN のアドレスや、tailnet で引けない名前) への要求を Mac のふつうのネットワークへ出してしまうので、InfoDesk が先に確かめます。同期と接続の確認の前に、端末から tailnet の端末の一覧を読み、URL のホストが端末の名前か Tailscale の IP アドレスのときだけ受け付け、その端末の Tailscale の IPv4 アドレスへつなぎます。それ以外のホストは断り、要求もパスワードも送りません。
+- NAS のフォルダで InfoDesk が触れるのは、自分の同期のファイルだけです。ほかのファイルは読まず、`manifest.json` にも入れず、消しません。
+- Tailscale のログイン画面がブラウザで開くのは、「Tailscale にログイン」を押したときだけです。InfoDesk が自分で端末を始める (起動時、同期をオンにしたとき、NAS を選んだとき) のは、この Mac が前にログインしたことがあるときだけです。
+- Tailscale の `log.tailscale.com` へのログのアップロードは、環境変数 `TS_NO_LOGS_NO_SUPPORT` で止めています。アプリの中の Go のランタイムは読み込み時に環境を読むので、InfoDesk は NAS を使うかどうかにかかわらず、起動のたびにこの変数を付けて自分を1回再起動します (Tailscale のライブラリはアプリの一部なので)。その再起動に失敗したら、Tailscale は起動しません。
 - Tailscale の状態 (端末の鍵) は、アプリのデータフォルダの `tailscale/` に権限 0700 で保存します。同期タブの「ログアウト」で、tailnet から端末が消えます。「この Mac の Tailscale の状態を消す」は、この Mac に保存した状態を消します。
 - NAS のパスワードは DB ではなく macOS のキーチェーン (サービス `jp.infodesk.app.nas`) に保存します。DB が持つのは、パスワードを設定したかどうかだけです。
 - 同期のデータは、WireGuard のトンネルの中で、Basic 認証の HTTP で NAS へ送られます。
