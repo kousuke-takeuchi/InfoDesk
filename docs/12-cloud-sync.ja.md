@@ -57,6 +57,8 @@ Cloud Console の画面は変わることがあるので、この手順では画
    }
    ```
 
+   コンソールでダウンロードできる JSON ファイル (値が `"installed"` の下にある形) を、そのまま `app/src-tauri/google-oauth.json` として置いてもかまいません。
+
 6. **ビルドし直す。** (`cd app && npm run bundle`、[はじめに](02-getting-started.ja.md)を参照。または `npm run tauri dev`。) 値はビルド時に読み込まれ、アプリに埋め込まれます。ファイルを書き換えたらビルドし直します。
 
 補足:

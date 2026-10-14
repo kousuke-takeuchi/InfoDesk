@@ -57,6 +57,8 @@ The Cloud Console changes its screens from time to time, so this guide names sec
    }
    ```
 
+   You can also save the JSON file that the console offers for download (its values are under `"installed"`) as `app/src-tauri/google-oauth.json` as it is.
+
 6. **Rebuild** the app (`cd app && npm run bundle`, see [Getting Started](02-getting-started.md), or `npm run tauri dev`). The values are read at build time and compiled in. If you edit the file, rebuild.
 
 Notes:

@@ -16,6 +16,8 @@ fn embed_google_oauth() {
         println!("cargo:warning=google-oauth.json is not valid JSON; sync is disabled");
         return;
     };
+    // Google Cloud Console からダウンロードした形 ({"installed": {...}}) もそのまま使える。
+    let value = value.get("installed").cloned().unwrap_or(value);
     for (key, env) in [
         ("client_id", "INFODESK_GOOGLE_CLIENT_ID"),
         ("client_secret", "INFODESK_GOOGLE_CLIENT_SECRET"),
