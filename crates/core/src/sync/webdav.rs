@@ -7,13 +7,24 @@ use async_trait::async_trait;
 
 use super::drive::{DriveError, DriveStore, RemoteFile};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WebDavConfig {
     pub url: String,
     pub user: String,
     pub password: String,
     /// `socks5h://user:pass@127.0.0.1:port`. `None` connects directly (tests).
     pub proxy: Option<String>,
+}
+
+impl std::fmt::Debug for WebDavConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebDavConfig")
+            .field("url", &self.url)
+            .field("user", &self.user)
+            .field("password", &"<redacted>")
+            .field("proxy", &self.proxy.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
 }
 
 pub struct WebDavStore {
@@ -34,6 +45,7 @@ impl WebDavStore {
         read: Duration,
     ) -> Result<Self, DriveError> {
         let mut builder = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(connect)
             .read_timeout(read);
         if let Some(proxy) = &cfg.proxy {
@@ -62,12 +74,15 @@ impl WebDavStore {
         })
     }
 
-    fn file_url(&self, name: &str) -> reqwest::Url {
+    fn file_url(&self, name: &str) -> Result<reqwest::Url, DriveError> {
+        if !safe_name(name) {
+            return Err(DriveError::Other(format!("unsafe file name {name:?}")));
+        }
         let mut url = self.base.clone();
         if let Ok(mut segs) = url.path_segments_mut() {
             segs.pop_if_empty().push(name);
         }
-        url
+        Ok(url)
     }
 
     async fn send(
@@ -98,6 +113,19 @@ impl WebDavStore {
         if code == 401 {
             return Err(DriveError::BadCredentials);
         }
+        if status.is_redirection() {
+            return Err(DriveError::Other(
+                "NAS の URL を確かめてください (転送されました)".into(),
+            ));
+        }
+        if code == 507 || code == 413 {
+            return Err(DriveError::Other("NAS の空き容量が足りません".into()));
+        }
+        if code == 403 {
+            return Err(DriveError::Other(
+                "NAS のフォルダに書き込む権限がありません".into(),
+            ));
+        }
         let text = resp.text().await.unwrap_or_default();
         Err(if code == 408 || code == 429 || status.is_server_error() {
             DriveError::Retryable(format!("HTTP {code}"))
@@ -116,12 +144,15 @@ impl WebDavStore {
                 false,
             )
             .await?;
+        if resp.status().as_u16() != 207 {
+            return Err(unexpected_propfind());
+        }
         let text = resp.text().await.map_err(transport)?;
         parse_multistatus(&text)
     }
 
     async fn stat(&self, name: &str) -> Result<RemoteFile, DriveError> {
-        let entries = self.propfind(self.file_url(name), "0").await?;
+        let entries = self.propfind(self.file_url(name)?, "0").await?;
         let entry = entries
             .into_iter()
             .next()
@@ -130,13 +161,28 @@ impl WebDavStore {
     }
 
     async fn put(&self, name: &str, bytes: Vec<u8>, mime: &str) -> Result<RemoteFile, DriveError> {
-        self.send("PUT", self.file_url(name), None, Some((bytes, mime)), false)
-            .await?;
+        self.send(
+            "PUT",
+            self.file_url(name)?,
+            None,
+            Some((bytes, mime)),
+            false,
+        )
+        .await?;
         self.stat(name).await
     }
 }
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:prop><D:getlastmodified/><D:getcontentlength/><D:resourcetype/></D:prop></D:propfind>"#;
+
+fn unexpected_propfind() -> DriveError {
+    DriveError::Other("unexpected PROPFIND response".into())
+}
+
+/// A name is one plain path segment: no separators, no `.` or `..`.
+fn safe_name(name: &str) -> bool {
+    !(name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\\'))
+}
 
 fn transport(e: reqwest::Error) -> DriveError {
     DriveError::Retryable(e.to_string())
@@ -206,6 +252,12 @@ fn href_path(href: &str) -> &str {
     }
 }
 
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    let head = s.get(..prefix.len())?;
+    head.eq_ignore_ascii_case(prefix)
+        .then(|| &s[prefix.len()..])
+}
+
 /// Parse a `207 Multi-Status` body. Matches elements by local name, so any
 /// prefix for the `DAV:` namespace (`D:`, `d:`, none) works.
 fn parse_multistatus(xml: &str) -> Result<Vec<Entry>, DriveError> {
@@ -215,6 +267,8 @@ fn parse_multistatus(xml: &str) -> Result<Vec<Entry>, DriveError> {
     let mut reader = quick_xml::Reader::from_str(xml);
     let mut entries = Vec::new();
     let mut current: Option<Entry> = None;
+    let mut seen_root = false;
+    let mut prop: Option<PropStat> = None;
     let mut field: Option<String> = None;
     let mut text = String::new();
     loop {
@@ -222,24 +276,29 @@ fn parse_multistatus(xml: &str) -> Result<Vec<Entry>, DriveError> {
             Event::Start(e) => {
                 let name = e.local_name().as_ref().to_string();
                 match name.as_str() {
+                    "multistatus" => seen_root = true,
                     "response" => current = Some(Entry::default()),
-                    "href" | "getlastmodified" | "getcontentlength" => {
+                    "propstat" => prop = Some(PropStat::default()),
+                    "href" | "getlastmodified" | "getcontentlength" | "status" => {
                         field = Some(name);
                         text.clear();
                     }
                     "collection" => {
-                        if let Some(c) = current.as_mut() {
-                            c.is_collection = true;
+                        if let Some(p) = prop.as_mut() {
+                            p.is_collection = true;
                         }
                     }
                     _ => {}
                 }
             }
             Event::Empty(e) => {
-                if e.local_name().as_ref() == "collection"
-                    && let Some(c) = current.as_mut()
+                let name = e.local_name().as_ref().to_string();
+                if name == "multistatus" {
+                    seen_root = true;
+                } else if name == "collection"
+                    && let Some(p) = prop.as_mut()
                 {
-                    c.is_collection = true;
+                    p.is_collection = true;
                 }
             }
             Event::Text(t) => {
@@ -264,13 +323,36 @@ fn parse_multistatus(xml: &str) -> Result<Vec<Entry>, DriveError> {
                     if let Some(c) = current.take() {
                         entries.push(c);
                     }
+                } else if name == "propstat" {
+                    if let (Some(p), Some(c)) = (prop.take(), current.as_mut())
+                        && p.ok()
+                    {
+                        c.is_collection |= p.is_collection;
+                        c.last_modified = c.last_modified.take().or(p.last_modified);
+                        c.length = c.length.or(p.length);
+                    }
                 } else if field.as_deref() == Some(name.as_str()) {
-                    if let Some(c) = current.as_mut() {
-                        let value = text.trim().to_string();
-                        match name.as_str() {
-                            "href" => c.href = value,
-                            "getlastmodified" => c.last_modified = Some(value),
-                            _ => c.length = value.parse().ok(),
+                    let value = text.trim().to_string();
+                    match name.as_str() {
+                        "href" => {
+                            if let Some(c) = current.as_mut() {
+                                c.href = value;
+                            }
+                        }
+                        "getlastmodified" => {
+                            if let Some(p) = prop.as_mut() {
+                                p.last_modified = Some(value);
+                            }
+                        }
+                        "getcontentlength" => {
+                            if let Some(p) = prop.as_mut() {
+                                p.length = value.parse().ok();
+                            }
+                        }
+                        _ => {
+                            if let Some(p) = prop.as_mut() {
+                                p.status = Some(value);
+                            }
                         }
                     }
                     field = None;
@@ -280,7 +362,28 @@ fn parse_multistatus(xml: &str) -> Result<Vec<Entry>, DriveError> {
             _ => {}
         }
     }
+    if !seen_root {
+        return Err(unexpected_propfind());
+    }
     Ok(entries)
+}
+
+/// One `propstat`: only one whose status is 200 (or absent) is trusted.
+#[derive(Default)]
+struct PropStat {
+    last_modified: Option<String>,
+    length: Option<u64>,
+    is_collection: bool,
+    status: Option<String>,
+}
+
+impl PropStat {
+    fn ok(&self) -> bool {
+        match &self.status {
+            None => true,
+            Some(s) => s.split_whitespace().nth(1) == Some("200"),
+        }
+    }
 }
 
 #[async_trait]
@@ -292,23 +395,33 @@ impl DriveStore for WebDavStore {
             .to_string();
         let mut files = Vec::new();
         for e in entries {
+            if e.is_collection {
+                continue;
+            }
             let path = percent_decode(href_path(&e.href));
             let trimmed = path.trim_end_matches('/');
-            if e.is_collection || trimmed.eq_ignore_ascii_case(&folder) {
+            // Only the part that comes from the base URL is case-insensitive
+            // (Synology share names are).
+            let Some(rest) = strip_prefix_ci(trimmed, &folder) else {
+                continue;
+            };
+            let Some(name) = rest.strip_prefix('/') else {
+                continue; // the folder itself, or an unrelated sibling
+            };
+            if !safe_name(name) {
                 continue;
             }
-            let name = trimmed.rsplit('/').next().unwrap_or("").to_string();
-            if name.is_empty() {
-                continue;
+            // A file without a usable timestamp is skipped, not fatal.
+            if let Ok(f) = to_remote(name.to_string(), e) {
+                files.push(f);
             }
-            files.push(to_remote(name, e)?);
         }
         Ok(files)
     }
 
     async fn download(&self, id: &str) -> Result<Vec<u8>, DriveError> {
         let resp = self
-            .send("GET", self.file_url(id), None, None, false)
+            .send("GET", self.file_url(id)?, None, None, false)
             .await?;
         Ok(resp.bytes().await.map_err(transport)?.to_vec())
     }
@@ -327,7 +440,7 @@ impl DriveStore for WebDavStore {
     }
 
     async fn delete(&self, id: &str) -> Result<(), DriveError> {
-        self.send("DELETE", self.file_url(id), None, None, true)
+        self.send("DELETE", self.file_url(id)?, None, None, true)
             .await?;
         Ok(())
     }
@@ -605,6 +718,200 @@ mod tests {
             assert_eq!(files.len(), 1);
             assert_eq!(d.download(&files[0].id).await.unwrap(), vec![7u8]);
         }
+    }
+
+    fn one_file_body(extra: &str) -> String {
+        format!(
+            r#"<?xml version="1.0"?><D:multistatus xmlns:D="DAV:">{extra}<D:response><D:href>/InfoDesk/a.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified><D:getcontentlength>5</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>"#
+        )
+    }
+
+    async fn list_names(body: String) -> Vec<String> {
+        let s = MockServer::start().await;
+        propfind_mock(&s, "/InfoDesk/", body).await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        d.list().await.unwrap().into_iter().map(|f| f.id).collect()
+    }
+
+    #[tokio::test]
+    async fn unsafe_names_are_rejected_without_a_request() {
+        let s = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(0)
+            .mount(&s)
+            .await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        for name in ["..", ".", "", "a/b", "a\\b", "../x"] {
+            assert!(
+                matches!(d.delete(name).await, Err(DriveError::Other(_))),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_drops_entries_with_unsafe_names() {
+        let body = one_file_body(
+            r#"<D:response><D:href>/InfoDesk/a%5Cb.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop></D:propstat></D:response>"#,
+        );
+        assert_eq!(list_names(body).await, vec!["a.json"]);
+    }
+
+    #[tokio::test]
+    async fn propfind_must_be_a_real_multistatus() {
+        let s = MockServer::start().await;
+        Mock::given(method("PROPFIND"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&s)
+            .await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        assert!(
+            matches!(d.list().await, Err(DriveError::Other(m)) if m == "unexpected PROPFIND response")
+        );
+
+        let s = MockServer::start().await;
+        Mock::given(method("PROPFIND"))
+            .respond_with(ResponseTemplate::new(207).set_body_string("<html>hi</html>"))
+            .mount(&s)
+            .await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        assert!(
+            matches!(d.list().await, Err(DriveError::Other(m)) if m == "unexpected PROPFIND response")
+        );
+    }
+
+    #[test]
+    fn debug_redacts_secrets() {
+        let c = WebDavConfig {
+            url: "http://nas/x".into(),
+            user: "kou".into(),
+            password: "s3cretpw".into(),
+            proxy: Some("socks5h://u:proxysecret@127.0.0.1:1055".into()),
+        };
+        let out = format!("{c:?}");
+        assert!(!out.contains("s3cretpw"), "{out}");
+        assert!(!out.contains("proxysecret"), "{out}");
+    }
+
+    #[tokio::test]
+    async fn subfolder_entries_are_skipped() {
+        let body = one_file_body(
+            r#"<D:response><D:href>/InfoDesk/sub/</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response>"#,
+        );
+        assert_eq!(list_names(body).await, vec!["a.json"]);
+    }
+
+    #[tokio::test]
+    async fn the_folders_own_entry_is_skipped_by_path_alone() {
+        // No resourcetype, so only the path comparison can recognise it.
+        for href in [
+            "http://host/InfoDesk",
+            "/InfoDesk",
+            "/%49nfoDesk/",
+            "/infodesk/",
+            "https://host:5006/InfoDesk/",
+        ] {
+            let body = one_file_body(&format!(
+                r#"<D:response><D:href>{href}</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop></D:propstat></D:response>"#
+            ));
+            assert_eq!(list_names(body).await, vec!["a.json"], "{href}");
+        }
+    }
+
+    #[tokio::test]
+    async fn only_the_base_path_is_case_insensitive() {
+        let body = one_file_body(
+            r#"<D:response><D:href>/infodesk/B.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop></D:propstat></D:response>"#,
+        );
+        assert_eq!(list_names(body).await, vec!["B.json", "a.json"]);
+    }
+
+    #[tokio::test]
+    async fn redirects_are_not_followed() {
+        let s = MockServer::start().await;
+        Mock::given(method("PROPFIND"))
+            .respond_with(ResponseTemplate::new(301).insert_header("location", "/elsewhere/"))
+            .mount(&s)
+            .await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        match d.list().await {
+            Err(DriveError::Other(m)) => {
+                assert_eq!(m, "NAS の URL を確かめてください (転送されました)")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn full_and_forbidden_have_friendly_errors() {
+        for (code, msg) in [
+            (507, "NAS の空き容量が足りません"),
+            (413, "NAS の空き容量が足りません"),
+            (403, "NAS のフォルダに書き込む権限がありません"),
+        ] {
+            let s = MockServer::start().await;
+            Mock::given(method("PUT"))
+                .respond_with(ResponseTemplate::new(code))
+                .mount(&s)
+                .await;
+            let d = store(format!("{}/InfoDesk", s.uri()));
+            match d.create("a", vec![], "x").await {
+                Err(DriveError::Other(m)) => assert_eq!(m, msg, "{code}"),
+                other => panic!("{code}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn storage_error_texts_are_neutral() {
+        assert_eq!(
+            DriveError::Other("x".into()).to_string(),
+            "保存先のエラー: x"
+        );
+        assert_eq!(
+            DriveError::Retryable("x".into()).to_string(),
+            "保存先に接続できません: x"
+        );
+    }
+
+    #[tokio::test]
+    async fn entries_without_a_usable_modified_time_are_skipped() {
+        let body = one_file_body(
+            r#"<D:response><D:href>/InfoDesk/nolm.json</D:href><D:propstat><D:prop><D:getcontentlength>1</D:getcontentlength></D:prop></D:propstat></D:response>
+<D:response><D:href>/InfoDesk/bad.json</D:href><D:propstat><D:prop><D:getlastmodified>yesterday</D:getlastmodified></D:prop></D:propstat></D:response>"#,
+        );
+        assert_eq!(list_names(body).await, vec!["a.json"]);
+    }
+
+    #[tokio::test]
+    async fn only_the_200_propstat_is_read() {
+        let body = r#"<D:multistatus xmlns:D="DAV:"><D:response><D:href>/InfoDesk/a.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified><D:getcontentlength>5</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+<D:propstat><D:prop><D:getcontentlength>999</D:getcontentlength><D:resourcetype><D:collection/></D:resourcetype></D:prop><D:status>HTTP/1.1 404 Not Found</D:status></D:propstat>
+</D:response></D:multistatus>"#;
+        let s = MockServer::start().await;
+        propfind_mock(&s, "/InfoDesk/", body.to_string()).await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        let files = d.list().await.unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].size, Some(5));
+    }
+
+    #[tokio::test]
+    async fn size_is_none_without_content_length() {
+        let body = r#"<D:multistatus xmlns:D="DAV:"><D:response><D:href>/InfoDesk/a.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>"#;
+        let s = MockServer::start().await;
+        propfind_mock(&s, "/InfoDesk/", body.to_string()).await;
+        let d = store(format!("{}/InfoDesk", s.uri()));
+        assert_eq!(d.list().await.unwrap()[0].size, None);
+    }
+
+    #[test]
+    fn socks5h_proxy_with_credentials_is_accepted() {
+        let mut c = cfg("http://nas.ts.net:5005/InfoDesk".into());
+        c.proxy = Some("socks5h://u:p@127.0.0.1:1055".into());
+        assert!(WebDavStore::new(c).is_ok());
     }
 
     #[test]

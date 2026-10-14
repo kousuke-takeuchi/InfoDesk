@@ -15,13 +15,13 @@ pub struct RemoteFile {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriveError {
-    #[error("Google ドライブに接続できません: {0}")]
+    #[error("保存先に接続できません: {0}")]
     Retryable(String),
     #[error("Google の再ログインが必要です")]
     AuthExpired,
     #[error("NAS のユーザー名かパスワードが違います")]
     BadCredentials,
-    #[error("Google ドライブのエラー: {0}")]
+    #[error("保存先のエラー: {0}")]
     Other(String),
 }
 
