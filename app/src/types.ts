@@ -161,3 +161,15 @@ export type ChatEndpoint =
   | { status: "starting" }
   | { status: "ready"; url: string; token: string }
   | { status: "error"; kind: "node_missing" | "node_too_old" | "agent_missing" | "start_failed"; message: string };
+
+/** Google ドライブ同期の状態 (バックエンドの SyncStatus)。 */
+export interface SyncStatus {
+  available: boolean;
+  signed_in: boolean;
+  account_email: string | null;
+  enabled: boolean;
+  syncing: boolean;
+  last_sync_at: string | null;
+  error: string | null;
+  device_name: string;
+}

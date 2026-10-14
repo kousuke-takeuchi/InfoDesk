@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SettingsView } from "./SettingsView";
 import { setupIpc } from "../test/ipc";
 import type { AppStatus } from "../types";
@@ -24,5 +25,14 @@ describe("SettingsView", () => {
     expect(await screen.findByLabelText("モデル")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "LLM" })).toHaveAttribute("aria-pressed", "true");
     expect(ipc.unmocked).toEqual([]);
+  });
+
+  it("has the sync tab last", async () => {
+    setupIpc({ list_sources: () => [], source_item_counts: () => ({}), sync_status: () => ({ available: true, signed_in: false, account_email: null, enabled: false, syncing: false, last_sync_at: null, error: null, device_name: "Mac" }) });
+    render(<SettingsView status={status} />);
+    const tabs = screen.getByRole("group", { name: "設定のタブ" });
+    expect(Array.from(tabs.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["ソース", "トピック", "LLM", "スケジュール", "同期"]);
+    await userEvent.click(screen.getByRole("button", { name: "同期" }));
+    expect(await screen.findByRole("button", { name: "Google でログイン" })).toBeInTheDocument();
   });
 });

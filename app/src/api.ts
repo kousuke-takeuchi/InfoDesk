@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppStatus, Category, ChatEndpoint, ChatThread, DigestScope, DigestStats, DigestView, Item, ItemFilter, Period,
-  ProbeResult, Settings, SidebarCounts, Source, Topic,
+  ProbeResult, Settings, SidebarCounts, Source, SyncStatus, Topic,
 } from "./types";
 
 export const EVENTS = {
@@ -13,6 +13,7 @@ export const EVENTS = {
   openSettings: "open-settings",
   chat: "chat-endpoint-changed",
   reader: "reader-state",
+  sync: "sync-changed",
 } as const;
 
 export const api = {
@@ -68,6 +69,12 @@ export const api = {
     invoke<void>("save_chat_messages", { threadId, messages }),
   chatEndpoint: () => invoke<ChatEndpoint>("chat_endpoint"),
   restartChat: () => invoke<void>("restart_chat"),
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncLogin: () => invoke<SyncStatus>("sync_login"),
+  syncLogout: () => invoke<SyncStatus>("sync_logout"),
+  syncSetEnabled: (enabled: boolean) => invoke<SyncStatus>("sync_set_enabled", { enabled }),
+  syncSetDeviceName: (name: string) => invoke<SyncStatus>("sync_set_device_name", { name }),
+  syncNow: () => invoke<void>("sync_now"),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
 };
 

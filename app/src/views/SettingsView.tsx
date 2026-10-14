@@ -4,11 +4,12 @@ import { SourcesTab } from "./settings/SourcesTab";
 import { TopicsTab } from "./settings/TopicsTab";
 import { LlmTab } from "./settings/LlmTab";
 import { ScheduleTab } from "./settings/ScheduleTab";
+import { SyncTab } from "./settings/SyncTab";
 import type { AppStatus } from "../types";
 
-export type SettingsTab = "sources" | "topics" | "llm" | "schedule";
+export type SettingsTab = "sources" | "topics" | "llm" | "schedule" | "sync";
 const TABS: { id: SettingsTab; label: string }[] = [
-  { id: "sources", label: "ソース" }, { id: "topics", label: "トピック" }, { id: "llm", label: "LLM" }, { id: "schedule", label: "スケジュール" },
+  { id: "sources", label: "ソース" }, { id: "topics", label: "トピック" }, { id: "llm", label: "LLM" }, { id: "schedule", label: "スケジュール" }, { id: "sync", label: "同期" },
 ];
 
 export function SettingsView({ status, initialTab = "sources" }: { status: AppStatus; initialTab?: SettingsTab }) {
@@ -25,6 +26,7 @@ export function SettingsView({ status, initialTab = "sources" }: { status: AppSt
         {tab === "topics" && <TopicsTab />}
         {tab === "llm" && <LlmTab />}
         {tab === "schedule" && <ScheduleTab status={status} />}
+        {tab === "sync" && <SyncTab />}
       </div>
     </>
   );
