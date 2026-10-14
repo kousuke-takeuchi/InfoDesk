@@ -114,17 +114,13 @@ impl WebDavStore {
             return Err(DriveError::BadCredentials);
         }
         if status.is_redirection() {
-            return Err(DriveError::Other(
-                "NAS の URL を確かめてください (転送されました)".into(),
-            ));
+            return Err(DriveError::Redirected);
         }
         if code == 507 || code == 413 {
-            return Err(DriveError::Other("NAS の空き容量が足りません".into()));
+            return Err(DriveError::StorageFull);
         }
         if code == 403 {
-            return Err(DriveError::Other(
-                "NAS のフォルダに書き込む権限がありません".into(),
-            ));
+            return Err(DriveError::Forbidden);
         }
         let text = resp.text().await.unwrap_or_default();
         Err(if code == 408 || code == 429 || status.is_server_error() {
@@ -835,12 +831,12 @@ mod tests {
             .mount(&s)
             .await;
         let d = store(format!("{}/InfoDesk", s.uri()));
-        match d.list().await {
-            Err(DriveError::Other(m)) => {
-                assert_eq!(m, "NAS の URL を確かめてください (転送されました)")
-            }
-            other => panic!("{other:?}"),
-        }
+        let err = d.list().await.unwrap_err();
+        // Shown as is, without the generic "保存先のエラー: " prefix.
+        assert_eq!(
+            err.to_string(),
+            "NAS の URL を確かめてください (転送されました)"
+        );
     }
 
     #[tokio::test]
@@ -856,10 +852,9 @@ mod tests {
                 .mount(&s)
                 .await;
             let d = store(format!("{}/InfoDesk", s.uri()));
-            match d.create("a", vec![], "x").await {
-                Err(DriveError::Other(m)) => assert_eq!(m, msg, "{code}"),
-                other => panic!("{code}: {other:?}"),
-            }
+            let err = d.create("a", vec![], "x").await.unwrap_err();
+            assert_eq!(err.to_string(), msg, "{code}");
+            assert!(!matches!(err, DriveError::Other(_)), "{code}");
         }
     }
 
@@ -905,6 +900,24 @@ mod tests {
         propfind_mock(&s, "/InfoDesk/", body.to_string()).await;
         let d = store(format!("{}/InfoDesk", s.uri()));
         assert_eq!(d.list().await.unwrap()[0].size, None);
+    }
+
+    #[test]
+    fn a_url_without_a_port_uses_the_scheme_default() {
+        let d = store("http://nas/InfoDesk".into());
+        let url = d.file_url("a.json").unwrap();
+        assert_eq!(url.as_str(), "http://nas/InfoDesk/a.json");
+        assert_eq!(url.port(), None);
+        assert_eq!(url.port_or_known_default(), Some(80));
+    }
+
+    #[tokio::test]
+    async fn absolute_hrefs_with_a_port_are_listed() {
+        let body = one_file_body(
+            r#"<D:response><D:href>http://nas.tail1234.ts.net:5005/InfoDesk/b.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop></D:propstat></D:response>
+<D:response><D:href>http://100.100.1.5:5005/Other/c.json</D:href><D:propstat><D:prop><D:getlastmodified>Wed, 14 Oct 2026 03:21:09 GMT</D:getlastmodified></D:prop></D:propstat></D:response>"#,
+        );
+        assert_eq!(list_names(body).await, vec!["b.json", "a.json"]);
     }
 
     #[test]

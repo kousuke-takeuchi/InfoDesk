@@ -746,7 +746,15 @@ pub async fn run_sync(
     drive: &dyn DriveStore,
     input: &SyncInput,
 ) -> Result<SyncReport, SyncError> {
-    let listing = drive.list().await?;
+    // The folder may hold files the pass did not write (a NAS share holds
+    // `.DS_Store`, leftovers of a connection check, the user's own files).
+    // Only names of the sync format are ever read, listed or deleted.
+    let listing: Vec<RemoteFile> = drive
+        .list()
+        .await?
+        .into_iter()
+        .filter(|f| parse_file_name(&f.name).is_some())
+        .collect();
     let mut pass = Pass {
         store,
         drive,
@@ -1814,13 +1822,11 @@ mod tests {
         assert!(snap.state[&id].read.is_none());
         assert!(snap.state[&id].starred.as_ref().unwrap().value);
         assert_eq!(manifest_of(&drive).await.db_id, "db1");
-        for gone in [
-            "day-2026-01-01.json.gz",
-            "digest-day-2026-01-01.json.gz",
-            "unknown-file.bin",
-        ] {
+        for gone in ["day-2026-01-01.json.gz", "digest-day-2026-01-01.json.gz"] {
             assert!(!names.contains(&gone.to_string()), "{gone} {names:?}");
         }
+        // Not a sync file: the reset leaves it alone.
+        assert!(names.contains(&"unknown-file.bin".to_string()), "{names:?}");
         let manifest = manifest_of(&drive).await;
         assert!(!manifest.files.contains_key("day-2026-01-01.json.gz"));
         assert!(!manifest.files.contains_key("digest-day-2026-01-01.json.gz"));
@@ -1829,6 +1835,65 @@ mod tests {
             "{names:?}"
         );
         assert!(names.iter().any(|n| n.starts_with("meta")), "{names:?}");
+    }
+
+    /// Files a person or the OS left in a NAS folder, and the leftovers of a check.
+    const FOREIGN: [&str; 4] = [
+        ".DS_Store",
+        "infodesk-check-0a1b.txt",
+        "notes.txt",
+        "day-2026-10-13.json.gz.bak",
+    ];
+
+    fn put_foreign(drive: &MemoryDrive) {
+        for name in FOREIGN {
+            drive.put(name, format!("user {name}").into_bytes());
+        }
+    }
+
+    async fn assert_foreign_untouched(drive: &Recording, downloads: &[String]) {
+        for name in FOREIGN {
+            assert_eq!(
+                read_file(&drive.inner, name).await,
+                Some(format!("user {name}").into_bytes()),
+                "{name} kept as it was"
+            );
+            assert!(!downloads.contains(&name.to_string()), "{name} downloaded");
+        }
+        let manifest = manifest_of(&drive.inner).await;
+        for name in FOREIGN {
+            assert!(!manifest.files.contains_key(name), "{name} in manifest");
+        }
+    }
+
+    #[tokio::test]
+    async fn foreign_files_in_the_folder_are_never_touched() {
+        // A normal first pass, then an unchanged one.
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = Recording::default();
+        put_foreign(&drive.inner);
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_foreign_untouched(&drive, &drive.take()).await;
+        run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert_foreign_untouched(&drive, &drive.take()).await;
+
+        // A folder that held another database: the reset deletes only sync files.
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = Recording::default();
+        put_manifest(&drive.inner, "old-db");
+        drive.inner.put("day-2026-01-01.json.gz", b"old".to_vec());
+        put_foreign(&drive.inner);
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(!report.warnings.is_empty());
+        assert!(
+            !drive
+                .inner
+                .names()
+                .contains(&"day-2026-01-01.json.gz".into())
+        );
+        assert_foreign_untouched(&drive, &drive.take()).await;
     }
 
     #[tokio::test]

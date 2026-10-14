@@ -21,6 +21,15 @@ pub enum DriveError {
     AuthExpired,
     #[error("NAS のユーザー名かパスワードが違います")]
     BadCredentials,
+    /// 507 or 413 from the NAS.
+    #[error("NAS の空き容量が足りません")]
+    StorageFull,
+    /// 403 from the NAS.
+    #[error("NAS のフォルダに書き込む権限がありません")]
+    Forbidden,
+    /// A 3xx answer. Redirects are never followed.
+    #[error("NAS の URL を確かめてください (転送されました)")]
+    Redirected,
     #[error("保存先のエラー: {0}")]
     Other(String),
 }
