@@ -5,7 +5,7 @@ InfoDeskを開発するコントリビュータ向けの内部ドキュメント
 | ドキュメント | 内容 |
 |---|---|
 | [architecture.md](architecture.md) | システム設計書: 構成図・ファイルマップ・データフロー・ジョブとスケジューラー・チャットのサイドカー・**変更レシピ** |
-| [data-model.md](data-model.md) | データ設計書: SQLiteスキーマ(`user_version` 1〜4)・テーブルと主な列・設定キー・FTS5 |
+| [data-model.md](data-model.md) | データ設計書: SQLiteスキーマ(`user_version` 1〜5)・テーブルと主な列・設定キー・FTS5 |
 | [tech-stack.md](tech-stack.md) | 技術スタック: `Cargo.toml` / `package.json` / `Cargo.lock` から読んだバージョンと選定理由 |
 | [design-system.md](design-system.md) | デザインシステム: `theme.css` のトークン・コンポーネント規約・`design.pen` と `design/exports/` |
 | [feature-inventory.md](feature-inventory.md) | 機能インベントリ: 設計書の節ごとに実装済み/未実装を棚卸し |

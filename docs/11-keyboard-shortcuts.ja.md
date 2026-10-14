@@ -1,4 +1,4 @@
-**English: [11-keyboard-shortcuts.md](11-keyboard-shortcuts.md)** | ← [前: ロードマップ](10-roadmap.ja.md)
+**English: [11-keyboard-shortcuts.md](11-keyboard-shortcuts.md)** | ← [前: ロードマップ](10-roadmap.ja.md) | 次: [クラウド同期 →](12-cloud-sync.ja.md)
 
 # キーボードショートカット
 

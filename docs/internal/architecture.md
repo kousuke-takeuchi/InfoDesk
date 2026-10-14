@@ -95,13 +95,14 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | ファイル | 責務 |
 |---|---|
 | `model.rs` | `Category`(7種)、`SourceKind`(6種)、`Period`、`DigestStatus`、`DigestScope`、`Source`、`Item`、`NewItem`、`Digest`、`Topic`、`ItemFilter`、集計の型 |
-| `store/` | `mod.rs`(`Store::open`、WAL)、`schema.rs`、`migrate.rs`、`items.rs`、`sources.rs`、`topics.rs`、`digests.rs`、`settings.rs`、`stats.rs`(概観の集計)、`chat.rs` |
+| `store/` | `mod.rs`(`Store::open`、WAL)、`schema.rs`、`migrate.rs`、`items.rs`、`sources.rs`、`topics.rs`、`digests.rs`、`settings.rs`、`stats.rs`(概観の集計)、`chat.rs`、`sync.rs`(同期用の操作記録、書き出し元データ、`sync_files`) |
 | `collector/` | `mod.rs`(振り分けと `apply_outcomes`)、`feed.rs`(RSS / Atom / Media RSS)、`github.rs`、`hackernews.rs`、`huggingface.rs`、`images.rs`(`og:image`)、`text.rs`(HTMLの除去と切り詰め) |
 | `summarizer/` | `mod.rs`(`plan_digest` / `finish_digest` / `run_digest`、記事要約)、`prompts.rs`(指示文。期間要約は1行目に `見出し: ` を書かせる) |
 | `llm/` | `mod.rs`(`LlmProvider` trait、`provider_from_settings`)、`ollama.rs`、`claude.rs`(`claude` CLIのヘッドレス実行) |
 | `page.rs` | 本文取得。内部アドレスを拒否するクライアント(`page_client`)、リダイレクトの検査、2MBと20000文字の上限 |
+| `sync/` | クラウド同期の中核。`format.rs`(Driveに置くファイルの形、操作の統合規則、ファイル名)、`drive.rs`(`DriveStore` trait とメモリ上の偽物 `MemoryDrive`)、`google.rs`(Drive API v3 の実装。`appDataFolder`、401で1回トークンを取り直す、429と5xxとレート制限は `Retryable`)、`engine.rs`(`run_sync`: 1回の同期、まとめ、保持期間)。`store/sync.rs` が操作の記録と取り込み、書き出し用の問い合わせを持つ |
 | `period.rs` | 期間の開始、終了、UTC範囲。ローカル日付、週は月曜始まり |
-| `seed.rs` | `DEFAULT_SOURCES`(22件)と `DEFAULT_SETTINGS`(17キー) |
+| `seed.rs` | `DEFAULT_SOURCES`(22件)と `DEFAULT_SETTINGS`(18キー) |
 | `error.rs` | `Error` と `Result` |
 
 ### `crates/cli/src`
@@ -115,12 +116,14 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `main.rs` | 先頭引数が `--cli` ならCLIとして動き、それ以外はアプリを起動する |
 | `lib.rs` | ビルダー、`setup`、`generate_handler!`(コマンドの登録)、ウィンドウを閉じたときの常駐、DockのReopen |
 | `state.rs` | `AppState`(`Store`、HTTPクライアント、`AppStatus`、通知関数、LLMファクトリー、サイドカー、閲覧ウィンドウの状態)、イベント名 |
-| `commands/` | `status`、`settings`、`items`、`sources`、`topics`、`digests`、`chat`、`chat_endpoint`。各ファイルは `*_impl(&AppState, ...)` の純粋な関数と `#[tauri::command]` の薄い包みに分かれる |
+| `commands/` | `status`、`settings`、`items`、`sources`、`topics`、`digests`、`chat`、`chat_endpoint`、`sync`(`sync_status`、`sync_login`、`sync_logout`、`sync_set_enabled`、`sync_set_device_name`、`sync_now`)。各ファイルは `*_impl(&AppState, ...)` の純粋な関数と `#[tauri::command]` の薄い包みに分かれる |
 | `jobs.rs` | `run_collect`、`run_item_summaries`、`run_digests`、`retry_pending`、`retry_all` |
 | `scheduler.rs` | `run_loop`、`due_jobs`、`next_collect_at`、`ScheduleConfig` |
 | `reader.rs` | 閲覧ウィンドウ(ツールバーと記事ページの2つのWebView)、URLの検査、ナビゲーションの制限 |
 | `sidecar.rs` | Nodeサイドカーの起動、準備完了の待機、再起動、停止 |
 | `tray.rs` | メニューバーのメニューと状態行 |
+| `sync/` | `mod.rs`(`SyncStatus`、`spawn_sync`、1回の同期の組み立て、設定キー `sync.*`)、`oauth.rs`(デスクトップ向けOAuth。PKCE、`127.0.0.1:<空きポート>` で受ける、更新用トークンの取得、revoke。ビルドに埋め込んだ ID とシークレットを使う)、`keychain.rs`(macOSキーチェーン。サービス `jp.infodesk.app.google`、アカウント `refresh_token`) |
+| `build.rs` | `google-oauth.json`(git管理外。ひな形は `google-oauth.example.json`)の `client_id` と `client_secret` を `INFODESK_GOOGLE_CLIENT_ID` / `INFODESK_GOOGLE_CLIENT_SECRET` としてビルドに埋め込む。無い、または壊れていれば同期は無効 |
 | `error.rs` | `AppError { message }`。Tauriは `Err` をJSONにして `invoke` のrejectへ渡す |
 | `capabilities/default.json` | メインウィンドウと `reader-toolbar` のWebViewに与える権限 |
 | `tauri.conf.json` / `tauri.bundle.json` | CSP、ウィンドウ、バンドル。`tauri.bundle.json` は `agent/dist/agent.mjs` を `agent/agent.mjs` としてリソースに入れる |
@@ -132,7 +135,7 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `main.tsx` / `App.tsx` | エントリーと全体の状態(表示、サイドバーの選択、チャットの開閉、イベントの購読) |
 | `api.ts` / `types.ts` | `invoke` の型付きラッパーと型、イベント名(`EVENTS`) |
 | `components/` | `Sidebar`、`Segmented`、`Toggle`、`ErrorLine`、`RevealCard`、`ChatToggle`、`charts/`(`BarChart`、`Sparkline`) |
-| `views/` | `DigestView`(+ `digest/Overview`、`digest/ImageCards`)、`FeedView`、`SettingsView`(+ `settings/` の4タブとRSS追加ダイアログ) |
+| `views/` | `DigestView`(+ `digest/Overview`、`digest/ImageCards`)、`FeedView`、`SettingsView`(+ `settings/` の5タブ(`SyncTab` を含む)とRSS追加ダイアログ) |
 | `chat/` | `ChatPanel`、`ChatThread`、`ThreadMenu`、`WorkSummary`、`ToolCall`、`Reasoning`、進行表示と文脈のロジック |
 | `reader/` | 閲覧ウィンドウのツールバー(`reader.html` から読む別エントリー) |
 | `lib/` | 日付、絞り込み条件、見出しの取り出し |
@@ -172,6 +175,18 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `retry_pending` / `retry_all` | `pending` だけ(自動)/ `pending` と `failed`(手動)を再試行 |
 
 LLMは `LlmFactory`(`provider_from_settings`)で用途(`LlmRole::Items` / `Digest`)ごとに作る。**Claudeが失敗してもOllamaへ自動で切り替えない**(選んだプロバイダー以外へ内容を送らないため)。
+
+### クラウド同期(`sync/`)
+
+`run_collect` と `run_digests` は、終わりに `state.request_sync()` を呼ぶ。これは `spawn_sync` を投げるだけで待たない(⌘R は収集なので同じ経路)。設定画面の「今すぐ同期」は `sync_now`。同期中は重ねて走らせず、実行中に要求が来たら終わった後にもう1回走らせる。
+
+1回の同期(`engine::run_sync`): Driveの一覧を取る → 他端末の `ops-*` を取り込む(Mac自身の操作としては記録しない) → Macの未送信の操作を `ops-<端末ID>-*` に書く → 中身が変わった `day-*`、`digest-*`、`meta.json.gz` を書く(ハッシュで判断) → 1日1回、まとめ(`state-snapshot.json.gz`、`covers` の `ops-*` を削除)と保持期間の削除 → 最後に `manifest.json`。ぶつかったときは `at` が新しい方、同じなら端末IDの大きい方。
+
+- 保持期間: 日次の記事とダイジェストは直近60日、週次と月次は直近400日(`DAY_RETENTION`、`LONG_RETENTION`)。Mac側の送信済み `sync_ops` は30日で消す。
+- エラー: ネットワーク、429、5xx、レート制限はその回をやめて次回に回す。401で更新用トークンも使えないときは `Google の再ログインが必要です` を出して止める。同期のエラーは `SyncStatus.error` に入り、収集やダイジェストのエラー(`last_error`)とは別。
+- 認証: 更新用トークンはキーチェーンだけ。ログアウトで revoke してキーチェーンから消す。スコープは `https://www.googleapis.com/auth/drive.appdata openid email`。
+- 状態は `AppState.sync`(`SyncStatus`)と、イベント `sync-changed`(`EVENT_SYNC`)で画面へ。
+- テストは `DriveStore` の偽物(`MemoryDrive`)で行い、ネットワークにつなぐテストは無い。本物のDriveとログインは手動で確かめる。公開用の手順は [../12-cloud-sync.md](../12-cloud-sync.md)。
 
 ### スケジューラー(`scheduler.rs`)
 

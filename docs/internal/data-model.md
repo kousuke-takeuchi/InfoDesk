@@ -53,6 +53,10 @@ erDiagram
         int read
         int starred
         text image_url
+        text read_changed_at
+        text starred_changed_at
+        text read_changed_by
+        text starred_changed_by
     }
     topics {
         int id PK
@@ -76,6 +80,22 @@ erDiagram
         text key PK
         text value
     }
+    sync_ops {
+        int id PK
+        int item_id
+        text field
+        int value
+        text at
+        int uploaded
+    }
+    sync_files {
+        text name PK
+        text kind
+        text drive_id
+        text sha256
+        text updated_at
+        text fingerprint
+    }
     chat_threads {
         int id PK
         text title
@@ -94,7 +114,7 @@ erDiagram
 
 ## 3. マイグレーション
 
-`PRAGMA user_version` を版番号に使う(`store/migrate.rs`)。`SCHEMA_VERSION = 4`。`MIGRATIONS` の各要素は `BEGIN; <SQL> PRAGMA user_version = N; COMMIT;` として1つずつ適用する。
+`PRAGMA user_version` を版番号に使う(`store/migrate.rs`)。`SCHEMA_VERSION = 5`。`MIGRATIONS` の各要素は `BEGIN; <SQL> PRAGMA user_version = N; COMMIT;` として1つずつ適用する。
 
 | 版 | 内容 | 追加した計画 |
 |---|---|---|
@@ -102,11 +122,12 @@ erDiagram
 | 2 | `ALTER TABLE digests ADD COLUMN last_error TEXT` | Plan 2a |
 | 3 | `chat_threads` と `chat_messages` を作成 | チャット(Plan 3) |
 | 4 | `ALTER TABLE items ADD COLUMN image_url TEXT` | 記事の画像 |
+| 5 | `items` に `read_changed_at`、`starred_changed_at`、`read_changed_by`、`starred_changed_by` を足し、`sync_ops` と `sync_files` を作成 | クラウド同期(Plan 7A) |
 
 ルール:
 
 - DBの版がコードの `SCHEMA_VERSION` より新しいときは開くのを拒否する(`Error::Invalid`)。古いアプリで新しいDBを壊さないため。
-- 既存の行を残す。マイグレーションのテストが、2、4で既存行が残ることを確かめている。
+- 既存の行を残す。マイグレーションのテストが、2、4、5で既存行が残ることを確かめている。
 - 版を足すときの手順は [architecture.md](architecture.md) の「設定キーを足す」と同じ場所(`migrate.rs`)に加えて、`SCHEMA_VERSION` を上げ、`tests` に「旧版から上げても行が残る」テストを足す。
 
 ## 4. テーブル
@@ -142,6 +163,7 @@ erDiagram
 - `ai_summary` は記事要約(日本語1〜2文)。上位N件(設定 `summary.top_n`)にだけ付く。
 - `image_url` は収集時に1回だけ決める(`https` のみ。決まらなければNULL)。既存の記事には遡らない。
 - `fetched_at` が期間の所属の基準(ダイジェストの集計も同じ)。
+- `read_changed_at` / `starred_changed_at`(RFC3339、NULL可)と `read_changed_by` / `starred_changed_by`(端末ID)は、既読とスターを最後に変えた時刻と端末。同期のぶつかり合いの判定に使う。NULL は「同期の対象になる変更がまだ無い」。
 - `idx_items_category_fetched(category, fetched_at)` がカテゴリーと期間の絞り込みを支える。
 
 ### items_fts と items_words
@@ -198,7 +220,7 @@ stateDiagram-v2
 
 ### settings
 
-キーと値の文字列。値の既定は `seed.rs` の `DEFAULT_SETTINGS`(17キー)。`seed_defaults` が起動時に足りないキーだけ補う。画面とTauriコマンドが読み書きできるのは `DEFAULT_SETTINGS` にあるキーだけ(`set_setting` は未知のキーを拒否する)。
+キーと値の文字列。値の既定は `seed.rs` の `DEFAULT_SETTINGS`(18キー)。`seed_defaults` が起動時に足りないキーだけ補う。画面とTauriコマンドが読み書きできるのは `DEFAULT_SETTINGS` にあるキーだけ(`set_setting` は未知のキーを拒否する)。
 
 | キー | 既定値 | 内容 |
 |---|---|---|
@@ -227,6 +249,27 @@ stateDiagram-v2
 | `seeded` | 初期ソースを入れ済みか |
 | `schedule.last_collect_at` | 最終収集(RFC3339)。全ソース失敗のときは約10分後に再試行されるよう前にずらして書く |
 | `schedule.last_daily_for` / `last_weekly_for` / `last_monthly_for` | 最後に確定した日次、週次、月次の対象の開始日(`YYYY-MM-DD`) |
+
+### sync_ops と sync_files
+
+クラウド同期用(版5)。実装は `store/sync.rs`。
+
+- `sync_ops`: Macで起きた既読とスターの操作。`set_read`、`set_starred`、`mark_all_read` が書く。`field` は `read` か `starred`、`value` は0か1、`at` は操作の時刻、`uploaded` は `ops-*` として書き出し済みか(0/1)。他端末の操作の取り込みは、ここに書かない。書き出し済みで30日を過ぎた行はまとめのときに消す。
+- `sync_files`: Driveに関する控え。`kind` で取り込み済みの `ops-*` と、書き出し済みのファイルを分ける。`name` が主キー、`drive_id` はDrive上のファイルid、`sha256` と `fingerprint` は変更の有無の判断に使う。
+
+同期の設定キー(`DEFAULT_SETTINGS` にあるのは `sync.enabled` だけ。残りは同期の処理が書く内部キーで、画面から直接は読み書きしない):
+
+| キー | 内容 |
+|---|---|
+| `sync.enabled` | 既定 `false`。同期のオンとオフ |
+| `sync.device_id` | この Mac の端末ID(初回の同期で作るUUID) |
+| `sync.db_id` | このDBの識別子(UUID)。作り直すと変わり、モバイルが控えを捨てる合図になる |
+| `sync.device_name` | 端末名。既定はコンピューター名 |
+| `sync.account_email` | ログイン中のメールアドレス |
+| `sync.last_sync_at` | 最終同期の時刻 |
+| `sync.last_compaction_at` | 最後にまとめと保持期間の削除を行った時刻 |
+
+更新用トークンはDBに置かない(macOSキーチェーン)。
 
 ### chat_threads と chat_messages
 

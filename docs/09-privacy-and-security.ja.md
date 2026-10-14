@@ -9,7 +9,7 @@ InfoDesk は、1人で使うデスクトップアプリです。アカウント�
 ## Mac の中に残るもの
 
 - DB `~/Library/Application Support/jp.infodesk.app/infodesk.db` に、ソース、トピック、収集した記事、要約、ダイジェスト、チャットのスレッド、設定が入ります。
-- InfoDesk のサービスへは何もアップロードしません。そのようなサービスはありません。
+- InfoDesk のサービスへは何もアップロードしません。そのようなサービスはありません。[クラウド同期](12-cloud-sync.ja.md)をオンにすると、利用者本人の Google ドライブにコピーが置かれます (下記)。
 - 同じ Mac の Ollama を使うとき、要約、ダイジェスト、チャットはローカルで動きます。そのための記事の文章はマシンの外へ出ません。
 - チャットのツールは読み取り専用で、この DB ([CLI](08-cli.ja.md) 経由) と、許可したページや検索 (下記) だけを読みます。
 
@@ -22,6 +22,8 @@ InfoDesk は、1人で使うデスクトップアプリです。アカウント�
 | 記事の画像 | 画像のホスト | サムネイルやカードを表示するとき。ウィンドウが `https:` から直接読みます |
 | Ollama での LLM の文章 | `ollama.base_url` の URL (既定は `http://localhost:11434`) | 要約、ダイジェスト、チャット |
 | Claude での LLM の文章 | Anthropic。導入してログインした `claude` CLI 経由 | Claude を選んだときの要約、ダイジェスト、チャット |
+| 収集した記事、ダイジェスト、既読とスターの印 (ファイルとして) | 利用者本人の Google ドライブの、アプリ専用の隠れた領域 (`appDataFolder`) | Google でログインして同期をオンにしたときだけ。収集とダイジェストのあと、および「今すぐ同期」のとき。ファイルの一覧は[クラウド同期](12-cloud-sync.ja.md)を参照 |
+| Google へのログインとトークン | Google (`accounts.google.com`、`oauth2.googleapis.com`、`www.googleapis.com`) | ログイン、トークンの更新、ログアウト (トークンを失効させる) のとき |
 | チャット用の記事本文 | その記事の URL | エージェントが `fetch_page` を呼んだときだけ。保存しません |
 | チャット用の Web 検索 | Claude: 組み込みの WebSearch。Ollama: `https://ollama.com/api/web_search` | エージェントが Web を検索したときだけ。Ollama では API キーを設定したときだけ |
 
@@ -34,9 +36,11 @@ InfoDesk は、1人で使うデスクトップアプリです。アカウント�
 
 ## 保存している秘密情報
 
-InfoDesk が保存する秘密情報は、任意の ollama.com の API キー (`ollama.web_search_api_key`) だけです。SQLite の設定テーブルに平文で保存し、`infodesk config list` でも表示されます。DB のファイルを読める人は、キーも読めます。ユーザーアカウントのファイルの権限を非公開に保ち、DB や `config list` のスクリーンショットを共有しないでください。
+ollama.com の API キーは任意です。保存する場合は (`ollama.web_search_api_key`)、SQLite の設定テーブルに平文で保存し、`infodesk config list` でも表示されます。DB のファイルを読める人は、キーも読めます。ユーザーアカウントのファイルの権限を非公開に保ち、DB や `config list` のスクリーンショットを共有しないでください。
 
 Claude は CLI 経由で使うので、InfoDesk は Claude の認証情報を保存しません。
+
+[クラウド同期](12-cloud-sync.ja.md)でログインすると、Google の更新用トークンは DB ではなく macOS のキーチェーン (サービス `jp.infodesk.app.google`、アカウント `refresh_token`) に保存されます。ログアウトすると、Google 側でトークンを失効させ、キーチェーンの項目も消します。アプリが Google に求める Drive の権限は `https://www.googleapis.com/auth/drive.appdata` だけで、InfoDesk 専用の隠れた領域にしか届きません。ほかの Drive のファイルには触れません (アドレスを表示するための `openid` と `email` も求めます)。OAuth のクライアント ID とシークレットはアプリに埋め込まれます。デスクトップアプリのシークレットは、Google の扱いでは秘密とみなされません。ログインは PKCE を使い、`127.0.0.1` で一度だけ待ち受けます。
 
 ## ページ取得の保護 (SSRF)
 
@@ -88,6 +92,7 @@ default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:*; im
 ## 限界のまとめ
 
 - API キーは平文で保存されます (上記)。
+- 同期をオンにすると、記事とダイジェストが Google ドライブにコピーされます。Google アカウントにアクセスできる人は、そこで読めます。
 - プロンプトインジェクションは完全には防げません。[AI チャット](06-ai-chat.ja.md)を参照してください。
 - 記事を開く、画像を読み込むと、第三者のサイトに接続します。
 - このアプリは macOS 向けのアルファ版です。外部のセキュリティレビューは受けていません。

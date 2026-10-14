@@ -146,6 +146,7 @@
 | スケジュール: 日次、週次、月次の時刻 | 実装済み | |
 | スケジュール: ログイン時に起動、ウィンドウを閉じても常駐 | 実装済み | |
 | スケジュール: 保留中の要約の「一覧」 | 未実装 | 一覧は無い。最後のエラーの表示と、一括の「保留中の要約を再試行」ボタンだけ |
+| 同期タブ: Google ログイン/ログアウト、同期のオンオフ、端末名、最終同期とエラー、今すぐ同期 | 実装済み | [クラウド同期の設計書](../superpowers/specs/2026-10-13-infodesk-cloud-sync-design.md) 5.4節。`SyncTab.tsx` |
 | スケジュール: 保留中の要約の「今すぐ再試行」 | 実装済み | 失敗した要約も対象 |
 
 ### チャットパネル
@@ -290,6 +291,24 @@
 | `unstable` 機能(`Window::add_child`) | 実装済み | `Cargo.toml` の `tauri` features |
 | 手元やLANのホストは閲覧ウィンドウで開かず、既定のブラウザで開く | 差分 | 設計書に無い追加。アプリのオリジンと重なるとIPCが使えてしまうため |
 | 記事を開いたときの既読の扱いは従来どおり | 実装済み | |
+
+## 17. クラウド同期 (Plan 7A)
+
+[クラウド同期の設計書](../superpowers/specs/2026-10-13-infodesk-cloud-sync-design.md)のMac側(5節)、データの形(3、4節)、手順書(7節)。根拠のファイルを備考に書く。手動の確認(本物のDriveとログイン)は利用者が行う。
+
+| 項目 | 状態 | 備考 |
+|---|---|---|
+| Drive の `appDataFolder` に `manifest.json`、`meta`、`day-*`、`digest-*`、`state-snapshot`、`ops-*` を置く | 実装済み | `crates/core/src/sync/format.rs`、`engine.rs`、`google.rs` |
+| 既読とスターの双方向同期(新しい `at` が勝ち、同じなら端末IDの大きい方) | 実装済み | `store/sync.rs`、`format.rs` |
+| まとめ(1日1回)と保持期間(日次60日、週次と月次400日) | 実装済み | `engine.rs`。送信済みの `sync_ops` は30日で消す(設計書に無い追加) |
+| 収集後、ダイジェスト生成後、⌘R、「今すぐ同期」で同期 | 実装済み | `jobs.rs` の `request_sync`、`sync/mod.rs`。⌘R は収集なので収集の後に同期される |
+| デスクトップ向けOAuth(PKCE、`127.0.0.1`)、トークンはキーチェーン、ログアウトでrevoke | 実装済み | `app/src-tauri/src/sync/oauth.rs`、`keychain.rs` |
+| ビルド時に `google-oauth.json` を埋め込む。無ければ同期を無効にして「このビルドでは同期を使えません」 | 実装済み | `app/src-tauri/build.rs` |
+| 同期タブ | 実装済み | `SyncTab.tsx`。同期のエラーは収集のエラーと別の行 |
+| DBの版5 | 実装済み | [data-model.md](data-model.md) |
+| 手順書 (Google 側の準備) | 実装済み | [../12-cloud-sync.md](../12-cloud-sync.md) |
+| モバイルアプリ (Flutter) | 未実装 | 計画B。`mobile/` はまだ無い |
+| 本物のDriveでのログインと同期の確認 | 未確認 | 自動テストは偽のDriveだけ。手動の確認一覧は計画Aの報告 |
 
 ## 設計書に無い実装
 

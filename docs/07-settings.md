@@ -2,7 +2,7 @@
 
 # Settings
 
-Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). Settings has four tabs: Sources, Topics, LLM and Schedule. Changes are saved when you edit a field.
+Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). Settings has five tabs: Sources, Topics, LLM, Schedule and Sync. Changes are saved when you edit a field.
 
 ## Tabs
 
@@ -12,6 +12,7 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 | Topics | Topics and their keywords. See [Sources and Topics](03-sources-and-topics.md). |
 | LLM | Which LLM each job uses, the Ollama and Claude settings, the Node path, connection tests. |
 | Schedule | Collection interval, digest times, launch behavior, retry of pending digests. |
+| Sync | Sign in with Google, turn sync on or off, this Mac's name, last sync time and error, "sync now". See [Cloud Sync](12-cloud-sync.md). |
 
 ### LLM tab
 
@@ -60,10 +61,13 @@ All settings are stored in the app database as text. Defaults are written on fir
 | `schedule.monthly_time` | `08:00` | Time (HH:MM) of the monthly digest, on the 1st of the month. |
 | `app.launch_at_login` | `false` | Start InfoDesk at login, in the menu bar without opening a window. |
 | `app.stay_resident` | `true` | Keep running in the menu bar when the main window is closed. |
+| `sync.enabled` | `false` | Sync to Google Drive after collections and digests. Needs a Google sign-in. See [Cloud Sync](12-cloud-sync.md). |
 
 An invalid time or weekday value is ignored and the default is used.
 
 The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
+
+Sync keeps its own keys too: `sync.device_name` (the name of this Mac, edited in the Sync tab), `sync.device_id` and `sync.db_id` (random ids made on first sync), `sync.account_email`, `sync.last_sync_at` and `sync.last_compaction_at`. Only `sync.enabled` is a plain setting; the Sync tab manages the others. Do not edit them. The Google refresh token is not in the database; it is in the macOS Keychain.
 
 The app only accepts the keys above. Setting `app.launch_at_login` is done with the toggle, because it also registers the macOS LaunchAgent. With the [CLI](08-cli.md), `config set` writes any key without checking it, so type carefully.
 

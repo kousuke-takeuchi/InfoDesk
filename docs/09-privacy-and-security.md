@@ -9,7 +9,7 @@ To report a vulnerability, see [SECURITY.md](../SECURITY.md).
 ## What stays local
 
 - The database `~/Library/Application Support/jp.infodesk.app/infodesk.db` holds sources, topics, collected articles, summaries, digests, chat threads and settings.
-- Nothing is uploaded to an InfoDesk service. There is none.
+- Nothing is uploaded to an InfoDesk service. There is none. If you turn on [Cloud Sync](12-cloud-sync.md), a copy goes to your own Google Drive (below).
 - With Ollama on the same Mac, summaries, digests and chat run locally. Article text does not leave the machine for them.
 - Chat tools are read-only and read only this database (through the [CLI](08-cli.md)), plus pages and searches you allow (below).
 
@@ -22,6 +22,8 @@ To report a vulnerability, see [SECURITY.md](../SECURITY.md).
 | Article images | The image hosts | When the app shows a thumbnail or a card. The window loads them directly from `https:` |
 | LLM text with Ollama | The URL in `ollama.base_url`, by default `http://localhost:11434` | Summaries, digests, chat |
 | LLM text with Claude | Anthropic, through the `claude` CLI you installed and signed in | Summaries, digests, chat, when you choose Claude |
+| Collected articles, digests, and read and starred marks, as files | Your own Google Drive, in the hidden app-only folder (`appDataFolder`) | Only after you sign in with Google and turn on sync. After each collection and digest, and on "sync now". See [Cloud Sync](12-cloud-sync.md) for the file list |
+| Google sign-in and token | Google (`accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`) | At sign-in, token refresh and sign-out (the token is revoked) |
 | Article body for chat | The article URL | Only when the agent calls `fetch_page`. Not saved |
 | Web search for chat | Claude: its built-in WebSearch. Ollama: `https://ollama.com/api/web_search` | Only when the agent searches the web. For Ollama only if you set an API key |
 
@@ -34,9 +36,11 @@ Notes:
 
 ## Stored secrets
 
-The only secret InfoDesk stores is the optional ollama.com API key (`ollama.web_search_api_key`). It is saved as plain text in the SQLite settings table, and `infodesk config list` prints it. Anyone who can read the database file can read the key. Keep the file permissions of your user account private, and do not share the database or screenshots of `config list`.
+The ollama.com API key is optional. It is stored (`ollama.web_search_api_key`) as plain text in the SQLite settings table, and `infodesk config list` prints it. Anyone who can read the database file can read the key. Keep the file permissions of your user account private, and do not share the database or screenshots of `config list`.
 
 Claude is used through its CLI, so InfoDesk stores no Claude credential.
+
+If you sign in for [Cloud Sync](12-cloud-sync.md), the Google refresh token is stored in the macOS Keychain (service `jp.infodesk.app.google`, account `refresh_token`), not in the database. Signing out revokes the token at Google and deletes the Keychain item. The app asks Google for one Drive permission, `https://www.googleapis.com/auth/drive.appdata`, which reaches only InfoDesk's own hidden folder and none of your other Drive files (it also asks for `openid` and `email`, to show your address). The OAuth client ID and secret are compiled into the app; for a desktop app Google does not treat the secret as confidential. Sign-in uses PKCE and a one-time listener on `127.0.0.1`.
 
 ## Page fetch guard (SSRF)
 
@@ -88,6 +92,7 @@ Chat runs in a separate Node process that the app starts. It is not a public ser
 ## Summary of limits
 
 - The API key is stored in plain text (see above).
+- With sync on, your articles and digests are copied to your Google Drive. Anyone with access to your Google account can read them there.
 - Prompt injection cannot be fully prevented. See [AI Chat](06-ai-chat.md).
 - Opening articles and loading images contacts third-party sites.
 - The app is alpha software for macOS. It has had no external security review.

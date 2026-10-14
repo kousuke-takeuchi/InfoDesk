@@ -1,4 +1,4 @@
-**日本語: [11-keyboard-shortcuts.ja.md](11-keyboard-shortcuts.ja.md)** | ← [Roadmap](10-roadmap.md)
+**日本語: [11-keyboard-shortcuts.ja.md](11-keyboard-shortcuts.ja.md)** | ← [Roadmap](10-roadmap.md) | Next: [Cloud Sync →](12-cloud-sync.md)
 
 # Keyboard Shortcuts
 
