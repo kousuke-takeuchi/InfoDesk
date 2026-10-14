@@ -5,12 +5,10 @@ fn main() {
 
 /// `google-oauth.json` (git 管理外) の `client_id` と `client_secret` をビルド時に埋め込む。
 /// ファイルが無い、または読めない場合は何も出さず、同期は無効になる。
+/// 監視は常に出す。ファイルが無いと Cargo は毎回このスクリプトを実行し直すので、
+/// 後からファイルを置いても次のビルドで埋め込まれる。
 fn embed_google_oauth() {
-    if std::path::Path::new("google-oauth.json").exists() {
-        println!("cargo:rerun-if-changed=google-oauth.json");
-    } else {
-        println!("cargo:rerun-if-changed=build.rs");
-    }
+    println!("cargo:rerun-if-changed=google-oauth.json");
     let Ok(text) = std::fs::read_to_string("google-oauth.json") else {
         return;
     };
