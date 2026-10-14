@@ -30,6 +30,13 @@ impl Store {
         Ok(())
     }
 
+    /// 設定を消す。なければ何もしない。
+    pub fn delete_setting(&self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", params![key])?;
+        Ok(())
+    }
+
     /// 全ての設定をキー順に返す。
     pub fn list_settings(&self) -> Result<Vec<(String, String)>> {
         let mut stmt = self
@@ -56,5 +63,14 @@ mod tests {
                 ("b.key".to_string(), "2".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn delete_setting_removes_the_key_and_ignores_missing_ones() {
+        let store = Store::open_in_memory().unwrap();
+        store.set_setting("a.key", "1").unwrap();
+        store.delete_setting("a.key").unwrap();
+        store.delete_setting("missing").unwrap();
+        assert_eq!(store.get_setting("a.key").unwrap(), None);
     }
 }

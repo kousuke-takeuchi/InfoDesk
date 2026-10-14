@@ -34,6 +34,9 @@ pub fn sync_set_enabled(app: AppHandle, enabled: bool) -> AppResult<SyncStatus> 
     if enabled {
         sync::start_tailnet_if_needed(&state);
         sync::spawn_sync(&app);
+    } else if sync::backend_is_nas(&state) {
+        // 同期しないなら、NAS のための Tailscale も止める (別スレッドで)。
+        drop(sync::stop_tailnet(&state));
     }
     Ok(sync::status_now(&state))
 }
@@ -49,13 +52,19 @@ pub fn sync_now(app: AppHandle) {
     sync::spawn_sync(&app);
 }
 
-/// 保存先 ("google" か "nas") を切り替える。
+/// 保存先 ("gdrive" か "nas") を切り替える。同じ保存先なら何もしない。
 #[tauri::command]
 pub fn sync_set_backend(app: AppHandle, backend: String) -> AppResult<SyncStatus> {
     let state = app.state::<AppState>();
-    sync::set_backend(&state, &backend)?;
-    sync::start_tailnet_if_needed(&state);
-    sync::spawn_sync(&app);
+    if sync::set_backend(&state, &backend)? {
+        if backend == sync::BACKEND_NAS {
+            sync::start_tailnet_if_needed(&state);
+        } else {
+            // Google ドライブには Tailscale を使わない。止めるのは別スレッドで。
+            drop(sync::stop_tailnet(&state));
+        }
+        sync::spawn_sync(&app);
+    }
     Ok(sync::status_now(&state))
 }
 
@@ -73,14 +82,16 @@ pub fn sync_set_nas(
 }
 
 /// Tailscale を始める。ログインが要るときは、端末がブラウザーでログイン画面を開く。
-/// 起動は待たされることがあるので、別スレッドで行う。
+/// もうログイン待ちなら、同じログイン画面を開き直す。起動は待たされることがあるので、別スレッドで行う。
 #[tauri::command]
 pub async fn tailnet_login(app: AppHandle) -> AppResult<SyncStatus> {
     let tailnet = app.state::<AppState>().tailnet.clone();
-    tauri::async_runtime::spawn_blocking(move || tailnet.start())
+    let result = tauri::async_runtime::spawn_blocking(move || tailnet.login())
         .await
-        .map_err(|e| AppError::from(format!("Tailscale の起動に失敗しました: {e}")))??;
+        .map_err(|e| AppError::from(format!("Tailscale の起動に失敗しました: {e}")))?;
     let state = app.state::<AppState>();
+    sync::tailnet_changed(&state);
+    result?;
     Ok(sync::status_now(&state))
 }
 
@@ -91,6 +102,20 @@ pub async fn tailnet_logout(app: AppHandle) -> AppResult<SyncStatus> {
     let result = tauri::async_runtime::spawn_blocking(move || tailnet.logout())
         .await
         .map_err(|e| AppError::from(format!("Tailscale のログアウトに失敗しました: {e}")))?;
+    let state = app.state::<AppState>();
+    sync::tailnet_changed(&state);
+    result?;
+    Ok(sync::status_now(&state))
+}
+
+/// ログアウトせずに、この Mac の Tailscale の状態を消す。起動が失敗し続けるときの手当て。
+/// 状態ディレクトリの削除は待たされうるので、別スレッドで行う。
+#[tauri::command]
+pub async fn tailnet_forget(app: AppHandle) -> AppResult<SyncStatus> {
+    let tailnet = app.state::<AppState>().tailnet.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || tailnet.forget())
+        .await
+        .map_err(|e| AppError::from(format!("Tailscale の状態を消せませんでした: {e}")))?;
     let state = app.state::<AppState>();
     sync::tailnet_changed(&state);
     result?;

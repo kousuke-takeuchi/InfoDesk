@@ -2108,6 +2108,7 @@ dependencies = [
  "chrono",
  "infodesk",
  "infodesk-core",
+ "libc",
  "libtailscale",
  "reqwest",
  "security-framework",

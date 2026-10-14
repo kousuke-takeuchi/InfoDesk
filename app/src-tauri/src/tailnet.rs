@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -58,6 +59,40 @@ pub trait Tailnet: Send + Sync {
     /// 登録解除に失敗したらエラーを返し、ディレクトリは消さない。
     fn logout(&self) -> AppResult<()>;
     fn stop(&self);
+    /// 「Tailscale にログイン」。ログイン待ちなら同じログイン URL をもう一度開き、それ以外は `start`。
+    /// メインスレッドから呼ばないこと。
+    fn login(&self) -> AppResult<()>;
+    /// LocalAPI でのログアウトをせずに、端末を止めて状態ディレクトリを消す。起動が失敗し続けて
+    /// ログアウトもできないときの手当て。管理画面には端末が残る。メインスレッドから呼ばないこと。
+    fn forget(&self) -> AppResult<()>;
+}
+
+/// 環境変数の値が真か。Go の `strconv.ParseBool` (envknob が使う) が真とする値だけを受け付ける。
+pub fn no_logs_env_is_true(v: Option<&std::ffi::OsStr>) -> bool {
+    matches!(
+        v.and_then(|v| v.to_str()),
+        Some("1" | "t" | "T" | "TRUE" | "true" | "True")
+    )
+}
+
+pub const BOOT_REFUSED_REASON: &str = "Tailscale のログ送信を止められなかったため起動しません";
+
+/// ログの送信を止められなかった。このプロセスでは端末を起こさない。
+static BOOT_REFUSED: AtomicBool = AtomicBool::new(false);
+
+/// このプロセスで Tailscale の端末を起こさないようにする (戻せない)。
+pub fn refuse_boot() {
+    BOOT_REFUSED.store(true, Ordering::SeqCst);
+}
+
+/// SIGPIPE を無視に戻す。Rust の実行時は起動時に無視にするが、`exec` は呼ぶ前に既定へ戻すので、
+/// `exec` に失敗したときはこれで戻す。
+pub fn restore_sigpipe() {
+    #[cfg(unix)]
+    // SAFETY: シグナルの扱いを Rust の実行時が起動時に設定するのと同じ値に戻すだけ。
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+    }
 }
 
 #[derive(Deserialize)]
@@ -193,8 +228,13 @@ struct Inner {
     thread: Option<JoinHandle<()>>,
 }
 
+type BootFn =
+    Arc<dyn Fn(&Path) -> Result<(libtailscale::Tailscale, Loopback), String> + Send + Sync>;
+
 pub struct EmbeddedTailnet {
     notify: Notifier,
+    /// 端末を起こす処理。テストでは本物の端末を起こさないものに差し替える。
+    boot: BootFn,
     config: Mutex<Option<Config>>,
     inner: Arc<Mutex<Inner>>,
 }
@@ -225,6 +265,7 @@ impl EmbeddedTailnet {
     pub fn new(notify: Notifier) -> Self {
         Self {
             notify,
+            boot: Arc::new(boot),
             config: Mutex::new(None),
             inner: Arc::new(Mutex::new(Inner::default())),
         }
@@ -284,6 +325,9 @@ fn prepare_dir(dir: &Path) -> std::io::Result<()> {
 }
 
 fn boot(dir: &Path) -> Result<(libtailscale::Tailscale, Loopback), String> {
+    if BOOT_REFUSED.load(Ordering::SeqCst) {
+        return Err(BOOT_REFUSED_REASON.to_string());
+    }
     prepare_dir(dir).map_err(|e| e.to_string())?;
     let mut ts = libtailscale::Tailscale::new();
     ts.set_dir(&dir.to_string_lossy())?;
@@ -343,8 +387,15 @@ impl Tailnet for EmbeddedTailnet {
         if let Some(previous) = previous {
             let _ = previous.join();
         }
+        // 待つ間に stop や新しい start があれば、この起動はもう古い。起こさず、新しい方の
+        // ハンドルも上書きしない。起動と記録は同じロックの中で行う (スレッドは最初にこのロックを待つ)。
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if g.generation != gen_id {
+            return Ok(());
+        }
         let inner = self.inner.clone();
         let notify = self.notify.clone();
+        let boot = self.boot.clone();
         let handle = std::thread::spawn(move || {
             if !current(&inner, gen_id) {
                 return;
@@ -398,7 +449,50 @@ impl Tailnet for EmbeddedTailnet {
                 sleep_while_current(&inner, gen_id);
             }
         });
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).thread = Some(handle);
+        g.thread = Some(handle);
+        Ok(())
+    }
+
+    fn login(&self) -> AppResult<()> {
+        let open = self
+            .config
+            .lock()
+            .expect("tailnet config lock")
+            .as_ref()
+            .map(|c| c.open.clone())
+            .ok_or_else(|| AppError::from("Tailscale is not configured".to_string()))?;
+        let pending = {
+            let g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            match (&g.state, g.running) {
+                (Some(TailnetState::NeedsLogin { url }), true) => Some(url.clone()),
+                _ => None,
+            }
+        };
+        // 起動スレッドは同じ URL を 1 回しか開かない。ボタンを押し直したら、ここで開き直す。
+        if let Some(url) = pending {
+            open(&url);
+            return Ok(());
+        }
+        self.start()
+    }
+
+    fn forget(&self) -> AppResult<()> {
+        let dir = self
+            .dir()
+            .ok_or_else(|| AppError::from("Tailscale is not configured".to_string()))?;
+        self.stop();
+        // 起動中のスレッドが状態ディレクトリに書き終えるのを待ってから消す。
+        // stop の後に新しい start があれば、そのスレッドは待たない (止まらないので)。
+        let thread = {
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            if g.running { None } else { g.thread.take() }
+        };
+        if let Some(thread) = thread {
+            let _ = thread.join();
+        }
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).map_err(|e| AppError::from(e.to_string()))?;
+        }
         Ok(())
     }
 
@@ -456,11 +550,13 @@ impl Tailnet for EmbeddedTailnet {
 }
 
 /// テスト用。状態を外から変えられる。
+#[cfg(test)]
 pub struct FakeTailnet {
     state: Mutex<TailnetState>,
     proxy: Mutex<String>,
 }
 
+#[cfg(test)]
 impl FakeTailnet {
     pub fn new(state: TailnetState) -> Self {
         Self {
@@ -474,6 +570,7 @@ impl FakeTailnet {
     }
 }
 
+#[cfg(test)]
 impl Tailnet for FakeTailnet {
     fn state(&self) -> TailnetState {
         self.state.lock().unwrap().clone()
@@ -491,6 +588,13 @@ impl Tailnet for FakeTailnet {
     }
     fn stop(&self) {
         self.set_state(TailnetState::Stopped);
+    }
+    fn login(&self) -> AppResult<()> {
+        self.start()
+    }
+    fn forget(&self) -> AppResult<()> {
+        self.set_state(TailnetState::Stopped);
+        Ok(())
     }
 }
 
@@ -671,5 +775,162 @@ mod tests {
     #[test]
     fn logout_without_configuration_fails() {
         assert!(embedded().logout().is_err());
+    }
+
+    type Opened = Arc<Mutex<Vec<String>>>;
+
+    /// 本物の端末を起こさない `EmbeddedTailnet`。起動は呼ばれたスレッドを記録して失敗する。
+    fn fake_booted(
+        dir: PathBuf,
+    ) -> (
+        Arc<EmbeddedTailnet>,
+        Opened,
+        Arc<Mutex<Vec<std::thread::ThreadId>>>,
+    ) {
+        let booted = Arc::new(Mutex::new(Vec::new()));
+        let log = booted.clone();
+        let mut t = embedded();
+        t.boot = Arc::new(move |_: &Path| {
+            log.lock().unwrap().push(std::thread::current().id());
+            Err("no node in tests".to_string())
+        });
+        let opened: Opened = Arc::new(Mutex::new(Vec::new()));
+        let sink = opened.clone();
+        t.configure(
+            dir,
+            Arc::new(move |u: &str| sink.lock().unwrap().push(u.to_string())),
+        );
+        (Arc::new(t), opened, booted)
+    }
+
+    fn wait_until(what: &str, mut f: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !f() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn login_opens_a_pending_login_url_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let (t, opened, booted) = fake_booted(dir.path().join("tailscale"));
+        let url = "https://login.tailscale.com/a/abc";
+        {
+            let mut g = t.inner.lock().unwrap();
+            g.running = true;
+            g.generation = 1;
+            g.state = Some(TailnetState::NeedsLogin { url: url.into() });
+        }
+        t.login().unwrap();
+        assert_eq!(opened.lock().unwrap().as_slice(), [url]);
+        assert_eq!(t.inner.lock().unwrap().generation, 1, "no new boot");
+        assert!(booted.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_late_start_does_not_replace_a_newer_boot_thread() {
+        let dir = tempfile::tempdir().unwrap();
+        let (t, _, booted) = fake_booted(dir.path().join("tailscale"));
+        // 前の起動スレッドが終わらないうちに、2 つ目の start を走らせる。
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        t.inner.lock().unwrap().thread = Some(std::thread::spawn(move || {
+            let _ = wait.recv();
+        }));
+        let late = {
+            let t = t.clone();
+            std::thread::spawn(move || t.start().unwrap())
+        };
+        wait_until("the late start to take the old thread", || {
+            let g = t.inner.lock().unwrap();
+            g.generation == 1 && g.thread.is_none()
+        });
+        // その間に止めて、もう一度始める。こちらが新しい世代。
+        t.stop();
+        t.start().unwrap();
+        wait_until("the new boot", || booted.lock().unwrap().len() == 1);
+        release.send(()).unwrap();
+        late.join().unwrap();
+        let newest = booted.lock().unwrap()[0];
+        let stored = t
+            .inner
+            .lock()
+            .unwrap()
+            .thread
+            .as_ref()
+            .map(|h| h.thread().id());
+        assert_eq!(stored, Some(newest));
+        assert_eq!(
+            booted.lock().unwrap().len(),
+            1,
+            "the late start never booted"
+        );
+    }
+
+    #[test]
+    fn the_no_logs_switch_parses_like_go_parse_bool() {
+        use std::ffi::OsStr;
+        for yes in ["1", "t", "T", "TRUE", "true", "True"] {
+            assert!(no_logs_env_is_true(Some(OsStr::new(yes))), "{yes}");
+        }
+        for no in [
+            "", "0", "f", "false", "FALSE", "yes", "on", " true", "tRUE", "2",
+        ] {
+            assert!(!no_logs_env_is_true(Some(OsStr::new(no))), "{no}");
+        }
+        assert!(!no_logs_env_is_true(None));
+    }
+
+    #[test]
+    fn boot_refuses_when_log_uploads_could_not_be_disabled() {
+        refuse_boot();
+        // 状態ディレクトリは作れない場所。拒否が先なら、そこまで進まない。
+        match boot(Path::new("/dev/null/tailscale")) {
+            Err(reason) => assert_eq!(reason, BOOT_REFUSED_REASON),
+            Ok(_) => panic!("booted"),
+        }
+        let t = embedded();
+        t.configure(PathBuf::from("/dev/null/tailscale"), Arc::new(|_: &str| {}));
+        t.start().unwrap();
+        wait_until("the refusal", || {
+            matches!(t.state(), TailnetState::Failed { .. })
+        });
+        assert_eq!(
+            t.state(),
+            TailnetState::Failed {
+                reason: BOOT_REFUSED_REASON.into()
+            }
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sigpipe_is_ignored_again_after_a_failed_exec() {
+        unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+        restore_sigpipe();
+        let previous = unsafe { libc::signal(libc::SIGPIPE, libc::SIG_IGN) };
+        assert_eq!(previous, libc::SIG_IGN);
+    }
+
+    #[test]
+    fn forget_stops_and_removes_the_state_dir_without_logging_out() {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("tailscale");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("tailscaled.state"), b"keys").unwrap();
+        let (t, _, _) = fake_booted(dir.clone());
+        {
+            let mut g = t.inner.lock().unwrap();
+            g.running = true;
+            g.generation = 1;
+            g.state = Some(TailnetState::Failed { reason: "x".into() });
+        }
+        t.forget().unwrap();
+        assert!(!dir.exists());
+        assert_eq!(t.state(), TailnetState::Stopped);
+        assert!(!t.inner.lock().unwrap().running);
+        // もう何もなくても成功する。
+        t.forget().unwrap();
+        assert!(embedded().forget().is_err(), "not configured");
     }
 }

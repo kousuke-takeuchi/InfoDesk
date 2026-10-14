@@ -6,8 +6,6 @@ mod scheduler;
 mod sidecar;
 mod state;
 mod sync;
-// Task 3 wires this into sync; until then most of it is unused.
-#[allow(dead_code)]
 mod tailnet;
 mod tray;
 
@@ -19,26 +17,33 @@ use tauri::{Emitter, Manager, WindowEvent};
 use crate::state::{AppState, EVENT_ITEMS, EVENT_STATUS};
 
 /// tsnet は log.tailscale.com へログを送る。止めるのは環境変数 `TS_NO_LOGS_NO_SUPPORT`
-/// (tailscale.com/envknob/envknob.go の `NoLogsNoSupport`、logpolicy.go:700 と :874)。
-/// ただし Go のランタイムは起動時 (libtailscale を読み込んだとき) に環境を写し取るので、
-/// 後から `set_var` しても Go からは見えない。そのため、未設定なら変数を付けて自分自身を
-/// `exec` し直す (同じプロセスのまま。この時点ではスレッドも tsnet の端末もない)。
-/// `set_var` を使わないので Rust 2024 の unsafe も要らない。
+/// (tailscale.com/envknob/envknob.go の `NoLogsNoSupport`。tsnet で効くのは logpolicy.go:874)。
+/// Go の値の読み方 (`strconv.ParseBool`) で真でなければ、変数を付けて自分自身を `exec` し直す。
+/// libtailscale (Go の c-archive) はプロセスの読み込み時に Go のランタイムを起こして環境を写し取るので、
+/// 後から `set_var` しても Go からは見えない。ここに来た時点で Go のランタイムのスレッドは
+/// もう動いているが、`exec` はプロセスの中身ごと置き換えるので問題ない (tsnet の端末はまだない)。
+/// `exec` できなかったときは、ログを止められないまま端末を起こさないよう、起動を拒ませる。
 fn ensure_no_tailscale_logs() {
+    if tailnet::no_logs_env_is_true(std::env::var_os(tailnet::NO_LOGS_ENV).as_deref()) {
+        return;
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        if std::env::var_os(tailnet::NO_LOGS_ENV).is_some() {
-            return;
+        match std::env::current_exe() {
+            Ok(exe) => {
+                let err = std::process::Command::new(exe)
+                    .args(std::env::args_os().skip(1))
+                    .env(tailnet::NO_LOGS_ENV, "true")
+                    .exec();
+                eprintln!("tailnet: could not re-exec to disable log uploads: {err}");
+            }
+            Err(e) => eprintln!("tailnet: could not find the executable to re-exec: {e}"),
         }
-        if let Ok(exe) = std::env::current_exe() {
-            let err = std::process::Command::new(exe)
-                .args(std::env::args_os().skip(1))
-                .env(tailnet::NO_LOGS_ENV, "true")
-                .exec();
-            eprintln!("tailnet: could not re-exec to disable log uploads: {err}");
-        }
+        // `exec` は呼ぶ前に SIGPIPE を既定に戻す。失敗したので、Rust の実行時と同じ無視に戻す。
+        tailnet::restore_sigpipe();
     }
+    tailnet::refuse_boot();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -61,7 +66,17 @@ pub fn run() {
                     tray::refresh(&handle);
                 }
             });
-            let tailnet = Arc::new(tailnet::EmbeddedTailnet::new(notify.clone()));
+            // Tailscale の状態が変わったら、同期の状態に写してから画面に知らせる。
+            // つながった時の同期の依頼は、写すとき (`refresh_status`) に行う。
+            let base = notify.clone();
+            let watcher = app.handle().clone();
+            let tailnet_notify: state::Notifier = Arc::new(move |name: &str| {
+                if let Some(state) = watcher.try_state::<AppState>() {
+                    sync::on_tailnet_event(&state);
+                }
+                base(name);
+            });
+            let tailnet = Arc::new(tailnet::EmbeddedTailnet::new(tailnet_notify));
             let opener = app.handle().clone();
             tailnet.configure(
                 app.path().app_data_dir()?.join("tailscale"),
@@ -74,12 +89,13 @@ pub fn run() {
             state.tailnet = tailnet;
             app.manage(state);
             app.state::<AppState>().load_persisted();
-            sync::init_status(&app.state::<AppState>());
-            // 保存済みの状態があるので、ログインは要らない。待たされるので別スレッドで始める。
-            sync::start_tailnet_if_needed(&app.state::<AppState>());
+            // Tailscale がつながった時に同期を頼めるよう、状態を写す前に用意する。
             let handle = app.handle().clone();
             app.state::<AppState>()
                 .set_sync_launcher(Arc::new(move || sync::spawn_sync(&handle)));
+            sync::init_status(&app.state::<AppState>());
+            // 保存済みの状態があるので、ログインは要らない。待たされるので別スレッドで始める。
+            sync::start_tailnet_if_needed(&app.state::<AppState>());
             tray::install(app)?;
             // ウィンドウは非表示で作られる。ログイン時の自動起動 (`--hidden`) 以外は表示する。
             if !std::env::args().any(|a| a == "--hidden")
@@ -163,6 +179,7 @@ pub fn run() {
             commands::sync::sync_set_nas,
             commands::sync::tailnet_login,
             commands::sync::tailnet_logout,
+            commands::sync::tailnet_forget,
             commands::sync::sync_test_nas,
         ])
         .build(tauri::generate_context!())
