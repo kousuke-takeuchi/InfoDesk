@@ -134,9 +134,90 @@ describe("SyncTab", () => {
   });
 
   it("shows the sync error in one red line", async () => {
-    setupIpc({ sync_status: () => ({ ...signedIn, error: "同期できませんでした: ネットワークに接続できません。次の同期で再試行します。" }) });
+    setupIpc({ sync_status: () => ({ ...signedIn, error: "Google の再ログインが必要です" }) });
     render(<SyncTab />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("同期できませんでした: ネットワークに接続できません。次の同期で再試行します。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("同期できませんでした: Google の再ログインが必要です");
+  });
+
+  it("does not double the prefix when the message already has it", async () => {
+    setupIpc({ sync_status: () => ({ ...signedIn, error: "同期できませんでした: ネットワーク" }) });
+    render(<SyncTab />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("同期できませんでした: ネットワーク");
+  });
+
+  it("does not prefix action errors", async () => {
+    setupIpc({ sync_status: () => out, sync_login: () => { throw { message: "タイムアウトしました" }; } });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "Google でログイン" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("タイムアウトしました");
+  });
+
+  it("ignores a stale sync_status response that resolves after a newer one", async () => {
+    const first = deferred();
+    let calls = 0;
+    setupIpc({ sync_status: () => (++calls === 1 ? first.promise : { ...signedIn, account_email: "new@gmail.com" }) });
+    render(<SyncTab />);
+    await waitFor(() => expect(calls).toBe(1));
+    await emitEvent(EVENTS.sync);
+    expect(await screen.findByText("new@gmail.com でログイン中")).toBeInTheDocument();
+    await act(async () => first.resolve({ ...signedIn, account_email: "old@gmail.com" }));
+    expect(screen.getByText("new@gmail.com でログイン中")).toBeInTheDocument();
+    expect(screen.queryByText("old@gmail.com でログイン中")).not.toBeInTheDocument();
+  });
+
+  it("ignores a stale load that resolves after a command result", async () => {
+    const first = deferred();
+    let calls = 0;
+    setupIpc({
+      sync_status: () => (++calls === 1 ? { ...signedIn, account_email: "a@gmail.com" } : first.promise),
+      sync_set_enabled: ({ enabled }) => ({ ...signedIn, account_email: "a@gmail.com", enabled }),
+    });
+    render(<SyncTab />);
+    await screen.findByText("a@gmail.com でログイン中");
+    await emitEvent(EVENTS.sync);
+    await waitFor(() => expect(calls).toBe(2));
+    await userEvent.click(screen.getByRole("switch", { name: "同期する" }));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "同期する" })).toHaveAttribute("aria-checked", "false"));
+    await act(async () => first.resolve({ ...signedIn, account_email: "a@gmail.com", enabled: true }));
+    expect(screen.getByRole("switch", { name: "同期する" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("disables sync now when signed out", async () => {
+    setupIpc({ sync_status: () => out });
+    render(<SyncTab />);
+    expect(await screen.findByRole("button", { name: "今すぐ同期" })).toBeDisabled();
+  });
+
+  it("shows 同期中… while syncing", async () => {
+    setupIpc({ sync_status: () => ({ ...signedIn, syncing: true }) });
+    render(<SyncTab />);
+    expect(await screen.findByTestId("last-sync")).toHaveTextContent("同期中…");
+    expect(screen.getByRole("button", { name: "今すぐ同期" })).toBeDisabled();
+  });
+
+  it("shows an error when sync_set_enabled fails", async () => {
+    setupIpc({ sync_status: () => signedIn, sync_set_enabled: () => { throw { message: "保存できません" }; } });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("switch", { name: "同期する" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("保存できません");
+  });
+
+  it("shows an error when sync_logout fails", async () => {
+    setupIpc({ sync_status: () => signedIn, sync_logout: () => { throw { message: "ログアウトできません" }; } });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "ログアウト" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("ログアウトできません");
+    expect(screen.getByRole("button", { name: "ログアウト" })).toBeEnabled();
+  });
+
+  it("clears an action error after a successful refetch", async () => {
+    setupIpc({ sync_status: () => signedIn, sync_logout: () => { throw { message: "ログアウトできません" }; } });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "ログアウト" }));
+    await screen.findByRole("alert");
+    await emitEvent(EVENTS.sync);
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
   it("shows a load failure", async () => {
@@ -152,7 +233,12 @@ describe("SyncTab", () => {
     await screen.findByText("you@gmail.com でログイン中");
     current = { ...signedIn, error: "失敗" };
     await emitEvent(EVENTS.sync);
-    expect(await screen.findByRole("alert")).toHaveTextContent("失敗");
+    expect(await screen.findByRole("alert")).toHaveTextContent("同期できませんでした: 失敗");
     expect(ipc.count("sync_status")).toBe(2);
+    current = { ...signedIn, error: null, account_email: "other@gmail.com" };
+    await emitEvent(EVENTS.sync);
+    expect(await screen.findByText("other@gmail.com でログイン中")).toBeInTheDocument();
+    expect(screen.queryByText("you@gmail.com でログイン中")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

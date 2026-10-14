@@ -7,6 +7,7 @@ import { formatClock } from "../../lib/dates";
 import { errorMessage, type SyncStatus } from "../../types";
 import { SettingField, type ActionResult } from "./shared";
 
+const SYNC_FAILED = "同期できませんでした";
 const DRIVE_DESC = "収集した記事とダイジェストを、Google ドライブのアプリ専用の領域に置きます。スマホの InfoDesk から読めます。";
 
 export function SyncTab() {
@@ -16,10 +17,14 @@ export function SyncTab() {
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const inFlight = useRef(new Set<string>());
 
-  const load = useCallback(
-    () => api.syncStatus().then((s) => { setStatus(s); setLoadError(null); }).catch((e) => setLoadError(errorMessage(e))),
-    [],
-  );
+  const ticket = useRef(0);
+
+  const load = useCallback(() => {
+    const t = ++ticket.current;
+    return api.syncStatus()
+      .then((s) => { if (t === ticket.current) { setStatus(s); setLoadError(null); setActionError(null); } })
+      .catch((e) => { if (t === ticket.current) setLoadError(errorMessage(e)); });
+  }, []);
   useEffect(() => { void load(); }, [load]);
   useTauriEvent(EVENTS.sync, () => { void load(); });
 
@@ -29,7 +34,7 @@ export function SyncTab() {
     inFlight.current.add(name);
     setBusy(new Set(inFlight.current));
     return fn()
-      .then((s) => { if (s) setStatus(s); setActionError(null); return { ok: true, error: null }; })
+      .then((s) => { if (s) { ticket.current++; setStatus(s); } setActionError(null); return { ok: true, error: null }; })
       .catch((e) => { const error = errorMessage(e); setActionError(error); return { ok: false, error }; })
       .finally(() => { inFlight.current.delete(name); setBusy(new Set(inFlight.current)); });
   }, []);
@@ -80,7 +85,7 @@ export function SyncTab() {
               <span className="small text-secondary" data-testid="last-sync">{status.syncing ? "同期中…" : status.last_sync_at ? formatClock(status.last_sync_at) : "—"}</span>
               <button className="btn" disabled={!canSync || !status.enabled || status.syncing || busy.has("now")} onClick={() => run("now", () => api.syncNow())}>今すぐ同期</button>
             </div>
-            <ErrorLine message={status.error} />
+            <ErrorLine message={status.error && (status.error.startsWith(SYNC_FAILED) ? status.error : `${SYNC_FAILED}: ${status.error}`)} />
           </section>
           <section className="section">
             <h2>Drive に置く期間</h2>
