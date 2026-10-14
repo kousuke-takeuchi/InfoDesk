@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, FixedOffset, Local, Utc};
@@ -11,6 +11,7 @@ use crate::error::{AppError, AppResult};
 pub const EVENT_STATUS: &str = "status-changed";
 pub const EVENT_ITEMS: &str = "items-changed";
 pub const EVENT_DIGESTS: &str = "digests-changed";
+pub const EVENT_SYNC: &str = "sync-changed";
 pub const EVENT_CHAT: &str = "chat-endpoint-changed";
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -69,7 +70,17 @@ pub struct AppState {
     pub reader_title: Mutex<String>,
     /// 閲覧ウィンドウの作成を1つずつにする。中で `.await` しないこと。
     pub reader_lock: Mutex<()>,
+    /// 同期の状態。収集やダイジェストの `status` とは別。
+    pub sync: Mutex<crate::sync::SyncStatus>,
+    /// 同期が実行中か。
+    pub sync_running: AtomicBool,
+    /// テストで Google ドライブの代わりを差し込む。
+    pub drive_override: Option<Arc<dyn infodesk_core::sync::drive::DriveStore>>,
+    /// 同期を非同期に起動する関数。起動時に設定する (テストでは未設定)。
+    sync_launcher: Mutex<Option<SyncLauncher>>,
 }
+
+pub type SyncLauncher = Arc<dyn Fn() + Send + Sync>;
 
 impl AppState {
     pub fn new(store: Store, notify: Notifier) -> Self {
@@ -84,6 +95,26 @@ impl AppState {
             chat: crate::sidecar::Sidecar::default(),
             reader_title: Mutex::new(String::new()),
             reader_lock: Mutex::new(()),
+            sync: Mutex::new(crate::sync::SyncStatus::default()),
+            sync_running: AtomicBool::new(false),
+            drive_override: None,
+            sync_launcher: Mutex::new(None),
+        }
+    }
+
+    pub fn set_sync_launcher(&self, launcher: SyncLauncher) {
+        *self.sync_launcher.lock().expect("sync launcher lock") = Some(launcher);
+    }
+
+    /// 収集やダイジェストの後に呼ぶ。同期を投げるだけで待たない。
+    pub fn request_sync(&self) {
+        let launcher = self
+            .sync_launcher
+            .lock()
+            .expect("sync launcher lock")
+            .clone();
+        if let Some(launch) = launcher {
+            launch();
         }
     }
 

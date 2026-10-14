@@ -208,6 +208,7 @@ impl TokenSource {
         }
     }
 
+    #[cfg(test)]
     fn with_client(cfg: OAuthConfig, secrets: Arc<dyn SecretStore>, http: reqwest::Client) -> Self {
         Self {
             cfg,

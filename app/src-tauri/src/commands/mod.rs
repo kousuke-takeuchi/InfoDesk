@@ -5,4 +5,5 @@ pub mod items;
 pub mod settings;
 pub mod sources;
 pub mod status;
+pub mod sync;
 pub mod topics;

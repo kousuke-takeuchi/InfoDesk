@@ -120,6 +120,9 @@ pub async fn run_digests(
     // `digests-changed` を受けた画面が古い `digesting` を見ないよう、先にジョブ数を戻す。
     drop(job_guard);
     state.notify(EVENT_DIGESTS);
+    if result.is_ok() {
+        state.request_sync();
+    }
     result.map(|()| results)
 }
 
@@ -204,6 +207,9 @@ pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
             s.set_error(ErrorOrigin::Collect, e.message.clone());
         }
     });
+    if result.is_ok() {
+        state.request_sync();
+    }
     result
 }
 
@@ -590,6 +596,27 @@ mod tests {
         state.update_status(|s| s.set_error(ErrorOrigin::Collect, "collect failed"));
         run_collect(&state).await.unwrap();
         assert_eq!(state.status().last_error, None);
+    }
+
+    #[tokio::test]
+    async fn collect_and_digests_request_a_sync_but_a_rejected_collect_does_not() {
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("要約"));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let c = calls.clone();
+        state.set_sync_launcher(Arc::new(move || {
+            c.fetch_add(1, Ordering::SeqCst);
+        }));
+        run_collect(&state).await.unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let today = Local::now().date_naive();
+        run_digests(&state, Period::Day, today, &all_category_scopes(), true)
+            .await
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        state.update_status(|s| s.collecting = true);
+        assert!(run_collect(&state).await.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]

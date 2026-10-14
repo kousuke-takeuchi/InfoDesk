@@ -1,3 +1,4 @@
+#[cfg(any(test, not(target_os = "macos")))]
 use std::sync::Mutex;
 
 pub const SERVICE: &str = "jp.infodesk.app.google";
@@ -10,9 +11,11 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self) -> Result<(), String>;
 }
 
+#[cfg(any(test, not(target_os = "macos")))]
 #[derive(Default)]
 pub struct MemorySecretStore(Mutex<Option<String>>);
 
+#[cfg(any(test, not(target_os = "macos")))]
 impl SecretStore for MemorySecretStore {
     fn get(&self) -> Result<Option<String>, String> {
         Ok(self.0.lock().unwrap().clone())

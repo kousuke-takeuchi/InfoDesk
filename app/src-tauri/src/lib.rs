@@ -36,6 +36,10 @@ pub fn run() {
             });
             app.manage(AppState::new(store, notify));
             app.state::<AppState>().load_persisted();
+            sync::init_status(&app.state::<AppState>());
+            let handle = app.handle().clone();
+            app.state::<AppState>()
+                .set_sync_launcher(Arc::new(move || sync::spawn_sync(&handle)));
             tray::install(app)?;
             // ウィンドウは非表示で作られる。ログイン時の自動起動 (`--hidden`) 以外は表示する。
             if !std::env::args().any(|a| a == "--hidden")
@@ -109,6 +113,12 @@ pub fn run() {
             commands::digests::regenerate_digest,
             commands::digests::collect_now,
             commands::digests::retry_pending_digests,
+            commands::sync::sync_status,
+            commands::sync::sync_login,
+            commands::sync::sync_logout,
+            commands::sync::sync_set_enabled,
+            commands::sync::sync_set_device_name,
+            commands::sync::sync_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
