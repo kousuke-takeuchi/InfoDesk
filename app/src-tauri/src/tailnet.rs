@@ -6,9 +6,9 @@
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::Deserialize;
@@ -19,22 +19,43 @@ use crate::state::{EVENT_SYNC, Notifier};
 pub const HOSTNAME: &str = "infodesk-mac";
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const LOCALAPI_TIMEOUT: Duration = Duration::from_secs(5);
+/// ログアウトはコントロールサーバーとの通信を伴うので長めに待つ。
+const LOGOUT_TIMEOUT: Duration = Duration::from_secs(30);
+/// ログアウトのために端末を起動するとき、LocalAPI が使えるまで待つ上限。
+const LOGOUT_BOOT_TIMEOUT: Duration = Duration::from_secs(60);
+/// ログのアップロード (log.tailscale.com) を止める環境変数 (`envknob.NoLogsNoSupport`)。
+pub const NO_LOGS_ENV: &str = "TS_NO_LOGS_NO_SUPPORT";
 /// LocalAPI が要求する Host ヘッダー (`apitype.LocalAPIHost`)。
 const LOCALAPI_HOST: &str = "local-tailscaled.sock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TailnetState {
     Stopped,
-    NeedsLogin { url: String },
+    /// 起動に失敗した。`reason` は資格情報を含まない。
+    Failed {
+        reason: String,
+    },
+    NeedsLogin {
+        url: String,
+    },
+    /// ログイン済みだが、管理画面での端末の承認待ち。
+    NeedsApproval,
     Starting,
-    Running { name: String, ip: String },
+    Running {
+        name: String,
+        ip: String,
+    },
 }
 
 pub trait Tailnet: Send + Sync {
     fn state(&self) -> TailnetState;
+    /// 古い起動処理がまだ残っていれば、その終了を待つ。メインスレッドから呼ばないこと。
     fn start(&self) -> AppResult<()>;
     /// `Running` のときだけ `Some`。NAS への通信はこの SOCKS5 プロキシを通す。
     fn proxy_url(&self) -> Option<String>;
+    /// 端末を登録解除して状態ディレクトリを消す。端末が止まっていれば起動して待つので、
+    /// 最長で 90 秒ほどブロックする。メインスレッドから呼ばないこと。
+    /// 登録解除に失敗したらエラーを返し、ディレクトリは消さない。
     fn logout(&self) -> AppResult<()>;
     fn stop(&self);
 }
@@ -59,7 +80,7 @@ struct SelfJson {
     ips: Vec<String>,
 }
 
-/// LocalAPI の `/localapi/v0/status` の JSON から状態を作る。読めない JSON は `Starting`。
+/// LocalAPI の `/localapi/v0/status?peers=false` の JSON から状態を作る。読めない JSON は `Starting`。
 pub fn state_from_status(json: &str) -> TailnetState {
     let Ok(s) = serde_json::from_str::<StatusJson>(json) else {
         return TailnetState::Starting;
@@ -83,8 +104,9 @@ pub fn state_from_status(json: &str) -> TailnetState {
                 ip,
             }
         }
+        "NeedsMachineAuth" => TailnetState::NeedsApproval,
         "Stopped" => TailnetState::Stopped,
-        // NoState、NeedsMachineAuth、Starting、URL がまだない NeedsLogin。
+        // NoState、Starting、URL がまだない NeedsLogin。
         _ => TailnetState::Starting,
     }
 }
@@ -115,16 +137,21 @@ struct Loopback {
     proxy_credential: String,
 }
 
-fn localapi(lb: &Loopback, method: &str, path: &str) -> Result<(u16, String), String> {
+fn localapi(
+    lb: &Loopback,
+    method: &str,
+    path: &str,
+    timeout: Duration,
+) -> Result<(u16, String), String> {
     let addr = lb
         .address
         .to_socket_addrs()
         .map_err(|e| e.to_string())?
         .next()
         .ok_or("no address")?;
-    let mut s = TcpStream::connect_timeout(&addr, LOCALAPI_TIMEOUT).map_err(|e| e.to_string())?;
-    s.set_read_timeout(Some(LOCALAPI_TIMEOUT)).ok();
-    s.set_write_timeout(Some(LOCALAPI_TIMEOUT)).ok();
+    let mut s = TcpStream::connect_timeout(&addr, timeout).map_err(|e| e.to_string())?;
+    s.set_read_timeout(Some(timeout)).ok();
+    s.set_write_timeout(Some(timeout)).ok();
     let auth = base64::engine::general_purpose::STANDARD.encode(format!(":{}", lb.credential));
     let req = format!(
         "{method} {path} HTTP/1.0\r\nHost: {LOCALAPI_HOST}\r\nSec-Tailscale: localapi\r\nAuthorization: Basic {auth}\r\nContent-Length: 0\r\n\r\n"
@@ -133,6 +160,17 @@ fn localapi(lb: &Loopback, method: &str, path: &str) -> Result<(u16, String), St
     let mut buf = Vec::new();
     let _ = s.read_to_end(&mut buf);
     split_http_response(&buf).ok_or_else(|| "bad LocalAPI response".to_string())
+}
+
+/// ログアウトの応答を調べる。成功は 204 だけ。エラーには本文も資格情報も入れない。
+fn check_logout(response: Result<(u16, String), String>) -> AppResult<()> {
+    match response {
+        Ok((204, _)) => Ok(()),
+        Ok((status, _)) => Err(AppError::from(format!(
+            "Tailscale logout failed (HTTP {status})"
+        ))),
+        Err(_) => Err(AppError::from("Tailscale logout failed".to_string())),
+    }
 }
 
 pub type OpenUrl = Arc<dyn Fn(&str) + Send + Sync>;
@@ -149,14 +187,37 @@ struct Inner {
     /// 端末そのもの。手放す (drop) と libtailscale が閉じる。
     node: Option<libtailscale::Tailscale>,
     running: bool,
+    /// 起動、停止のたびに増やす。状態の書き込みと同じロックの中で比べる。
+    generation: u64,
+    /// 直近の起動スレッド。次の起動はこれの終了を待ってから始める。
+    thread: Option<JoinHandle<()>>,
 }
 
 pub struct EmbeddedTailnet {
     notify: Notifier,
     config: Mutex<Option<Config>>,
     inner: Arc<Mutex<Inner>>,
-    /// 起動、停止のたびに増やす。古い監視スレッドが自分で止まる。
-    generation: Arc<AtomicU64>,
+}
+
+/// 世代が `gen_id` のままなら状態を書く。古い世代 (stop や再起動の後) なら何もせず `None`。
+/// 世代の確認と書き込みを同じロックの中で行うので、stop の後に状態が戻ることはない。
+/// `Some(changed)` を返したときだけ、呼び出し側は URL を開くなどの副作用を起こしてよい。
+/// `finished` が真なら、起動スレッドが終わる (`running` を下ろす) ことも同時に記録する。
+fn commit(inner: &Mutex<Inner>, gen_id: u64, next: TailnetState, finished: bool) -> Option<bool> {
+    let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+    if g.generation != gen_id {
+        return None;
+    }
+    if finished {
+        g.running = false;
+    }
+    let changed = g.state.as_ref() != Some(&next);
+    g.state = Some(next);
+    Some(changed)
+}
+
+fn current(inner: &Mutex<Inner>, gen_id: u64) -> bool {
+    inner.lock().unwrap_or_else(|e| e.into_inner()).generation == gen_id
 }
 
 impl EmbeddedTailnet {
@@ -166,24 +227,11 @@ impl EmbeddedTailnet {
             notify,
             config: Mutex::new(None),
             inner: Arc::new(Mutex::new(Inner::default())),
-            generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub fn configure(&self, dir: PathBuf, open: OpenUrl) {
         *self.config.lock().expect("tailnet config lock") = Some(Config { dir, open });
-    }
-
-    fn set_state(inner: &Mutex<Inner>, notify: &Notifier, next: TailnetState) {
-        let changed = {
-            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-            let changed = g.state.as_ref() != Some(&next);
-            g.state = Some(next);
-            changed
-        };
-        if changed {
-            notify(EVENT_SYNC);
-        }
     }
 
     fn loopback(&self) -> Option<Arc<Loopback>> {
@@ -193,10 +241,50 @@ impl EmbeddedTailnet {
             .loopback
             .clone()
     }
+
+    fn dir(&self) -> Option<PathBuf> {
+        self.config
+            .lock()
+            .expect("tailnet config lock")
+            .as_ref()
+            .map(|c| c.dir.clone())
+    }
+
+    /// 起動済みの端末の LocalAPI が使えるようになるまで待つ。
+    fn wait_for_loopback(&self, timeout: Duration) -> AppResult<Arc<Loopback>> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(lb) = self.loopback() {
+                return Ok(lb);
+            }
+            if let TailnetState::Failed { reason } = self.state() {
+                return Err(AppError::from(format!(
+                    "Tailscale could not start: {reason}"
+                )));
+            }
+            if Instant::now() >= deadline {
+                return Err(AppError::from(
+                    "Tailscale did not become ready in time".to_string(),
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+}
+
+/// 状態ディレクトリを作り、既にあっても権限を 0o700 にする (鍵が入る)。
+fn prepare_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
 }
 
 fn boot(dir: &Path) -> Result<(libtailscale::Tailscale, Loopback), String> {
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    prepare_dir(dir).map_err(|e| e.to_string())?;
     let mut ts = libtailscale::Tailscale::new();
     ts.set_dir(&dir.to_string_lossy())?;
     ts.set_hostname(HOSTNAME)?;
@@ -212,6 +300,14 @@ fn boot(dir: &Path) -> Result<(libtailscale::Tailscale, Loopback), String> {
             proxy_credential: lb.proxy_credential,
         },
     ))
+}
+
+/// `POLL_INTERVAL` だけ待つ。世代が変わったら早めに戻る。
+fn sleep_while_current(inner: &Mutex<Inner>, gen_id: u64) {
+    let until = Instant::now() + POLL_INTERVAL;
+    while Instant::now() < until && current(inner, gen_id) {
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 impl Tailnet for EmbeddedTailnet {
@@ -232,26 +328,34 @@ impl Tailnet for EmbeddedTailnet {
                 .ok_or_else(|| AppError::from("Tailscale is not configured".to_string()))?;
             (cfg.dir.clone(), cfg.open.clone())
         };
-        {
+        let (gen_id, previous) = {
             let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             if g.running {
                 return Ok(());
             }
             g.running = true;
+            g.generation += 1;
+            g.state = Some(TailnetState::Starting);
+            (g.generation, g.thread.take())
+        };
+        (self.notify)(EVENT_SYNC);
+        // 同じ状態ディレクトリで 2 つの端末を起こさない。古い世代は自分で終わる。
+        if let Some(previous) = previous {
+            let _ = previous.join();
         }
-        let gen_id = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        Self::set_state(&self.inner, &self.notify, TailnetState::Starting);
         let inner = self.inner.clone();
         let notify = self.notify.clone();
-        let generation = self.generation.clone();
-        std::thread::spawn(move || {
-            let current = || generation.load(Ordering::SeqCst) == gen_id;
+        let handle = std::thread::spawn(move || {
+            if !current(&inner, gen_id) {
+                return;
+            }
             let (ts, lb) = match boot(&dir) {
                 Ok(v) => v,
-                Err(_) => {
-                    if current() {
-                        inner.lock().unwrap_or_else(|e| e.into_inner()).running = false;
-                        Self::set_state(&inner, &notify, TailnetState::Stopped);
+                Err(reason) => {
+                    // 資格情報はここまで届かない。エラー文だけを残す。
+                    eprintln!("tailnet: boot failed: {reason}");
+                    if commit(&inner, gen_id, TailnetState::Failed { reason }, true) == Some(true) {
+                        notify(EVENT_SYNC);
                     }
                     return;
                 }
@@ -259,29 +363,42 @@ impl Tailnet for EmbeddedTailnet {
             let lb = Arc::new(lb);
             {
                 let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                if !current() {
+                if g.generation != gen_id {
                     return; // 起動中に stop された。ts はここで drop される。
                 }
                 g.node = Some(ts);
                 g.loopback = Some(lb.clone());
             }
             let mut opened: Option<String> = None;
-            while current() {
-                if let Ok((200, body)) = localapi(&lb, "GET", "/localapi/v0/status") {
+            while current(&inner, gen_id) {
+                if let Ok((200, body)) = localapi(
+                    &lb,
+                    "GET",
+                    "/localapi/v0/status?peers=false",
+                    LOCALAPI_TIMEOUT,
+                ) {
                     let next = state_from_status(&body);
-                    if let TailnetState::NeedsLogin { url } = &next
-                        && opened.as_deref() != Some(url.as_str())
-                    {
-                        open(url);
-                        opened = Some(url.clone());
-                    }
-                    if current() {
-                        Self::set_state(&inner, &notify, next);
+                    let url = match &next {
+                        TailnetState::NeedsLogin { url } => Some(url.clone()),
+                        _ => None,
+                    };
+                    // 世代の確認が通ったときだけ、通知とブラウザを開く処理に進む。
+                    if let Some(changed) = commit(&inner, gen_id, next, false) {
+                        if changed {
+                            notify(EVENT_SYNC);
+                        }
+                        if let Some(url) = url
+                            && opened.as_deref() != Some(url.as_str())
+                        {
+                            open(&url);
+                            opened = Some(url);
+                        }
                     }
                 }
-                std::thread::sleep(POLL_INTERVAL);
+                sleep_while_current(&inner, gen_id);
             }
         });
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).thread = Some(handle);
         Ok(())
     }
 
@@ -298,29 +415,35 @@ impl Tailnet for EmbeddedTailnet {
     }
 
     fn logout(&self) -> AppResult<()> {
-        if let Some(lb) = self.loopback() {
-            // 失敗しても端末を止めて状態を消す (次の起動で新しくログインする)。
-            let _ = localapi(&lb, "POST", "/localapi/v0/logout");
+        let dir = self
+            .dir()
+            .ok_or_else(|| AppError::from("Tailscale is not configured".to_string()))?;
+        // 状態ディレクトリがなければ、登録されたものもない。
+        if dir.exists() {
+            let lb = match self.loopback() {
+                Some(lb) => lb,
+                None => {
+                    self.start()?;
+                    self.wait_for_loopback(LOGOUT_BOOT_TIMEOUT)
+                        .inspect_err(|_| {
+                            self.stop();
+                        })?
+                }
+            };
+            let res = localapi(&lb, "POST", "/localapi/v0/logout", LOGOUT_TIMEOUT);
+            check_logout(res)?;
         }
         self.stop();
-        let dir = self
-            .config
-            .lock()
-            .expect("tailnet config lock")
-            .as_ref()
-            .map(|c| c.dir.clone());
-        if let Some(dir) = dir
-            && dir.exists()
-        {
+        if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|e| AppError::from(e.to_string()))?;
         }
         Ok(())
     }
 
     fn stop(&self) {
-        self.generation.fetch_add(1, Ordering::SeqCst);
         let node = {
             let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            g.generation += 1;
             g.running = false;
             g.loopback = None;
             g.state = Some(TailnetState::Stopped);
@@ -468,5 +591,85 @@ mod tests {
         assert!(t.start().is_err());
         assert_eq!(t.state(), TailnetState::Stopped);
         assert_eq!(t.proxy_url(), None);
+    }
+
+    fn embedded() -> EmbeddedTailnet {
+        EmbeddedTailnet::new(Arc::new(|_| {}))
+    }
+
+    #[test]
+    fn a_stale_generation_cannot_overwrite_stopped() {
+        let t = embedded();
+        let gen_id = {
+            let mut g = t.inner.lock().unwrap();
+            g.generation = 1;
+            g.running = true;
+            g.generation
+        };
+        let running = TailnetState::Running {
+            name: "n".into(),
+            ip: "100.1.1.1".into(),
+        };
+        assert_eq!(commit(&t.inner, gen_id, running.clone(), false), Some(true));
+        t.stop();
+        assert_eq!(t.state(), TailnetState::Stopped);
+        // stop の前に取った世代での更新は捨てられる。
+        assert_eq!(commit(&t.inner, gen_id, running, false), None);
+        let login = TailnetState::NeedsLogin { url: "u".into() };
+        assert_eq!(commit(&t.inner, gen_id, login, false), None);
+        assert_eq!(t.state(), TailnetState::Stopped);
+    }
+
+    #[test]
+    fn a_stale_boot_failure_does_not_clear_running() {
+        let t = embedded();
+        {
+            let mut g = t.inner.lock().unwrap();
+            g.generation = 2;
+            g.running = true;
+        }
+        let failed = TailnetState::Failed { reason: "x".into() };
+        assert_eq!(commit(&t.inner, 1, failed.clone(), true), None);
+        assert!(t.inner.lock().unwrap().running);
+        assert_eq!(commit(&t.inner, 2, failed.clone(), true), Some(true));
+        assert!(!t.inner.lock().unwrap().running);
+        assert_eq!(t.state(), failed);
+    }
+
+    #[test]
+    fn needs_machine_auth_is_its_own_state() {
+        assert_eq!(
+            state_from_status(r#"{"BackendState":"NeedsMachineAuth"}"#),
+            TailnetState::NeedsApproval
+        );
+    }
+
+    #[test]
+    fn logout_requires_204_and_hides_the_body() {
+        assert!(check_logout(Ok((204, String::new()))).is_ok());
+        let err = check_logout(Ok((500, "secret-token".into()))).unwrap_err();
+        let text = format!("{err:?}");
+        assert!(text.contains("500"));
+        assert!(!text.contains("secret-token"));
+        assert!(check_logout(Err("refused".into())).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn state_dir_is_private_even_if_it_already_exists() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!("infodesk-ts-{}", std::process::id()));
+        let dir = base.join("tailscale");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        prepare_dir(&dir).unwrap();
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        std::fs::remove_dir_all(&base).unwrap();
+        assert_eq!(mode, 0o700);
+    }
+
+    #[test]
+    fn logout_without_configuration_fails() {
+        assert!(embedded().logout().is_err());
     }
 }

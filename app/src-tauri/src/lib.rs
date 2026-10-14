@@ -18,8 +18,32 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 use crate::state::{AppState, EVENT_ITEMS, EVENT_STATUS};
 
+/// tsnet は log.tailscale.com へログを送る。止めるのは環境変数 `TS_NO_LOGS_NO_SUPPORT`
+/// (tailscale.com/envknob/envknob.go の `NoLogsNoSupport`、logpolicy.go:700 と :874)。
+/// ただし Go のランタイムは起動時 (libtailscale を読み込んだとき) に環境を写し取るので、
+/// 後から `set_var` しても Go からは見えない。そのため、未設定なら変数を付けて自分自身を
+/// `exec` し直す (同じプロセスのまま。この時点ではスレッドも tsnet の端末もない)。
+/// `set_var` を使わないので Rust 2024 の unsafe も要らない。
+fn ensure_no_tailscale_logs() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        if std::env::var_os(tailnet::NO_LOGS_ENV).is_some() {
+            return;
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            let err = std::process::Command::new(exe)
+                .args(std::env::args_os().skip(1))
+                .env(tailnet::NO_LOGS_ENV, "true")
+                .exec();
+            eprintln!("tailnet: could not re-exec to disable log uploads: {err}");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    ensure_no_tailscale_logs();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
