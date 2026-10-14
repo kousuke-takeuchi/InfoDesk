@@ -67,7 +67,7 @@ An invalid time or weekday value is ignored and the default is used.
 
 The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
 
-Sync keeps its own keys too: `sync.device_name` (the name of this Mac, edited in the Sync tab), `sync.device_id` and `sync.db_id` (random ids made on first sync), `sync.account_email`, `sync.last_sync_at` and `sync.last_compaction_at`. Only `sync.enabled` is a plain setting; the Sync tab manages the others. Do not edit them. The Google refresh token is not in the database; it is in the macOS Keychain.
+Sync keeps its own keys too: `sync.device_name` (the name of this Mac, edited in the Sync tab), `sync.device_id` (a random id made on the first read or star change, or on the first sync, whichever comes first), `sync.db_id` (a random id made on the first sync), `sync.account_email`, `sync.last_sync_at` and `sync.last_compaction_at`. Only `sync.enabled` is a plain setting; the Sync tab manages the others. Do not edit them. The Google refresh token is not in the database; it is in the macOS Keychain.
 
 The app only accepts the keys above. Setting `app.launch_at_login` is done with the toggle, because it also registers the macOS LaunchAgent. With the [CLI](08-cli.md), `config set` writes any key without checking it, so type carefully.
 

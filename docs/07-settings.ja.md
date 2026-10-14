@@ -67,7 +67,7 @@
 
 スケジューラーは、実行済みの記録として `schedule.last_collect_at`、`schedule.last_daily_for`、`schedule.last_weekly_for`、`schedule.last_monthly_for` も持ちます。編集しないでください。
 
-同期も専用のキーを持ちます。`sync.device_name` (この Mac の名前。同期タブで編集)、`sync.device_id` と `sync.db_id` (初回の同期で作るランダムな id)、`sync.account_email`、`sync.last_sync_at`、`sync.last_compaction_at` です。普通の設定は `sync.enabled` だけで、ほかは同期タブが管理します。編集しないでください。Google の更新用トークンは DB ではなく macOS のキーチェーンにあります。
+同期も専用のキーを持ちます。`sync.device_name` (この Mac の名前。同期タブで編集)、`sync.device_id` (最初に既読かスターを変えたとき、または初回の同期の早いほうで作るランダムな id)、`sync.db_id` (初回の同期で作るランダムな id)、`sync.account_email`、`sync.last_sync_at`、`sync.last_compaction_at` です。普通の設定は `sync.enabled` だけで、ほかは同期タブが管理します。編集しないでください。Google の更新用トークンは DB ではなく macOS のキーチェーンにあります。
 
 アプリは上のキーだけを受け付けます。`app.launch_at_login` は macOS の LaunchAgent の登録も行うため、切替スイッチで変更します。[CLI](08-cli.ja.md) の `config set` は、キーを確かめずに何でも書き込むので、入力に注意してください。
 

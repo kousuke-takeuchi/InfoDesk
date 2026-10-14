@@ -20,6 +20,8 @@ pub const SETTING_LAST_SYNC_AT: &str = "sync.last_sync_at";
 pub const SETTING_LAST_COMPACTION_AT: &str = "sync.last_compaction_at";
 pub const FALLBACK_DEVICE_NAME: &str = "この Mac";
 pub const REAUTH_MESSAGE: &str = "Google の再ログインが必要です";
+/// 通信できなかった失敗 (`DriveError::Retryable`) に出す文。詳細は画面に出さない。
+pub const NETWORK_MESSAGE: &str = "ネットワークに接続できません。次の同期で再試行します。";
 
 /// 同期の状態。収集やダイジェストの `last_error` とは別に持つ。
 #[derive(Debug, Clone, Default, Serialize)]
@@ -97,7 +99,7 @@ pub fn refresh_status(state: &AppState) {
     } else {
         name
     };
-    let mut st = state.sync.lock().expect("sync lock");
+    let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
     st.available = oauth::oauth_config().is_some();
     st.enabled = enabled.as_deref() == Some("true");
     st.account_email = email.filter(|e| !e.is_empty());
@@ -108,13 +110,13 @@ pub fn refresh_status(state: &AppState) {
 /// 起動時に1回呼ぶ。サインイン済みかは、保存したメールアドレスの有無で決める。
 pub fn init_status(state: &AppState) {
     refresh_status(state);
-    let mut st = state.sync.lock().expect("sync lock");
+    let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
     st.signed_in = st.available && st.account_email.is_some();
 }
 
 pub fn status_now(state: &AppState) -> SyncStatus {
     refresh_status(state);
-    state.sync.lock().expect("sync lock").clone()
+    state.sync.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 fn update(state: &AppState, f: impl FnOnce(&mut SyncStatus)) {
@@ -169,8 +171,16 @@ pub fn signed_out(state: &AppState) {
     });
 }
 
+/// 有効にするときは、無効の間に残った未送信の操作を捨て、次の同期でスナップショットを作り直させる。
+/// 印の状態は記事の `*_changed_at` が持っているので、そのスナップショットで届く。
 pub fn set_enabled(state: &AppState, enabled: bool) -> AppResult<()> {
-    state.with_store(|s| s.set_setting(SETTING_ENABLED, if enabled { "true" } else { "false" }))?;
+    state.with_store(|s| {
+        if enabled {
+            s.discard_pending_ops()?;
+            s.set_setting(SETTING_LAST_COMPACTION_AT, "")?;
+        }
+        s.set_setting(SETTING_ENABLED, if enabled { "true" } else { "false" })
+    })?;
     update(state, |s| {
         s.enabled = enabled;
         if !enabled {
@@ -297,7 +307,10 @@ async fn run_once(state: &AppState) -> AppResult<()> {
         }
     })
     .daily_time;
-    let compact = compaction_due(parse_time(last_compaction), now, state.tz, daily_time);
+    // まだ一度もまとめていなければ、時刻を待たずにまとめて、今の印を届ける。
+    let last_compaction = parse_time(last_compaction);
+    let compact =
+        last_compaction.is_none() || compaction_due(last_compaction, now, state.tz, daily_time);
     let writer = state
         .sync
         .lock()
@@ -317,7 +330,7 @@ async fn run_once(state: &AppState) -> AppResult<()> {
             let stamp = now.to_rfc3339();
             let _ = state.with_store(|s| {
                 s.set_setting(SETTING_LAST_SYNC_AT, &stamp)?;
-                if compact {
+                if report.compacted {
                     s.set_setting(SETTING_LAST_COMPACTION_AT, &stamp)?;
                 }
                 Ok(())
@@ -333,21 +346,29 @@ async fn run_once(state: &AppState) -> AppResult<()> {
         Err(err) => {
             // 取り込みのあとで失敗しても、取り込み済みの変更は画面に出す必要がある。
             state.notify(EVENT_ITEMS);
-            if stale() {
-                // 実行中にサインインし直された。古い認証の結果は捨てる。
-                return Ok(());
+            {
+                // 古さの確認と書き換えを同じロックの中で行い、間に入ったサインインを消さない。
+                let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
+                if stale() {
+                    // 実行中にサインインし直された。古い認証の結果は捨てる。
+                    return Ok(());
+                }
+                match err {
+                    SyncError::Drive(DriveError::AuthExpired) => {
+                        reset_auth(state);
+                        let _ =
+                            state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
+                        st.signed_in = false;
+                        st.account_email = None;
+                        st.error = Some(REAUTH_MESSAGE.to_string());
+                    }
+                    SyncError::Drive(DriveError::Retryable(_)) => {
+                        st.error = Some(NETWORK_MESSAGE.to_string());
+                    }
+                    other => st.error = Some(other.to_string()),
+                }
             }
-            if matches!(err, SyncError::Drive(DriveError::AuthExpired)) {
-                reset_auth(state);
-                let _ = state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
-                update(state, |s| {
-                    s.signed_in = false;
-                    s.account_email = None;
-                    s.error = Some(REAUTH_MESSAGE.to_string());
-                });
-            } else {
-                record_error(state, &err.to_string());
-            }
+            state.notify(EVENT_SYNC);
         }
     }
     Ok(())
@@ -677,6 +698,122 @@ mod tests {
         sync_once(&state).await.unwrap();
         assert!(drive.fail_next.lock().unwrap().is_none());
         assert!(!state.sync_running.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn network_errors_show_a_fixed_message_without_detail() {
+        let (mut state, _) = test_state();
+        let drive = ready(&mut state);
+        *drive.fail_next.lock().unwrap() = Some(DriveError::Retryable(
+            "error sending request: tcp connect".into(),
+        ));
+        sync_once(&state).await.unwrap();
+        let err = state.sync.lock().unwrap().error.clone();
+        assert_eq!(
+            err.as_deref(),
+            Some("ネットワークに接続できません。次の同期で再試行します。")
+        );
+    }
+
+    /// 記事を1件足し、同期が無効の間に既読にする。
+    fn read_while_sync_is_off(state: &AppState) -> i64 {
+        use infodesk_core::model::{ItemFilter, NewItem};
+        state
+            .with_store(|s| {
+                s.set_setting(SETTING_ENABLED, "false")?;
+                let src = s.list_sources()?.remove(0);
+                let item = NewItem {
+                    url: "https://e.com/old".into(),
+                    title: "t".into(),
+                    excerpt: String::new(),
+                    author: None,
+                    published_at: None,
+                    score: None,
+                    image_url: None,
+                };
+                s.upsert_items(&src, &[item], &Utc::now())?;
+                let id = s.query_items(&ItemFilter::default())?[0].id;
+                s.set_read(id, true)?;
+                Ok(id)
+            })
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_first_sync_publishes_marks_even_before_the_daily_time() {
+        use infodesk_core::sync::format::{StateSnapshot, gunzip_json, gzip_json};
+        let (mut state, _) = test_state();
+        let drive = ready(&mut state);
+        let id = read_while_sync_is_off(&state);
+        state
+            .with_store(|s| {
+                s.set_setting(SETTING_ENABLED, "true")?;
+                s.set_setting("schedule.daily_time", "23:59")
+            })
+            .unwrap();
+        // Drive にはもう (空の) スナップショットがある。
+        let empty = StateSnapshot {
+            covers: Vec::new(),
+            state: Default::default(),
+        };
+        drive.put("state-snapshot.json.gz", gzip_json(&empty).unwrap());
+        sync_once(&state).await.unwrap();
+        let f = drive
+            .list()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|f| f.name == "state-snapshot.json.gz")
+            .unwrap();
+        let snap: StateSnapshot = gunzip_json(&drive.download(&f.id).await.unwrap()).unwrap();
+        assert!(snap.state[&id].read.as_ref().expect("published").value);
+        let last = state
+            .with_store(|s| s.get_setting(SETTING_LAST_COMPACTION_AT))
+            .unwrap();
+        assert!(parse_time(last).is_some());
+    }
+
+    #[test]
+    fn enabling_sync_drops_unsent_ops_and_asks_for_a_fresh_snapshot() {
+        let (state, _) = test_state();
+        let id = read_while_sync_is_off(&state);
+        state
+            .with_store(|s| {
+                s.set_setting(SETTING_ENABLED, "true")?;
+                s.set_starred(id, true)?;
+                s.set_setting(SETTING_ENABLED, "false")?;
+                s.set_setting(SETTING_LAST_COMPACTION_AT, &Utc::now().to_rfc3339())
+            })
+            .unwrap();
+        let (device, _) = state.with_store(|s| s.ensure_sync_ids()).unwrap();
+        assert_eq!(
+            state
+                .with_store(|s| s.pending_local_ops(&device))
+                .unwrap()
+                .len(),
+            1
+        );
+        set_enabled(&state, true).unwrap();
+        assert!(
+            state
+                .with_store(|s| s.pending_local_ops(&device))
+                .unwrap()
+                .is_empty()
+        );
+        let last = state
+            .with_store(|s| s.get_setting(SETTING_LAST_COMPACTION_AT))
+            .unwrap();
+        assert_eq!(parse_time(last), None);
+        // 無効にするときは何も消さない。
+        state.with_store(|s| s.set_read(id, false)).unwrap();
+        set_enabled(&state, false).unwrap();
+        assert_eq!(
+            state
+                .with_store(|s| s.pending_local_ops(&device))
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]

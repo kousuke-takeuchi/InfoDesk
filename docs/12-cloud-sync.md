@@ -87,16 +87,17 @@ Retention:
 - Articles and daily digests: the last 60 days (Mac dates). Older `day-*` and `digest-day-*` files are deleted by the Mac.
 - Weekly and monthly digests: the last 400 days.
 - Once a day the Mac folds all change batches into `state-snapshot.json.gz` and deletes the batches it covered. Uploaded change records on the Mac older than 30 days are also pruned.
+- The first sync, and the first sync after you turn "同期する" on again, always writes `state-snapshot.json.gz`. It carries the read and starred marks you set before, including marks set before sync existed or while sync was off. While sync is off, the Mac keeps each mark's time but does not record change batches to send.
 - The phone keeps its local copy until you delete it from its settings.
 
-If you reset the Mac database, its article ids change. A new database id in `manifest.json` tells the phone to discard its copy and fetch again.
+If you reset the Mac database, its article ids change. On its next sync the Mac sees the old database id in `manifest.json`, deletes all change batches and the old `state-snapshot.json.gz` without applying them (their article ids point at other articles), and publishes the new database. Marks made on the phone that the Mac had not yet imported are lost. The new database id in `manifest.json` tells the phone to discard its copy and fetch again.
 
 ## 5. Troubleshooting
 
 - **"Google の再ログインが必要です" (re-login needed).** The stored token no longer works (you revoked access in your Google account, the password changed, or the token expired). Sync stops. Press "ログアウト" if shown, then "Google でログイン" again.
 - **Sign-in never finishes.** The browser must be able to reach `http://127.0.0.1` on your own Mac, because Google sends the result back there. The sign-in waits for 5 minutes, then gives up. Press the button again.
 - **Drive is full.** The Mac's files are small (compressed JSON), but app data counts against your Drive storage. If Google reports a storage error, the sync fails and shows the error. Free space in your Google account and press "今すぐ同期".
-- **Rate limits and network errors.** Network errors, HTTP 429, 5xx and Drive rate limit errors stop that sync. The next sync retries. Nothing is lost. The error appears on the sync line of the Sync tab.
+- **Rate limits and network errors.** Network errors, HTTP 429, 5xx and Drive rate limit errors stop that sync. The next sync retries. Nothing is lost. The sync line of the Sync tab shows "ネットワークに接続できません。次の同期で再試行します。" (cannot reach the network; the next sync retries).
 - **"このビルドでは同期を使えません".** The build has no `google-oauth.json`. See section 3.
 - **A phone mark does not show up on the Mac.** Marks are imported at each sync. Press "今すぐ同期" on the Mac.
 - To stop sync, turn off "同期する", or press "ログアウト". Files already on Drive stay there until you remove them from Drive's "Manage apps" settings.

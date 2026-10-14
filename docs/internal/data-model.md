@@ -163,7 +163,7 @@ erDiagram
 - `ai_summary` は記事要約(日本語1〜2文)。上位N件(設定 `summary.top_n`)にだけ付く。
 - `image_url` は収集時に1回だけ決める(`https` のみ。決まらなければNULL)。既存の記事には遡らない。
 - `fetched_at` が期間の所属の基準(ダイジェストの集計も同じ)。
-- `read_changed_at` / `starred_changed_at`(RFC3339、NULL可)と `read_changed_by` / `starred_changed_by`(端末ID)は、既読とスターを最後に変えた時刻と端末。同期のぶつかり合いの判定に使う。NULL は「同期の対象になる変更がまだ無い」。
+- `read_changed_at` / `starred_changed_at`(RFC3339、NULL可)と `read_changed_by` / `starred_changed_by`(端末ID)は、既読とスターを最後に変えた時刻と端末。同期のぶつかり合いの判定に使う。NULL は「同期の対象になる変更がまだ無い」。版5への移行で、既読やスターが付いていた記事には `1970-01-01T00:00:00.000Z` を入れ(端末は NULL)、最初の同期のスナップショットで届ける。どの端末の実際の操作にも負ける。
 - `idx_items_category_fetched(category, fetched_at)` がカテゴリーと期間の絞り込みを支える。
 
 ### items_fts と items_words
@@ -254,7 +254,7 @@ stateDiagram-v2
 
 クラウド同期用(版5)。実装は `store/sync.rs`。
 
-- `sync_ops`: Macで起きた既読とスターの操作。`set_read`、`set_starred`、`mark_all_read` が書く。`field` は `read` か `starred`、`value` は0か1、`at` は操作の時刻、`uploaded` は `ops-*` として書き出し済みか(0/1)。他端末の操作の取り込みは、ここに書かない。書き出し済みで30日を過ぎた行はまとめのときに消す。
+- `sync_ops`: Macで起きた既読とスターの操作。`set_read`、`set_starred`、`mark_all_read` が書く。ただし `sync.enabled` が `true` のときだけで、無効の間は `*_changed_at` と `*_changed_by` だけを更新する。同期を有効にするときに、送っていない行 (`uploaded = 0`) を消す。`field` は `read` か `starred`、`value` は0か1、`at` は操作の時刻、`uploaded` は `ops-*` として書き出し済みか(0/1)。他端末の操作の取り込みは、ここに書かない。書き出し済みで30日を過ぎた行はまとめのときに消す。
 - `sync_files`: Driveに関する控え。`kind` で取り込み済みの `ops-*` と、書き出し済みのファイルを分ける。`name` が主キー、`drive_id` はDrive上のファイルid、`sha256` と `fingerprint` は変更の有無の判断に使う。
 
 同期の設定キー(`DEFAULT_SETTINGS` にあるのは `sync.enabled` だけ。残りは同期の処理が書く内部キーで、画面から直接は読み書きしない):
@@ -262,7 +262,7 @@ stateDiagram-v2
 | キー | 内容 |
 |---|---|
 | `sync.enabled` | 既定 `false`。同期のオンとオフ |
-| `sync.device_id` | この Mac の端末ID(初回の同期で作るUUID) |
+| `sync.device_id` | この Mac の端末ID(最初の既読かスターの変更、または初回の同期の早いほうで作るUUID) |
 | `sync.db_id` | このDBの識別子(UUID)。作り直すと変わり、モバイルが控えを捨てる合図になる |
 | `sync.device_name` | 端末名。既定はコンピューター名 |
 | `sync.account_email` | ログイン中のメールアドレス |

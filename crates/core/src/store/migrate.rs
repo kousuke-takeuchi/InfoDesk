@@ -35,6 +35,8 @@ const MIGRATIONS: &[(i32, &str)] = &[
          ALTER TABLE items ADD COLUMN starred_changed_at TEXT;
          ALTER TABLE items ADD COLUMN read_changed_by TEXT;
          ALTER TABLE items ADD COLUMN starred_changed_by TEXT;
+         UPDATE items SET read_changed_at = '1970-01-01T00:00:00.000Z' WHERE read = 1;
+         UPDATE items SET starred_changed_at = '1970-01-01T00:00:00.000Z' WHERE starred = 1;
          CREATE TABLE IF NOT EXISTS sync_ops (
              id INTEGER PRIMARY KEY,
              item_id INTEGER NOT NULL,
@@ -195,5 +197,44 @@ mod tests {
             .query_row("SELECT title FROM items", [], |r| r.get(0))
             .unwrap();
         assert_eq!(title, "残る記事");
+    }
+
+    #[test]
+    fn version_5_stamps_marks_set_before_the_upgrade_with_the_epoch() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute_batch("ALTER TABLE items ADD COLUMN image_url TEXT; PRAGMA user_version = 4;")
+            .unwrap();
+        for (url, read, starred) in [
+            ("https://e.com/read", 1, 0),
+            ("https://e.com/star", 0, 1),
+            ("https://e.com/none", 0, 0),
+        ] {
+            conn.execute(
+                "INSERT INTO items(source_id, source_name, category, url, title, excerpt, fetched_at, read, starred) \
+                 VALUES (NULL, 'S', 'tech_jp', ?1, 't', '', '2026-10-09T00:00:00Z', ?2, ?3)",
+                rusqlite::params![url, read, starred],
+            )
+            .unwrap();
+        }
+        migrate(&conn).unwrap();
+        let row = |url: &str| -> (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) {
+            conn.query_row(
+                "SELECT read_changed_at, read_changed_by, starred_changed_at, starred_changed_by \
+                 FROM items WHERE url = ?1",
+                [url],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap()
+        };
+        let epoch = Some("1970-01-01T00:00:00.000Z".to_string());
+        assert_eq!(row("https://e.com/read"), (epoch.clone(), None, None, None));
+        assert_eq!(row("https://e.com/star"), (None, None, epoch, None));
+        assert_eq!(row("https://e.com/none"), (None, None, None, None));
     }
 }

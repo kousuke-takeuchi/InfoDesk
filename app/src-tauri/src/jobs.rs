@@ -620,6 +620,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn collect_still_works_after_a_launched_sync_fails_with_auth_expired() {
+        use infodesk_core::sync::drive::{DriveError, DriveStore, MemoryDrive};
+        let (mut state, _) = test_state();
+        use_mock(&mut state, Ok("要約"));
+        let drive = Arc::new(MemoryDrive::new());
+        *drive.fail_next.lock().unwrap() = Some(DriveError::AuthExpired);
+        let d = drive.clone();
+        state.drive_factory = Arc::new(move || Ok(d.clone() as Arc<dyn DriveStore>));
+        state
+            .with_store(|s| s.set_setting(crate::sync::SETTING_ENABLED, "true"))
+            .unwrap();
+        state.sync.lock().unwrap().signed_in = true;
+        let state = Arc::new(state);
+        let runs: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> = Arc::default();
+        let (weak, handles) = (Arc::downgrade(&state), runs.clone());
+        state.set_sync_launcher(Arc::new(move || {
+            let weak = weak.clone();
+            handles.lock().unwrap().push(tokio::spawn(async move {
+                if let Some(st) = weak.upgrade() {
+                    let _ = crate::sync::sync_once(&st).await;
+                }
+            }));
+        }));
+        let server = MockServer::start().await;
+        one_rss_source(&state, &server, 200).await;
+        let drain = || std::mem::take(&mut *runs.lock().unwrap());
+
+        run_collect(&state).await.unwrap();
+        let launched = drain();
+        assert_eq!(launched.len(), 1);
+        for h in launched {
+            h.await.unwrap();
+        }
+        let sync = state.sync.lock().unwrap().clone();
+        assert!(!sync.signed_in);
+        assert_eq!(sync.error.as_deref(), Some(crate::sync::REAUTH_MESSAGE));
+
+        let again = run_collect(&state).await.unwrap();
+        assert!(again.failed_sources.is_empty());
+        for h in drain() {
+            h.await.unwrap();
+        }
+        let status = state.status();
+        assert!(!status.collecting);
+        assert_eq!(status.last_error, None);
+    }
+
+    #[tokio::test]
     async fn second_collect_while_running_is_rejected() {
         // Review Focus 1
         let (state, _) = test_state();

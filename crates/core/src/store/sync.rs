@@ -102,7 +102,7 @@ fn device_id_in(conn: &Connection) -> Result<String> {
     }
 }
 
-/// 呼び出し側のトランザクションの中で使う `set_flag`。
+/// 呼び出し側のトランザクションの中で使う `set_flag`。`sync_ops` に足すのは同期が有効なときだけ。
 pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool) -> Result<()> {
     let (col, at_col) = match field {
         Field::Read => ("read", "read_changed_at"),
@@ -125,15 +125,25 @@ pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool)
         &format!("UPDATE items SET {col} = ?2, {at_col} = ?3, {by_col} = ?4 WHERE id = ?1"),
         params![id, value, now, device],
     )?;
-    conn.execute(
-        "INSERT INTO sync_ops(item_id, field, value, at) VALUES (?1, ?2, ?3, ?4)",
-        params![id, field_name(field), value, now],
-    )?;
+    // 同期が無効の間は記録しない。印の時刻は残るので、有効にした後の最初の同期で送れる。
+    let enabled: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'sync.enabled'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if enabled.as_deref() == Some("true") {
+        conn.execute(
+            "INSERT INTO sync_ops(item_id, field, value, at) VALUES (?1, ?2, ?3, ?4)",
+            params![id, field_name(field), value, now],
+        )?;
+    }
     Ok(())
 }
 
 impl Store {
-    /// 値が変わったときだけ、列と `*_changed_at` を更新し、`sync_ops` に1行足す。
+    /// 値が変わったときだけ、列と `*_changed_at` を更新し、同期が有効なら `sync_ops` に1行足す。
     pub(super) fn set_flag(&self, id: i64, field: Field, value: bool) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         set_flag_in(&tx, id, field, value)?;
@@ -257,6 +267,14 @@ impl Store {
         }
         tx.commit()?;
         Ok(applied)
+    }
+
+    /// まだ送っていない `sync_ops` を消し、消した行数を返す。
+    /// 同期を有効にしたときに呼ぶ。印の状態は `*_changed_at` が持ち、最初の同期でまとめて送る。
+    pub fn discard_pending_ops(&self) -> Result<usize> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM sync_ops WHERE uploaded = 0", [])?)
     }
 
     /// 送信済みで `older_than` より前の `sync_ops` を消し、消した行数を返す。
@@ -564,7 +582,49 @@ mod tests {
     }
 
     fn store() -> Store {
-        store_with_source(Category::TechJp).0
+        let s = store_with_source(Category::TechJp).0;
+        s.set_setting("sync.enabled", "true").unwrap();
+        s
+    }
+
+    #[test]
+    fn marks_are_stamped_but_not_journaled_while_sync_is_off() {
+        let s = store_with_source(Category::TechJp).0;
+        let id = insert_item(&s, "https://a/1");
+        s.set_read(id, true).unwrap();
+        s.set_starred(id, true).unwrap();
+        s.mark_all_read(&ItemFilter::default()).unwrap();
+        assert!(s.pending_local_ops("mac").unwrap().is_empty());
+        let device = s.get_setting("sync.device_id").unwrap().unwrap();
+        let stamps = s.local_state_stamps(None, "unused").unwrap();
+        let read = stamps[&id].read.clone().unwrap();
+        assert!(read.value);
+        assert_eq!(read.device, device);
+        assert!(stamps[&id].starred.clone().unwrap().value);
+    }
+
+    #[test]
+    fn discarding_pending_ops_keeps_uploaded_rows_and_stamps() {
+        let s = store();
+        let a = insert_item(&s, "https://a/1");
+        let b = insert_item(&s, "https://a/2");
+        s.set_read(a, true).unwrap();
+        let sent: Vec<i64> = s
+            .pending_local_ops("mac")
+            .unwrap()
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect();
+        s.mark_ops_uploaded(&sent).unwrap();
+        s.set_read(b, true).unwrap();
+        assert_eq!(s.discard_pending_ops().unwrap(), 1);
+        assert!(s.pending_local_ops("mac").unwrap().is_empty());
+        assert_eq!(s.prune_uploaded_ops("2999-01-01T00:00:00.000Z").unwrap(), 1);
+        assert!(
+            s.local_state_stamps(None, "mac").unwrap()[&b]
+                .read
+                .is_some()
+        );
     }
 
     #[test]

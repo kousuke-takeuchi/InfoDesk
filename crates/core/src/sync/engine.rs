@@ -1,4 +1,4 @@
-//! One sync pass: import remote ops, upload local ops, write changed files,
+//! One sync pass: check the database id, import remote ops, upload local ops, write changed files,
 //! compact, apply retention, and write the manifest last.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -62,6 +62,9 @@ pub struct SyncReport {
     pub built_files: usize,
     /// Problems that did not stop the pass, such as unreadable remote files.
     pub warnings: Vec<String>,
+    /// True when compaction ran in this pass, asked for or forced because
+    /// Drive had no snapshot.
+    pub compacted: bool,
 }
 
 /// True when today's `daily_time` has passed and the last compaction was before it.
@@ -307,10 +310,55 @@ struct Pass<'a> {
     now_s: String,
     remote: BTreeMap<String, RemoteFile>,
     hashes: BTreeMap<String, String>,
+    /// The manifest on Drive when the pass started, downloaded once.
+    old_manifest: Option<Manifest>,
     report: SyncReport,
 }
 
 impl Pass<'_> {
+    /// Downloads and parses the manifest. An unparsable one counts as missing
+    /// and is rewritten at the end of the pass.
+    async fn read_manifest(&mut self) -> Result<(), SyncError> {
+        if let Some(f) = self.remote.get(MANIFEST).cloned() {
+            let bytes = self.drive.download(&f.id).await?;
+            self.old_manifest = serde_json::from_slice::<Manifest>(&bytes).ok();
+        }
+        Ok(())
+    }
+
+    /// Drive holds files written for another database, whose item ids mean
+    /// other articles. Deletes every ops file and the snapshot without reading
+    /// them, and forgets their `sync_files` rows. The pass then publishes this
+    /// database as if Drive were empty.
+    async fn reset_for_new_database(&mut self, old_db: &str) -> Result<(), SyncError> {
+        let is_stale =
+            |n: &str| n == SNAPSHOT || matches!(parse_file_name(n), Some(FileKind::Ops { .. }));
+        let on_drive: Vec<String> = self
+            .remote
+            .keys()
+            .filter(|n| is_stale(n))
+            .cloned()
+            .collect();
+        for name in &on_drive {
+            self.delete_remote(name).await?;
+        }
+        locked(self.store, |s| {
+            for kind in ["in", "out"] {
+                for row in s.sync_files(kind)? {
+                    if is_stale(&row.name) {
+                        s.delete_sync_file(&row.name)?;
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        self.report.warnings.push(format!(
+            "Drive held sync data of another database ({old_db}); deleted {} ops and snapshot files without applying them",
+            on_drive.len()
+        ));
+        Ok(())
+    }
+
     /// Writes `bytes` unless the recorded hash already matches the Drive copy.
     /// `fingerprint` is stored with the 'out' row.
     async fn write_out(
@@ -534,6 +582,25 @@ impl Pass<'_> {
         }
     }
 
+    /// Applies the Mac's stamps (including ones whose `sync_ops` row was pruned
+    /// or never written) and keeps only retained items.
+    fn fold_local_stamps(
+        &self,
+        state: &mut BTreeMap<i64, ItemState>,
+        input: &SyncInput,
+        retained: &HashSet<i64>,
+    ) -> Result<(), SyncError> {
+        let ids: Vec<i64> = retained.iter().copied().collect();
+        let local = locked(self.store, |s| {
+            s.local_state_stamps(Some(&ids), &input.device_id)
+        })?;
+        for op in local_ops(local) {
+            apply_op(state, &op);
+        }
+        state.retain(|id, _| retained.contains(id));
+        Ok(())
+    }
+
     async fn compact(
         &mut self,
         input: &SyncInput,
@@ -544,26 +611,31 @@ impl Pass<'_> {
 
         let names = self.ops_names();
         let existing = self.read_snapshot().await?;
-        if names.is_empty() {
-            // No new ops: only re-apply retention to a readable snapshot, and
-            // rewrite it only if that removed something.
-            match existing {
-                None => return Ok(()),
-                Some((mut snap, false)) => {
-                    let before = snap.state.len();
-                    snap.state.retain(|id, _| retained.contains(id));
-                    if snap.state.len() != before {
-                        self.write_out(SNAPSHOT, st(gzip_json(&snap))?, MIME_GZ, None)
-                            .await?;
-                    }
-                    return Ok(());
-                }
-                Some((_, true)) => {}
+        if names.is_empty()
+            && let Some((mut snap, false)) = existing
+        {
+            // No new ops: fold in the local stamps (marks that never had an
+            // ops file, such as ones set while sync was off) and re-apply
+            // retention. Rewrite only if that changed the state.
+            let before = snap.state.clone();
+            self.fold_local_stamps(&mut snap.state, input, retained)?;
+            if snap.state != before {
+                self.write_out(SNAPSHOT, st(gzip_json(&snap))?, MIME_GZ, None)
+                    .await?;
             }
+            return Ok(());
         }
+        // With no snapshot yet, the first one is built from the local stamps
+        // even when there are no ops files.
         let mut state = existing.map(|(s, _)| s.state).unwrap_or_default();
         let mut covers = Vec::new();
         for name in &names {
+            // This Mac's own ops are already in its stamps, read below.
+            if matches!(parse_file_name(name), Some(FileKind::Ops { device }) if device == input.device_id)
+            {
+                covers.push(name.clone());
+                continue;
+            }
             let (_, parsed) = self.download_ops(name).await?;
             let Some(file) = parsed else { continue };
             for op in file.ops.iter().filter_map(normalize_op) {
@@ -571,15 +643,7 @@ impl Pass<'_> {
             }
             covers.push(name.clone());
         }
-        // The Mac's own stamps, including ones whose `sync_ops` row was pruned.
-        let ids: Vec<i64> = retained.iter().copied().collect();
-        let local = locked(self.store, |s| {
-            s.local_state_stamps(Some(&ids), &input.device_id)
-        })?;
-        for op in local_ops(local) {
-            apply_op(&mut state, &op);
-        }
-        state.retain(|id, _| retained.contains(id));
+        self.fold_local_stamps(&mut state, input, retained)?;
         let snapshot = StateSnapshot {
             covers: covers.clone(),
             state,
@@ -659,18 +723,16 @@ impl Pass<'_> {
             files,
         };
         let existing = self.remote.get(MANIFEST).cloned();
-        if let Some(f) = &existing {
-            // `written_at` means "when the content last changed": an identical
-            // manifest (ignoring `written_at`) is not rewritten.
-            if let Ok(bytes) = self.drive.download(&f.id).await
-                && let Ok(old) = serde_json::from_slice::<Manifest>(&bytes)
-                && (Manifest {
-                    written_at: manifest.written_at.clone(),
-                    ..old
-                }) == manifest
-            {
-                return Ok(());
-            }
+        // `written_at` means "when the content last changed": an identical
+        // manifest (ignoring `written_at`) is not rewritten.
+        if existing.is_some()
+            && let Some(old) = self.old_manifest.take()
+            && (Manifest {
+                written_at: manifest.written_at.clone(),
+                ..old
+            }) == manifest
+        {
+            return Ok(());
         }
         let bytes = st(serde_json::to_vec(&manifest).map_err(Into::into))?;
         let file = match existing {
@@ -695,13 +757,26 @@ pub async fn run_sync(
         now_s: op_time(input.now),
         remote: listing.into_iter().map(|f| (f.name.clone(), f)).collect(),
         hashes: BTreeMap::new(),
+        old_manifest: None,
         report: SyncReport::default(),
     };
+    pass.read_manifest().await?;
+    if let Some(old_db) = pass
+        .old_manifest
+        .as_ref()
+        .map(|m| m.db_id.clone())
+        .filter(|id| *id != input.db_id)
+    {
+        pass.reset_for_new_database(&old_db).await?;
+    }
     pass.import_remote_ops(input).await?;
     pass.upload_local_ops(input).await?;
     let retained = pass.write_outputs(input).await?;
-    if input.compact {
+    // Without a snapshot the phone cannot see marks that have no ops file,
+    // such as ones set before sync existed, so the first pass always compacts.
+    if input.compact || !pass.remote.contains_key(SNAPSHOT) {
         pass.compact(input, &retained).await?;
+        pass.report.compacted = true;
     }
     pass.apply_retention(input).await?;
     pass.write_manifest(input).await?;
@@ -739,7 +814,19 @@ mod tests {
     const NOW: &str = "2026-10-13T12:00:00Z";
 
     fn setup() -> Mutex<Store> {
-        Mutex::new(store_with_source(Category::TechJp).0)
+        let s = store_with_source(Category::TechJp).0;
+        s.set_setting("sync.enabled", "true").unwrap();
+        s.set_setting("sync.device_id", "mac").unwrap();
+        Mutex::new(s)
+    }
+
+    /// An empty snapshot, so a pass compacts only when asked to.
+    fn put_empty_snapshot(drive: &MemoryDrive) {
+        let snap = StateSnapshot {
+            covers: Vec::new(),
+            state: BTreeMap::new(),
+        };
+        drive.put(SNAPSHOT, gzip_json(&snap).unwrap());
     }
 
     fn add_item(m: &Mutex<Store>, url: &str, fetched: &str) -> i64 {
@@ -877,6 +964,7 @@ mod tests {
         let id = add_item(&m, "https://a/1", "2026-10-13T03:00:00Z");
         m.lock().unwrap().set_read(id, true).unwrap();
         let drive = MemoryDrive::new();
+        put_empty_snapshot(&drive);
         let first = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
         assert_eq!(first.uploaded_ops, 1);
         let ops_files: Vec<String> = drive
@@ -977,12 +1065,13 @@ mod tests {
             "meta.json.gz",
             "day-2026-10-12.json.gz",
             "day-2026-10-13.json.gz",
+            "state-snapshot.json.gz",
             "manifest.json",
         ] {
             assert!(names.contains(&n.to_string()), "{n} in {names:?}");
         }
-        assert_eq!(names.len(), 4, "no duplicates: {names:?}");
-        assert_eq!(report.written_files.len(), 3 - partial + 1);
+        assert_eq!(names.len(), 5, "no duplicates: {names:?}");
+        assert_eq!(report.written_files.len(), 4 - partial + 1);
     }
 
     #[tokio::test]
@@ -1322,6 +1411,7 @@ mod tests {
             }
             manifest
         }
+        put_empty_snapshot(&drive);
         run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
         let first = check(&drive).await;
         assert!(first.files.contains_key(&phone));
@@ -1511,6 +1601,261 @@ mod tests {
         assert_eq!(snap.covers, vec!["ops-phone-x.json"]);
         let second = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
         assert!(!second.written_files.contains(&SNAPSHOT.to_string()));
+    }
+
+    const EPOCH: &str = "1970-01-01T00:00:00.000Z";
+
+    /// A read mark set before schema v5, as the v5 migration leaves it.
+    fn pre_v5_read(m: &Mutex<Store>, id: i64) {
+        m.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE items SET read = 1, read_changed_at = ?2 WHERE id = ?1",
+                rusqlite::params![id, EPOCH],
+            )
+            .unwrap();
+    }
+
+    /// Records the name of every file downloaded.
+    #[derive(Default)]
+    struct Recording {
+        inner: MemoryDrive,
+        downloads: std::sync::Mutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl DriveStore for Recording {
+        async fn list(&self) -> Result<Vec<RemoteFile>, DriveError> {
+            self.inner.list().await
+        }
+        async fn download(&self, id: &str) -> Result<Vec<u8>, DriveError> {
+            let name = self
+                .inner
+                .list()
+                .await?
+                .into_iter()
+                .find(|f| f.id == id)
+                .map(|f| f.name)
+                .unwrap_or_default();
+            self.downloads.lock().unwrap().push(name);
+            self.inner.download(id).await
+        }
+        async fn create(
+            &self,
+            name: &str,
+            bytes: Vec<u8>,
+            mime: &str,
+        ) -> Result<RemoteFile, DriveError> {
+            self.inner.create(name, bytes, mime).await
+        }
+        async fn update(
+            &self,
+            id: &str,
+            bytes: Vec<u8>,
+            mime: &str,
+        ) -> Result<RemoteFile, DriveError> {
+            self.inner.update(id, bytes, mime).await
+        }
+        async fn delete(&self, id: &str) -> Result<(), DriveError> {
+            self.inner.delete(id).await
+        }
+    }
+
+    impl Recording {
+        fn take(&self) -> Vec<String> {
+            std::mem::take(&mut *self.downloads.lock().unwrap())
+        }
+    }
+
+    #[tokio::test]
+    async fn pre_v5_marks_reach_the_snapshot_on_the_first_pass() {
+        let m = setup();
+        let id = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        pre_v5_read(&m, id);
+        let drive = MemoryDrive::new();
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(report.compacted);
+        let snap = snapshot_of(&drive).await;
+        let r = snap.state[&id]
+            .read
+            .as_ref()
+            .expect("pre-v5 mark published");
+        assert!(r.value);
+        assert_eq!(r.at, EPOCH);
+        assert_eq!(r.device, "mac");
+        assert!(manifest_of(&drive).await.files.contains_key(SNAPSHOT));
+        // Once the snapshot exists, a pass without `compact` leaves it alone.
+        let again = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(!again.compacted);
+    }
+
+    #[tokio::test]
+    async fn compaction_without_ops_folds_local_stamps_into_the_snapshot() {
+        let m = setup();
+        let id = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        pre_v5_read(&m, id);
+        let drive = MemoryDrive::new();
+        put_empty_snapshot(&drive);
+        run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        let snap = snapshot_of(&drive).await;
+        assert!(snap.state[&id].read.as_ref().expect("folded").value);
+        let again = run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        assert!(!again.written_files.contains(&SNAPSHOT.to_string()));
+    }
+
+    #[tokio::test]
+    async fn a_phone_op_beats_the_epoch_stamp() {
+        let m = setup();
+        let id = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        pre_v5_read(&m, id);
+        let drive = MemoryDrive::new();
+        put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id,
+                Field::Read,
+                false,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!(report.applied_ops, 1);
+        assert!(!m.lock().unwrap().get_item(id).unwrap().unwrap().read);
+        let r = snapshot_of(&drive).await.state[&id].read.clone().unwrap();
+        assert!(!r.value);
+        assert_eq!(r.device, "phone");
+    }
+
+    fn put_manifest(drive: &MemoryDrive, db_id: &str) {
+        let manifest = Manifest {
+            schema: SCHEMA,
+            db_id: db_id.into(),
+            written_at: "2026-10-01T00:00:00.000Z".into(),
+            writer: "Old Mac".into(),
+            files: BTreeMap::new(),
+        };
+        drive.put(MANIFEST, serde_json::to_vec(&manifest).unwrap());
+    }
+
+    #[tokio::test]
+    async fn a_new_database_id_clears_old_sync_files_without_applying_them() {
+        let m = setup();
+        let id = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        m.lock().unwrap().set_starred(id, true).unwrap();
+        let drive = MemoryDrive::new();
+        put_manifest(&drive, "old-db");
+        let phone = put_ops(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            vec![op(
+                id,
+                Field::Read,
+                true,
+                "2999-01-01T00:00:00.000Z",
+                "phone",
+            )],
+        );
+        let old_mac = put_ops(
+            &drive,
+            "oldmac",
+            "2026-10-12T11:00:00.000Z",
+            vec![op(
+                id,
+                Field::Starred,
+                false,
+                "2999-01-01T00:00:00.000Z",
+                "oldmac",
+            )],
+        );
+        let mut stale = BTreeMap::new();
+        apply_op(
+            &mut stale,
+            &op(id, Field::Read, true, "2999-01-01T00:00:00.000Z", "phone"),
+        );
+        drive.put(
+            SNAPSHOT,
+            gzip_json(&StateSnapshot {
+                covers: vec!["ops-phone-x.json".into()],
+                state: stale,
+            })
+            .unwrap(),
+        );
+        // Rows left from the old database's files.
+        m.lock()
+            .unwrap()
+            .put_sync_file(&SyncFileRow {
+                name: phone.clone(),
+                kind: "in".into(),
+                drive_id: Some("gone".into()),
+                sha256: None,
+                updated_at: NOW.into(),
+                fingerprint: None,
+            })
+            .unwrap();
+
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!((report.imported_ops, report.applied_ops), (0, 0));
+        assert!(!report.warnings.is_empty());
+        let item = m.lock().unwrap().get_item(id).unwrap().unwrap();
+        assert!(!item.read, "stale phone op not applied");
+        assert!(item.starred, "stale old-Mac op not applied");
+        let names = drive.names();
+        assert!(!names.contains(&phone), "{names:?}");
+        assert!(!names.contains(&old_mac), "{names:?}");
+        assert!(m.lock().unwrap().sync_file(&phone).unwrap().is_none());
+        assert!(m.lock().unwrap().sync_file(&old_mac).unwrap().is_none());
+        let snap = snapshot_of(&drive).await;
+        assert!(!snap.covers.contains(&"ops-phone-x.json".to_string()));
+        assert!(snap.covers.iter().all(|c| c.starts_with("ops-mac-")));
+        assert!(snap.state[&id].read.is_none());
+        assert!(snap.state[&id].starred.as_ref().unwrap().value);
+        assert_eq!(manifest_of(&drive).await.db_id, "db1");
+    }
+
+    #[tokio::test]
+    async fn the_manifest_is_downloaded_once_per_pass() {
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = Recording::default();
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        drive.take();
+        let again = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(again.written_files.is_empty(), "{:?}", again.written_files);
+        assert_eq!(drive.take(), vec![MANIFEST.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn compaction_skips_downloading_own_ops_but_deletes_them() {
+        let m = setup();
+        let id = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = Recording::default();
+        run_sync(&m, &drive, &input(NOW, true)).await.unwrap();
+        m.lock().unwrap().set_read(id, true).unwrap();
+        run_sync(&m, &drive, &input("2026-10-13T12:01:00Z", false))
+            .await
+            .unwrap();
+        let own: Vec<String> = drive
+            .inner
+            .names()
+            .into_iter()
+            .filter(|n| n.starts_with("ops-mac-"))
+            .collect();
+        assert_eq!(own.len(), 1);
+        drive.take();
+        let report = run_sync(&m, &drive, &input("2026-10-13T12:02:00Z", true))
+            .await
+            .unwrap();
+        let downloads = drive.take();
+        assert!(!downloads.contains(&own[0]), "{downloads:?}");
+        assert!(report.deleted_files.contains(&own[0]));
+        let snap = snapshot_of(&drive.inner).await;
+        assert!(snap.covers.contains(&own[0]));
+        assert!(snap.state[&id].read.as_ref().unwrap().value);
     }
 
     #[test]
