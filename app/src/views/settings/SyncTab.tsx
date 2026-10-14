@@ -58,6 +58,7 @@ export function SyncTab() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [nasTest, setNasTest] = useState<{ text: string; ok: boolean } | null>(null);
   const [confirmForget, setConfirmForget] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const closeGuide = useCallback(() => setGuideOpen(false), []);
 
   const ticket = useRef(0);
@@ -95,6 +96,7 @@ export function SyncTab() {
     setNasTest(null);
     void run("backend", () => api.syncSetBackend(backend)).then((r) => { if (r.ok && backend === "nas" && status.nas_url === "") setGuideOpen(true); });
   };
+  const nasSaved = status.nas_url !== "" || status.nas_user !== "" || status.nas_password_set;
   const saveNas = (name: string, url: string, user: string, password: string | null) => run(name, () => api.syncSetNas(url, user, password)).then((r) => { if (r.ok) setNasTest(null); return r; });
   return (
     <>
@@ -152,6 +154,19 @@ export function SyncTab() {
               )}
               <button className="btn" disabled={busy.has("test")} onClick={() => run("test", () => api.syncTestNas().then((text) => { setNasTest({ text, ok: text === NAS_CHECK_OK }); }))}>{busy.has("test") ? "確かめています…" : "確かめる"}</button>
             </div>
+            {nasSaved && (
+              <div className="setting-row">
+                {confirmClear ? (
+                  <div className="cell-confirm">
+                    <span>NAS の URL、ユーザー名、パスワードを消します。消しますか?</span>
+                    <button className="btn btn-danger" disabled={busy.has("clear")} onClick={() => { void run("clear", () => api.syncClearNas()).then((r) => { setConfirmClear(false); if (r.ok) setNasTest(null); }); }}>消す</button>
+                    <button className="btn" onClick={() => setConfirmClear(false)}>やめる</button>
+                  </div>
+                ) : (
+                  <button className="btn" onClick={() => setConfirmClear(true)}>NAS の設定を消す</button>
+                )}
+              </div>
+            )}
             <button className="link-btn" onClick={() => setGuideOpen(true)}><BookOpen size={14} />NAS の準備を見る (初めての方へ)</button>
           </>
         ) : !status.available ? (

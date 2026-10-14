@@ -68,6 +68,13 @@ pub fn sync_set_backend(app: AppHandle, backend: String) -> AppResult<SyncStatus
     Ok(sync::status_now(&state))
 }
 
+/// NAS の URL、ユーザー名、パスワード (キーチェーン) を消す。
+#[tauri::command]
+pub fn sync_clear_nas(state: State<'_, AppState>) -> AppResult<SyncStatus> {
+    sync::clear_nas(&state)?;
+    Ok(sync::status_now(&state))
+}
+
 #[tauri::command]
 pub fn sync_set_nas(
     app: AppHandle,
@@ -81,18 +88,16 @@ pub fn sync_set_nas(
     Ok(sync::status_now(&state))
 }
 
-/// Tailscale を始める。ログインが要るときは、端末がブラウザーでログイン画面を開く。
-/// もうログイン待ちなら、同じログイン画面を開き直す。起動は待たされることがあるので、別スレッドで行う。
+/// 「Tailscale にログイン」が押された。ログイン画面を開くのはこの操作だけ。
+/// 端末を始め、ログインが要るならブラウザーでログイン画面を開く。もうログイン待ちなら、
+/// 同じログイン画面を開き直す (実行中の同期は止めない)。待たされうるので、別スレッドで行う。
 #[tauri::command]
 pub async fn tailnet_login(app: AppHandle) -> AppResult<SyncStatus> {
-    let tailnet = app.state::<AppState>().tailnet.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || tailnet.login())
+    let worker = app.clone();
+    tauri::async_runtime::spawn_blocking(move || sync::login_tailnet(&worker.state::<AppState>()))
         .await
-        .map_err(|e| AppError::from(format!("Tailscale の起動に失敗しました: {e}")))?;
-    let state = app.state::<AppState>();
-    sync::tailnet_changed(&state);
-    result?;
-    Ok(sync::status_now(&state))
+        .map_err(|e| AppError::from(format!("Tailscale の起動に失敗しました: {e}")))??;
+    Ok(sync::status_now(&app.state::<AppState>()))
 }
 
 /// Tailscale からログアウトする。最長で 90 秒ほど待つので、別スレッドで行う。

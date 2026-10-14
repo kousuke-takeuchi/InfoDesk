@@ -41,9 +41,14 @@ pub const NAS_URL_MESSAGE: &str =
 /// WebDAV クライアントを作れなかった。詳細 (プロキシの資格情報を含みうる) は出さない。
 pub const NAS_PREPARE_MESSAGE: &str = "NAS への接続を準備できません";
 pub const TAILNET_LOGIN_MESSAGE: &str = "Tailscale にログインしてください";
+/// ログイン済みの端末はあるが、止まっている (同期が無効など)。
+pub const TAILNET_STOPPED_MESSAGE: &str = "Tailscale が停止中です";
 pub const TAILNET_APPROVAL_MESSAGE: &str = "Tailscale の管理画面でこの端末を承認してください";
 pub const NAS_INCOMPLETE_MESSAGE: &str = "NAS の URL、ユーザー名、パスワードを入力してください";
 pub const NAS_CHECK_OK: &str = "読み書きできました";
+/// URL のホストが tailnet の端末ではない。外のネットワークには送らない。
+pub const NAS_NOT_IN_TAILNET_MESSAGE: &str =
+    "NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください";
 pub const FALLBACK_DEVICE_NAME: &str = "この Mac";
 pub const REAUTH_MESSAGE: &str = "Google の再ログインが必要です";
 /// 通信できなかった失敗 (`DriveError::Retryable`) に出す文。詳細は画面に出さない。
@@ -293,10 +298,15 @@ fn make_drive_for(
 }
 
 /// NAS の保存先を作る。Tailscale が Running でなければ、直接つながずに止める。
+/// URL のホストが tailnet の端末でなければ止める (tsnet の SOCKS5 プロキシは、tailnet にない宛先を
+/// システムのネットワークへそのまま出してしまう)。端末なら、宛先をその Tailscale の IP に書き換える。
 fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStore>> {
     let proxy = match state.tailnet.state() {
         TailnetState::Running { .. } => state.tailnet.proxy_url(),
         TailnetState::NeedsApproval => return Err(TAILNET_APPROVAL_MESSAGE.to_string().into()),
+        TailnetState::Stopped if state.tailnet.has_saved_state() => {
+            return Err(TAILNET_STOPPED_MESSAGE.to_string().into());
+        }
         _ => None,
     };
     let Some(proxy) = proxy else {
@@ -305,6 +315,7 @@ fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStor
     if !nas.complete() {
         return Err(NAS_INCOMPLETE_MESSAGE.to_string().into());
     }
+    let url = url_in_tailnet(state, &nas.url)?;
     let password = state
         .nas_secrets
         .get()
@@ -316,11 +327,22 @@ fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStor
         return Err(NAS_INCOMPLETE_MESSAGE.to_string().into());
     };
     (state.nas_drive_factory)(WebDavConfig {
-        url: nas.url.clone(),
+        url,
         user: nas.user.clone(),
         password,
         proxy: Some(proxy),
     })
+}
+
+/// NAS の URL のホストを、tailnet の端末の Tailscale の IP に書き換える。ポートとパスはそのまま。
+/// Host ヘッダーも IP になる。Synology の WebDAV Server はポートで受けるので名前を見ない。
+fn url_in_tailnet(state: &AppState, raw: &str) -> AppResult<String> {
+    let not_found = || crate::error::AppError::from(NAS_NOT_IN_TAILNET_MESSAGE.to_string());
+    let mut url = url::Url::parse(raw).map_err(|_| NAS_URL_MESSAGE.to_string())?;
+    let host = url.host_str().ok_or_else(not_found)?.to_string();
+    let ip = state.tailnet.peer_addr(&host).ok_or_else(not_found)?;
+    url.set_ip_host(ip).map_err(|_| not_found())?;
+    Ok(url.to_string())
 }
 
 /// 本物の WebDAV クライアントを作る。
@@ -465,13 +487,16 @@ fn restore_setting(
     }
 }
 
-/// NAS の URL、ユーザー名、パスワードを保存する。`password` が `None` なら今のパスワードのまま、
-/// 空なら消す。資格情報の拒否で止めていた同期は、ここで再開する。
+/// NAS の URL、ユーザー名、パスワードを保存する。URL は空でもよい (確かめない)。
+/// `password` が `None` なら今のパスワードのまま、空なら消す。資格情報の拒否で止めていた同期は、ここで再開する。
 /// NAS を選んでいて URL が変わったら、次の同期で最初から書き出す。
 /// 設定を先に書き、キーチェーンに書けなければ設定を元に戻す。
 pub fn set_nas(state: &AppState, url: &str, user: &str, password: Option<&str>) -> AppResult<()> {
     let (url, user) = (url.trim(), user.trim());
-    check_nas_url(url)?;
+    // 空の URL は「まだ入れていない」。ユーザー名やパスワードだけ先に保存できる。
+    if !url.is_empty() {
+        check_nas_url(url)?;
+    }
     let keys = [
         SETTING_NAS_URL,
         SETTING_NAS_USER,
@@ -559,15 +584,19 @@ pub async fn test_nas(state: &AppState) -> String {
     }
 }
 
-/// 起動時に Tailscale を始めるか。NAS を選び、同期が有効なとき。
+/// 利用者に頼まれずに Tailscale を始めてよいか。NAS を選び、同期が有効で、前にログインした
+/// 端末の状態が残っているとき。残っていなければ止めたままにする (ログイン画面を勝手に開かない。
+/// 画面は「Tailscale にログインしてください」と出す)。
 pub fn should_start_tailnet(state: &AppState) -> bool {
     state
         .with_store(|s| Ok((read_nas(s)?, s.get_setting(SETTING_ENABLED)?)))
         .map(|(nas, enabled)| nas.is_nas() && enabled.as_deref() == Some("true"))
         .unwrap_or(false)
+        && state.tailnet.has_saved_state()
 }
 
-/// 条件に合えば Tailscale を別スレッドで始める (start は待たされることがある)。
+/// 条件に合えば Tailscale を別スレッドで裏で始める (start は待たされることがある)。
+/// 起動時と、同期や保存先の切り替えで呼ぶ。ログイン画面は開かない。
 pub fn start_tailnet_if_needed(state: &AppState) {
     if should_start_tailnet(state) {
         let tailnet = state.tailnet.clone();
@@ -598,6 +627,22 @@ pub fn tailnet_changed(state: &AppState) {
     reset_auth(state);
     refresh_status(state);
     state.notify(EVENT_SYNC);
+}
+
+/// 「Tailscale にログイン」(利用者が押した)。ログイン画面を開けるのはここだけ。
+/// 認証を捨てない (`reset_auth` しない): ログイン待ちで URL を開き直すだけなら、実行中の同期を
+/// 止める理由はない。端末を起こし直したときも、NAS のクライアントは覚えていないので捨てる物がない。
+/// 待たされうるので、メインスレッドから呼ばないこと。
+pub fn login_tailnet(state: &AppState) -> AppResult<()> {
+    let result = state.tailnet.login();
+    refresh_status(state);
+    state.notify(EVENT_SYNC);
+    result
+}
+
+/// NAS の URL、ユーザー名、パスワード (キーチェーン) を消す。保存先の選択はそのまま。
+pub fn clear_nas(state: &AppState) -> AppResult<()> {
+    set_nas(state, "", "", Some(""))
 }
 
 /// 端末名を保存する。空にすると既定 (ホスト名) に戻す。
@@ -1284,7 +1329,9 @@ mod tests {
     use crate::tailnet::{FakeTailnet, Tailnet, TailnetState};
     use infodesk_core::sync::webdav::WebDavConfig;
 
-    const NAS_URL: &str = "https://nas.ts.net:5006/sync";
+    /// 偽の tailnet (`FAKE_STATUS`) にいる NAS。同期はその Tailscale の IP に向かう。
+    const NAS_URL: &str = "http://takeuchi-nas:5005/infodesk/";
+    const NAS_VIA_TAILNET: &str = "http://100.100.1.5:5005/infodesk/";
 
     fn running() -> TailnetState {
         TailnetState::Running {
@@ -1504,9 +1551,8 @@ mod tests {
     #[test]
     fn the_nas_url_is_checked_before_anything_is_saved() {
         let (state, _) = test_state();
+        // 空の URL は「まだ入れていない」として保存できる (別のテスト)。
         for bad in [
-            "",
-            "   ",
             "takeuchi-nas:5005/infodesk/",
             "ftp://nas/infodesk/",
             "file:///tmp/x",
@@ -1738,7 +1784,7 @@ mod tests {
         fake.set_state(running());
         make_drive(&state, 0).unwrap();
         let cfg = seen.lock().unwrap()[0].clone();
-        assert_eq!(cfg.url, NAS_URL);
+        assert_eq!(cfg.url, NAS_VIA_TAILNET);
         assert_eq!((cfg.user.as_str(), cfg.password.as_str()), ("kou", "pw"));
         assert_eq!(cfg.proxy, fake.proxy_url());
     }
@@ -1851,12 +1897,140 @@ mod tests {
     #[test]
     fn the_tailnet_starts_at_launch_only_for_an_enabled_nas() {
         let (mut state, _) = test_state();
-        nas_ready(&mut state, TailnetState::Stopped);
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::Stopped);
+        fake.saved_state.store(true, Ordering::SeqCst);
         assert!(should_start_tailnet(&state));
         set_enabled(&state, false).unwrap();
         assert!(!should_start_tailnet(&state));
         set_enabled(&state, true).unwrap();
         set_backend(&state, "gdrive").unwrap();
         assert!(!should_start_tailnet(&state));
+    }
+
+    // ---- tailnet の中だけ ----
+
+    #[test]
+    fn the_nas_is_reached_only_at_its_tailscale_ip() {
+        let (mut state, _) = test_state();
+        let (_, _, seen) = nas_ready(&mut state, running());
+        for (url, expected) in [
+            (NAS_URL, NAS_VIA_TAILNET),
+            (
+                "http://takeuchi-nas.tail1234.ts.net:5005/infodesk/",
+                NAS_VIA_TAILNET,
+            ),
+            (
+                "http://takeuchi-nas.tail1234.ts.net.:5005/infodesk/",
+                NAS_VIA_TAILNET,
+            ),
+            ("http://100.100.1.5:5005/infodesk/", NAS_VIA_TAILNET),
+            // ポートがなければ http の既定 (80) のまま。
+            (
+                "http://takeuchi-nas/infodesk/",
+                "http://100.100.1.5/infodesk/",
+            ),
+        ] {
+            set_nas(&state, url, "kou", None).unwrap();
+            seen.lock().unwrap().clear();
+            make_drive(&state, 0).unwrap();
+            assert_eq!(seen.lock().unwrap()[0].url, expected, "{url}");
+        }
+    }
+
+    #[tokio::test]
+    async fn hosts_outside_the_tailnet_are_refused_before_any_request() {
+        let (mut state, _) = test_state();
+        let (_, _, seen) = nas_ready(&mut state, running());
+        for url in [
+            "http://192.168.1.10:5005/infodesk/",
+            "http://nas.local:5005/infodesk/",
+            "http://takeuchi-nas.example.com:5005/infodesk/",
+            "http://100.100.1.99:5005/infodesk/",
+        ] {
+            set_nas(&state, url, "kou", None).unwrap();
+            let err = make_drive(&state, 0).err().unwrap();
+            assert_eq!(err.message, NAS_NOT_IN_TAILNET_MESSAGE, "{url}");
+            assert_eq!(test_nas(&state).await, NAS_NOT_IN_TAILNET_MESSAGE, "{url}");
+            sync_once(&state).await.unwrap();
+            assert_eq!(
+                state.sync.lock().unwrap().error.as_deref(),
+                Some(NAS_NOT_IN_TAILNET_MESSAGE),
+                "{url}"
+            );
+        }
+        assert!(seen.lock().unwrap().is_empty(), "never built a client");
+        assert_eq!(
+            NAS_NOT_IN_TAILNET_MESSAGE,
+            "NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください"
+        );
+    }
+
+    // ---- ログイン画面は頼まれたときだけ ----
+
+    #[test]
+    fn the_tailnet_starts_on_its_own_only_with_saved_state() {
+        let (mut state, _) = test_state();
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::Stopped);
+        assert!(!should_start_tailnet(&state), "never logged in");
+        fake.saved_state.store(true, Ordering::SeqCst);
+        assert!(should_start_tailnet(&state));
+    }
+
+    #[test]
+    fn login_while_waiting_for_login_keeps_the_running_sync() {
+        let (mut state, _) = test_state();
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::NeedsLogin { url: "u".into() });
+        let generation = state.sync_generation.load(Ordering::SeqCst);
+        login_tailnet(&state).unwrap();
+        assert_eq!(fake.opened.lock().unwrap().as_slice(), ["u"]);
+        assert_eq!(state.sync_generation.load(Ordering::SeqCst), generation);
+    }
+
+    #[tokio::test]
+    async fn the_nas_check_says_when_tailscale_is_stopped() {
+        let (mut state, _) = test_state();
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::Stopped);
+        state
+            .with_store(|s| s.set_setting(SETTING_ENABLED, "false"))
+            .unwrap();
+        assert_eq!(
+            test_nas(&state).await,
+            TAILNET_LOGIN_MESSAGE,
+            "never logged in"
+        );
+        fake.saved_state.store(true, Ordering::SeqCst);
+        assert_eq!(test_nas(&state).await, "Tailscale が停止中です");
+    }
+
+    // ---- NAS の設定 ----
+
+    #[test]
+    fn the_user_and_password_can_be_saved_before_the_url() {
+        let (state, _) = test_state();
+        set_backend(&state, "nas").unwrap();
+        set_nas(&state, "", "kou", Some("pw")).unwrap();
+        let st = status_now(&state);
+        assert_eq!((st.nas_url.as_str(), st.nas_user.as_str()), ("", "kou"));
+        assert!(st.nas_password_set);
+        assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("pw"));
+        // 空白だけの URL も空として扱う。入れた URL は今までどおり確かめる。
+        set_nas(&state, "  ", "kou", None).unwrap();
+        assert!(set_nas(&state, "nas:5005", "kou", None).is_err());
+    }
+
+    #[test]
+    fn the_nas_settings_can_be_cleared() {
+        let (mut state, _) = test_state();
+        nas_ready(&mut state, running());
+        state
+            .with_store(|s| s.set_setting(SETTING_RESET_PENDING, ""))
+            .unwrap();
+        clear_nas(&state).unwrap();
+        let st = status_now(&state);
+        assert_eq!((st.nas_url.as_str(), st.nas_user.as_str()), ("", ""));
+        assert!(!st.nas_password_set);
+        assert_eq!(state.nas_secrets.get().unwrap(), None);
+        assert_eq!(st.backend, "nas", "the choice of storage stays");
+        assert!(reset_pending(&state), "a new URL later starts over");
     }
 }

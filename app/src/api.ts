@@ -76,6 +76,7 @@ export const api = {
   syncSetDeviceName: (name: string) => invoke<SyncStatus>("sync_set_device_name", { name }),
   syncSetBackend: (backend: string) => invoke<SyncStatus>("sync_set_backend", { backend }),
   syncSetNas: (url: string, user: string, password: string | null) => invoke<SyncStatus>("sync_set_nas", { url, user, password }),
+  syncClearNas: () => invoke<SyncStatus>("sync_clear_nas"),
   tailnetLogin: () => invoke<SyncStatus>("tailnet_login"),
   tailnetLogout: () => invoke<SyncStatus>("tailnet_logout"),
   tailnetForget: () => invoke<SyncStatus>("tailnet_forget"),

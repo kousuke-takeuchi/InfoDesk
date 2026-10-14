@@ -30,6 +30,8 @@ fn ensure_no_tailscale_logs() {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
+        // `exec` は呼ぶ前に SIGPIPE を既定に戻す。失敗したら、今の扱いにそのまま戻す。
+        let sigpipe = tailnet::save_sigpipe();
         match std::env::current_exe() {
             Ok(exe) => {
                 let err = std::process::Command::new(exe)
@@ -40,10 +42,17 @@ fn ensure_no_tailscale_logs() {
             }
             Err(e) => eprintln!("tailnet: could not find the executable to re-exec: {e}"),
         }
-        // `exec` は呼ぶ前に SIGPIPE を既定に戻す。失敗したので、Rust の実行時と同じ無視に戻す。
-        tailnet::restore_sigpipe();
+        if let Some(saved) = &sigpipe {
+            tailnet::restore_sigpipe(saved);
+        }
     }
     tailnet::refuse_boot();
+}
+
+/// アプリの終了時。チャットのサイドカーと Tailscale の端末を止める (メインスレッドで呼ばれる)。
+fn on_exit(state: &AppState) {
+    state.chat.stop();
+    state.tailnet.stop();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -94,7 +103,8 @@ pub fn run() {
             app.state::<AppState>()
                 .set_sync_launcher(Arc::new(move || sync::spawn_sync(&handle)));
             sync::init_status(&app.state::<AppState>());
-            // 保存済みの状態があるので、ログインは要らない。待たされるので別スレッドで始める。
+            // 前にログインした端末の状態があるときだけ、裏で始める (ログイン画面は開かない)。
+            // 待たされるので別スレッドで始める。
             sync::start_tailnet_if_needed(&app.state::<AppState>());
             tray::install(app)?;
             // ウィンドウは非表示で作られる。ログイン時の自動起動 (`--hidden`) 以外は表示する。
@@ -177,6 +187,7 @@ pub fn run() {
             commands::sync::sync_now,
             commands::sync::sync_set_backend,
             commands::sync::sync_set_nas,
+            commands::sync::sync_clear_nas,
             commands::sync::tailnet_login,
             commands::sync::tailnet_logout,
             commands::sync::tailnet_forget,
@@ -191,8 +202,27 @@ pub fn run() {
                 tray::show_main_window(app);
             }
             if let tauri::RunEvent::Exit = event {
-                app.state::<AppState>().chat.stop();
-                app.state::<AppState>().tailnet.stop();
+                on_exit(&app.state::<AppState>());
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tailnet::{FakeTailnet, Tailnet, TailnetState};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn exit_stops_the_tailnet() {
+        let (mut state, _) = crate::state::test_state();
+        let fake = Arc::new(FakeTailnet::new(TailnetState::Running {
+            name: "mac".into(),
+            ip: "100.1.2.3".into(),
+        }));
+        state.tailnet = fake.clone();
+        on_exit(&state);
+        assert_eq!(fake.stops.load(Ordering::SeqCst), 1);
+        assert_eq!(fake.state(), TailnetState::Stopped);
+    }
 }

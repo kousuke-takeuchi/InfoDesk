@@ -452,6 +452,38 @@ describe("SyncTab", () => {
     expect(screen.queryByRole("button", { name: "この Mac の Tailscale の状態を消す" })).not.toBeInTheDocument();
   });
 
+  it("saves the user and password while the URL is still empty", async () => {
+    const empty = { ...nas, nas_url: "", nas_user: "", nas_password_set: false };
+    const ipc = setupIpc({ sync_status: () => empty, sync_set_nas: ({ url, user, password }) => ({ ...empty, nas_url: url, nas_user: user, nas_password_set: password !== null }) });
+    render(<SyncTab />);
+    const user = await screen.findByLabelText("ユーザー名");
+    await userEvent.type(user, "bob{enter}");
+    await waitFor(() => expect(ipc.last("sync_set_nas")).toEqual({ url: "", user: "bob", password: null }));
+    await userEvent.click(screen.getByLabelText("パスワード"));
+    await userEvent.type(screen.getByLabelText("パスワード"), "pw{enter}");
+    await waitFor(() => expect(ipc.last("sync_set_nas")).toEqual({ url: "", user: "bob", password: "pw" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears the saved NAS settings after an inline confirm", async () => {
+    const cleared = { ...nas, nas_url: "", nas_user: "", nas_password_set: false };
+    const ipc = setupIpc({ sync_status: () => nas, sync_clear_nas: () => cleared });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("button", { name: "NAS の設定を消す" }));
+    expect(ipc.count("sync_clear_nas")).toBe(0);
+    expect(screen.getByText("NAS の URL、ユーザー名、パスワードを消します。消しますか?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "やめる" }));
+    expect(ipc.count("sync_clear_nas")).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "NAS の設定を消す" }));
+    await userEvent.click(screen.getByRole("button", { name: "消す" }));
+    expect(ipc.count("sync_clear_nas")).toBe(1);
+    await waitFor(() => expect(screen.getByLabelText("NAS の URL")).toHaveValue(""));
+    expect(screen.getByLabelText("ユーザー名")).toHaveValue("");
+    expect(screen.getByLabelText("パスワード")).toHaveValue("");
+    // 消す物がなければ出さない。
+    expect(screen.queryByRole("button", { name: "NAS の設定を消す" })).not.toBeInTheDocument();
+  });
+
   it("does not offer forget unless the tailnet failed", async () => {
     setupIpc({ sync_status: () => nas });
     render(<SyncTab />);
