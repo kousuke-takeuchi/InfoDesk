@@ -1,4 +1,4 @@
-**日本語: [12-cloud-sync.ja.md](12-cloud-sync.ja.md)** | ← [Keyboard Shortcuts](11-keyboard-shortcuts.md)
+**日本語: [12-cloud-sync.ja.md](12-cloud-sync.ja.md)** | ← [Keyboard Shortcuts](11-keyboard-shortcuts.md) | Next: [NAS Setup →](13-nas-setup.md)
 
 # Cloud Sync
 
@@ -14,7 +14,16 @@ The mobile app itself is not part of this release. This release contains the Mac
 - Each file on Drive has one writer, so devices never overwrite each other.
 - If the network is down, the Mac keeps working on its own and catches up at the next sync.
 
-## 2. How to use it
+## 2. Choosing where to sync
+
+The Sync tab has a "保存先" (storage) choice with two options:
+
+- **Google ドライブ** (the default): the hidden app-only area of your Google Drive, as described in this page.
+- **NAS (WebDAV)**: a Synology NAS you own, reached through a Tailscale node inside InfoDesk. See [NAS Setup](13-nas-setup.md).
+
+The files and the rules (retention, one writer per file, read and starred marks) are the same for both. Switching the storage does a full re-publish to the new storage on the next sync. The old storage keeps its files; InfoDesk does not delete them.
+
+## 3. How to use it (Google Drive)
 
 1. Open Settings (Cmd+,) and select the "同期" (Sync) tab.
 2. Press "Google でログイン". Your browser opens a Google page. Sign in and allow access. You do not type any ID or password into InfoDesk. When the browser says you are signed in, return to InfoDesk.
@@ -33,9 +42,9 @@ Only one sync runs at a time. The tab shows the time of the last sync and, on a 
 
 ![The Sync tab (design mockup)](../design/exports/13-settings-sync.png)
 
-If this build has no Google credentials (section 3), the tab shows "このビルドでは同期を使えません" and the sign-in button is hidden.
+If this build has no Google credentials (section 4), the tab shows "このビルドでは同期を使えません" and the sign-in button is hidden.
 
-## 3. For developers: Google setup
+## 4. For developers: Google setup
 
 Users of a ready-made build skip this section. Do it once if you build InfoDesk yourself. The OAuth client ID and secret are not in the repository, so a build without them has sync disabled.
 
@@ -69,7 +78,7 @@ Notes:
 - **A missing or broken file** disables sync. A file that is not valid JSON also prints a build warning.
 - The same Google Cloud project is meant to serve the future mobile client (an iOS OAuth client), because the app-only Drive folder is shared per project.
 
-## 4. What is stored on Drive
+## 5. What is stored on Drive
 
 InfoDesk uses the hidden app data folder of your Drive (`appDataFolder`). The files are not shown in the normal Drive file list. To see that InfoDesk holds hidden data, open your Google account's Drive settings and look at "Manage apps".
 
@@ -94,14 +103,16 @@ Retention:
 
 If you reset the Mac database, its article ids change. On its next sync the Mac sees the old database id in `manifest.json`, deletes all change batches and the old `state-snapshot.json.gz` without applying them (their article ids point at other articles), and publishes the new database. Marks made on the phone that the Mac had not yet imported are lost. The new database id in `manifest.json` tells the phone to discard its copy and fetch again.
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 - **"Google の再ログインが必要です" (re-login needed).** The stored token no longer works (you revoked access in your Google account, the password changed, or the token expired). Sync stops. Press "ログアウト" if shown, then "Google でログイン" again.
 - **Sign-in never finishes.** The browser must be able to reach `http://127.0.0.1` on your own Mac, because Google sends the result back there. The sign-in waits for 5 minutes, then gives up. Press the button again.
 - **Drive is full.** The Mac's files are small (compressed JSON), but app data counts against your Drive storage. If Google reports a storage error, the sync fails and shows the error. Free space in your Google account and press "今すぐ同期".
 - **Rate limits and network errors.** Network errors, HTTP 429, 5xx and Drive rate limit errors stop that sync. The next sync retries. Nothing is lost. The sync line of the Sync tab shows "ネットワークに接続できません。次の同期で再試行します。" (cannot reach the network; the next sync retries).
-- **"このビルドでは同期を使えません".** The build has no `google-oauth.json`. See section 3.
+- **"このビルドでは同期を使えません".** The build has no `google-oauth.json`. See section 4.
 - **A phone mark does not show up on the Mac.** Marks are imported at each sync. Press "今すぐ同期" on the Mac.
 - To stop sync, turn off "同期する", or press "ログアウト". Files already on Drive stay there until you remove them from Drive's "Manage apps" settings.
+
+For NAS problems, see the troubleshooting table in [NAS Setup](13-nas-setup.md).
 
 See [Settings](07-settings.md) for the settings keys and [Privacy and Security](09-privacy-and-security.md) for what is sent to Google.

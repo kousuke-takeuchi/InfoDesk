@@ -10,12 +10,14 @@ InfoDesk は macOS 専用です。動作を確認しているのは Apple Silico
 |---|---|---|---|
 | Xcode Command Line Tools | はい | `xcode-select --install` | `xcode-select -p` |
 | Rust 1.89 以上 (rustup) | はい | https://rustup.rs | `cargo --version` |
+| Go (下記) | ビルドに必要 | https://go.dev/dl/ または `brew install go` | `go version` |
 | Node.js 22 以上 | はい | https://nodejs.org | `node --version` |
 | Ollama | どちらか一方 | https://ollama.com | `ollama list` |
 | Claude Code CLI (`claude`) | どちらか一方 | https://claude.com/claude-code | `claude --version` |
 
 - **LLM のプロバイダーが少なくとも1つ必要です。** 既定は Ollama とモデル `gemma4:26b` です (`ollama pull gemma4:26b`)。モデルは設定で変えられます。`claude` CLI も、要約とチャットの代わりに使えます。
 - **Node.js** はチャットのエージェント (アプリが起動する小さなサイドカー) が使います。収集とダイジェストには要りません。Node が無くてもアプリは動き、使えないのはチャットだけです。
+- **Go** はアプリのビルドに必要です。アプリ内の Tailscale の端末 ([NAS への同期](13-nas-setup.ja.md)で使う) が Go で書かれているためです。`.cargo/config.toml` が `GOTOOLCHAIN=go1.25.5` を設定するので、最初のビルドでそのツールチェーンをダウンロードすることがあります。バイナリは約 26 MB 大きくなります。PATH に Go が無いと、ビルドスクリプトのパニック `go build command failed to start` で失敗します。
 - rustup は `cargo` を `~/.cargo/bin` に入れます。必要なら PATH に加えてください。
 
 ## 2. 開発モードで動かす

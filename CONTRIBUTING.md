@@ -15,6 +15,10 @@ Thanks for your interest. InfoDesk is a local-first desktop reader (Tauri 2 + Re
 7. **No AI attribution trailers in commits.** Do not add `Co-Authored-By:` or similar lines to commit messages.
 8. **No emojis and no em-dashes** in documentation.
 
+## Build requirements
+
+Besides Rust and Node, building the app needs **Go** on your PATH, because the in-app Tailscale node (libtailscale) is written in Go. `.cargo/config.toml` sets `GOTOOLCHAIN=go1.25.5`, so the first build may download that toolchain, and the binary grows by about 26 MB. Without Go the build script panics with `go build command failed to start`. See [Getting Started](docs/02-getting-started.md).
+
 ## Workflow
 
 1. Read the spec section for the area you touch.

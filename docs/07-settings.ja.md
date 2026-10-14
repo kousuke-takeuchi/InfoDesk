@@ -12,7 +12,7 @@
 | トピック | トピックとそのキーワード。[ソースとトピック](03-sources-and-topics.ja.md)を参照。 |
 | LLM | 各処理で使う LLM、Ollama と Claude の設定、Node のパス、接続テスト。 |
 | スケジュール | 収集の間隔、要約の時刻、起動の設定、保留中の要約の再試行。 |
-| 同期 | Google でログイン、同期のオンとオフ、この Mac の名前、最終同期の時刻とエラー、「今すぐ同期」。[クラウド同期](12-cloud-sync.ja.md)を参照。 |
+| 同期 | 保存先 (Google ドライブか NAS) の選択、Google または Tailscale のログイン、NAS のアドレスとユーザー、同期のオンとオフ、この Mac の名前、最終同期の時刻とエラー、「今すぐ同期」。[クラウド同期](12-cloud-sync.ja.md)を参照。 |
 
 ### LLM タブ
 
@@ -61,13 +61,13 @@
 | `schedule.monthly_time` | `08:00` | 月次要約の時刻 (HH:MM)。毎月1日。 |
 | `app.launch_at_login` | `false` | ログイン時に InfoDesk を起動する。ウィンドウは開かず、メニューバーに常駐します。 |
 | `app.stay_resident` | `true` | メインウィンドウを閉じても、メニューバーで動き続ける。 |
-| `sync.enabled` | `false` | 収集とダイジェストのあと、Google ドライブへ同期する。Google へのログインが要る。[クラウド同期](12-cloud-sync.ja.md)を参照。 |
+| `sync.enabled` | `false` | 収集とダイジェストのあと、選んだ保存先 (Google ドライブか NAS) へ同期する。Google へのログイン、または Tailscale のログインと NAS のアドレスが要る。[クラウド同期](12-cloud-sync.ja.md)を参照。 |
 
 不正な時刻や曜日の値は無視され、既定値が使われます。
 
 スケジューラーは、実行済みの記録として `schedule.last_collect_at`、`schedule.last_daily_for`、`schedule.last_weekly_for`、`schedule.last_monthly_for` も持ちます。編集しないでください。
 
-同期も専用のキーを持ちます。`sync.device_name` (この Mac の名前。同期タブで編集)、`sync.device_id` (最初に既読かスターを変えたとき、または初回の同期の早いほうで作るランダムな id)、`sync.db_id` (初回の同期で作るランダムな id)、`sync.account_email`、`sync.last_sync_at`、`sync.last_compaction_at` です。普通の設定は `sync.enabled` だけで、ほかは同期タブが管理します。編集しないでください。Google の更新用トークンは DB ではなく macOS のキーチェーンにあります。
+同期も専用のキーを持ちます。`sync.device_name` (この Mac の名前。同期タブで編集)、`sync.device_id` (最初に既読かスターを変えたとき、または初回の同期の早いほうで作るランダムな id)、`sync.db_id` (初回の同期で作るランダムな id)、`sync.account_email`、`sync.last_sync_at`、`sync.last_compaction_at` です。保存先の選択で、さらにキーが増えます。`sync.backend` (`gdrive` が既定、または `nas`。それ以外の値は `gdrive` として読む)、`sync.nas.url`、`sync.nas.user`、`sync.nas.password_set` (パスワードを保存したかどうかだけ)、`sync.reset_pending` (保存先が変わると立ち、次の同期が新しい保存先で最初からやり直す印) です。NAS のパスワード本体は macOS のキーチェーン (サービス `jp.infodesk.app.nas`)、Tailscale の状態はアプリのデータフォルダの `tailscale/` にあります。[NAS の準備](13-nas-setup.ja.md)を参照。普通の設定は `sync.enabled` だけで、ほかは同期タブが管理します。編集しないでください。Google の更新用トークンは DB ではなく macOS のキーチェーンにあります。
 
 アプリは上のキーだけを受け付けます。`app.launch_at_login` は macOS の LaunchAgent の登録も行うため、切替スイッチで変更します。[CLI](08-cli.ja.md) の `config set` は、キーを確かめずに何でも書き込むので、入力に注意してください。
 

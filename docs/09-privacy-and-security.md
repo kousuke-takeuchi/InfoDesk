@@ -9,7 +9,7 @@ To report a vulnerability, see [SECURITY.md](../SECURITY.md).
 ## What stays local
 
 - The database `~/Library/Application Support/jp.infodesk.app/infodesk.db` holds sources, topics, collected articles, summaries, digests, chat threads and settings.
-- Nothing is uploaded to an InfoDesk service. There is none. If you turn on [Cloud Sync](12-cloud-sync.md), a copy goes to your own Google Drive (below).
+- Nothing is uploaded to an InfoDesk service. There is none. If you turn on [Cloud Sync](12-cloud-sync.md), a copy goes to your own Google Drive or your own NAS (below).
 - With Ollama on the same Mac, summaries, digests and chat run locally. Article text does not leave the machine for them.
 - Chat tools are read-only and read only this database (through the [CLI](08-cli.md)), plus pages and searches you allow (below).
 
@@ -23,6 +23,8 @@ To report a vulnerability, see [SECURITY.md](../SECURITY.md).
 | LLM text with Ollama | The URL in `ollama.base_url`, by default `http://localhost:11434` | Summaries, digests, chat |
 | LLM text with Claude | Anthropic, through the `claude` CLI you installed and signed in | Summaries, digests, chat, when you choose Claude |
 | Collected articles, digests, and read and starred marks, as files | Your own Google Drive, in the hidden app-only folder (`appDataFolder`) | Only after you sign in with Google and turn on sync. After each collection and digest, and on "sync now". See [Cloud Sync](12-cloud-sync.md) for the file list |
+| The same files, as WebDAV requests | Your own Synology NAS, at the address you enter (`http://<NAS name>:5005/<folder>/`) | Only after you choose NAS, log in to Tailscale and turn on sync. They travel inside the WireGuard tunnel of the in-app Tailscale node, so the plain HTTP leg is encrypted on the network |
+| Tailscale login and coordination | Tailscale (`login.tailscale.com` and its control and relay servers) | When the in-app node logs in, starts and connects. It sends what Tailscale needs to log in and connect a device, such as the device name `infodesk-mac`. It does not send your articles. Log uploads are turned off (below) |
 | Google sign-in and token | Google (`accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`) | At sign-in, token refresh and sign-out (the token is revoked) |
 | Article body for chat | The article URL | Only when the agent calls `fetch_page`. Not saved |
 | Web search for chat | Claude: its built-in WebSearch. Ollama: `https://ollama.com/api/web_search` | Only when the agent searches the web. For Ollama only if you set an API key |
@@ -41,6 +43,14 @@ The ollama.com API key is optional. It is stored (`ollama.web_search_api_key`) a
 Claude is used through its CLI, so InfoDesk stores no Claude credential.
 
 If you sign in for [Cloud Sync](12-cloud-sync.md), the Google refresh token is stored in the macOS Keychain (service `jp.infodesk.app.google`, account `refresh_token`), not in the database. Signing out revokes the token at Google and deletes the Keychain item. The app asks Google for one Drive permission, `https://www.googleapis.com/auth/drive.appdata`, which reaches only InfoDesk's own hidden folder and none of your other Drive files (it also asks for `openid` and `email`, to show your address). The OAuth client ID and secret are compiled into the app; for a desktop app Google does not treat the secret as confidential. Sign-in uses PKCE and a one-time listener on `127.0.0.1`.
+
+If you choose NAS storage (see [NAS Setup](13-nas-setup.md)):
+
+- The NAS is reached only through the Tailscale node inside InfoDesk. There is no system VPN, so other apps on the Mac are not affected, and no Tailscale app is needed.
+- Tailscale log uploads to `log.tailscale.com` are turned off with the environment variable `TS_NO_LOGS_NO_SUPPORT`. Because the Go runtime inside the app reads its environment at load, InfoDesk restarts itself once at launch with the variable set. If that restart fails, Tailscale is not started.
+- The Tailscale state (the node key) is saved in the `tailscale/` folder of the app data directory, with mode 0700. Pressing "ログアウト" in the Sync tab removes the device from your tailnet. "この Mac の Tailscale の状態を消す" deletes the saved state on this Mac.
+- The NAS password is stored in the macOS Keychain (service `jp.infodesk.app.nas`), not in the database. The database keeps only whether a password is set.
+- Sync data goes to the NAS over HTTP with Basic authentication, inside the WireGuard tunnel.
 
 ## Page fetch guard (SSRF)
 
@@ -92,7 +102,7 @@ Chat runs in a separate Node process that the app starts. It is not a public ser
 ## Summary of limits
 
 - The API key is stored in plain text (see above).
-- With sync on, your articles and digests are copied to your Google Drive. Anyone with access to your Google account can read them there.
+- With sync on, your articles and digests are copied to your Google Drive. Anyone with access to your Google account can read them there. With NAS storage, they are copied to your NAS, and anyone who can sign in to that NAS user or to your Tailscale account can reach them.
 - Prompt injection cannot be fully prevented. See [AI Chat](06-ai-chat.md).
 - Opening articles and loading images contacts third-party sites.
 - The app is alpha software for macOS. It has had no external security review.

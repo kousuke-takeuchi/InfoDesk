@@ -10,12 +10,14 @@ InfoDesk runs on macOS only. Apple Silicon is the tested setup. There is no preb
 |---|---|---|---|
 | Xcode Command Line Tools | yes | `xcode-select --install` | `xcode-select -p` |
 | Rust 1.89 or later (rustup) | yes | https://rustup.rs | `cargo --version` |
+| Go (see below) | yes, to build | https://go.dev/dl/ or `brew install go` | `go version` |
 | Node.js 22 or later | yes | https://nodejs.org | `node --version` |
 | Ollama | one of the two | https://ollama.com | `ollama list` |
 | Claude Code CLI (`claude`) | one of the two | https://claude.com/claude-code | `claude --version` |
 
 - **You need at least one LLM provider.** The default is Ollama with the model `gemma4:26b` (run `ollama pull gemma4:26b`). You can choose another model in Settings. The `claude` CLI works as an alternative for summaries and chat.
 - **Node.js** is used by the chat agent, a small sidecar process that the app starts. The collector and the digests do not need it. Without Node the app still works, and only chat is unavailable.
+- **Go** is needed to build the app, because the in-app Tailscale node (used for [NAS sync](13-nas-setup.md)) is written in Go. `.cargo/config.toml` sets `GOTOOLCHAIN=go1.25.5`, so the first build may download that toolchain. The binary grows by about 26 MB. Without Go on your PATH, the build fails with a build-script panic `go build command failed to start`.
 - rustup installs `cargo` into `~/.cargo/bin`. Add it to your PATH if needed.
 
 ## 2. Run in development

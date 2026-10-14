@@ -268,6 +268,11 @@ stateDiagram-v2
 | `sync.account_email` | ログイン中のメールアドレス |
 | `sync.last_sync_at` | 最終同期の時刻 |
 | `sync.last_compaction_at` | 最後にまとめと保持期間の削除を行った時刻 |
+| `sync.backend` | 保存先。`gdrive`(既定)か `nas`。ほかの値(古い `google` も)は `gdrive` として読む |
+| `sync.nas.url` | NASのWebDAVのURL(`http://<NAS名>:5005/<フォルダ>/`)。開発中の古いキー `sync.nas_url` は読むときに移す |
+| `sync.nas.user` | NASのユーザー名 |
+| `sync.nas.password_set` | パスワードを保存したか(`true` / 空)。パスワード本体はキーチェーン(サービス `jp.infodesk.app.nas`) |
+| `sync.reset_pending` | 保存先が変わったら `true`。次の同期の始めに `sync_files` を捨てて全部を出し直し、空に戻す |
 
 更新用トークンはDBに置かない(macOSキーチェーン)。
 

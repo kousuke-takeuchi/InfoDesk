@@ -9,7 +9,7 @@ InfoDesk は、1人で使うデスクトップアプリです。アカウント�
 ## Mac の中に残るもの
 
 - DB `~/Library/Application Support/jp.infodesk.app/infodesk.db` に、ソース、トピック、収集した記事、要約、ダイジェスト、チャットのスレッド、設定が入ります。
-- InfoDesk のサービスへは何もアップロードしません。そのようなサービスはありません。[クラウド同期](12-cloud-sync.ja.md)をオンにすると、利用者本人の Google ドライブにコピーが置かれます (下記)。
+- InfoDesk のサービスへは何もアップロードしません。そのようなサービスはありません。[クラウド同期](12-cloud-sync.ja.md)をオンにすると、利用者本人の Google ドライブか NAS にコピーが置かれます (下記)。
 - 同じ Mac の Ollama を使うとき、要約、ダイジェスト、チャットはローカルで動きます。そのための記事の文章はマシンの外へ出ません。
 - チャットのツールは読み取り専用で、この DB ([CLI](08-cli.ja.md) 経由) と、許可したページや検索 (下記) だけを読みます。
 
@@ -23,6 +23,8 @@ InfoDesk は、1人で使うデスクトップアプリです。アカウント�
 | Ollama での LLM の文章 | `ollama.base_url` の URL (既定は `http://localhost:11434`) | 要約、ダイジェスト、チャット |
 | Claude での LLM の文章 | Anthropic。導入してログインした `claude` CLI 経由 | Claude を選んだときの要約、ダイジェスト、チャット |
 | 収集した記事、ダイジェスト、既読とスターの印 (ファイルとして) | 利用者本人の Google ドライブの、アプリ専用の隠れた領域 (`appDataFolder`) | Google でログインして同期をオンにしたときだけ。収集とダイジェストのあと、および「今すぐ同期」のとき。ファイルの一覧は[クラウド同期](12-cloud-sync.ja.md)を参照 |
+| 同じファイル (WebDAV のリクエストとして) | 利用者本人の Synology NAS。入力したアドレス (`http://<NAS の名前>:5005/<フォルダ>/`) | 保存先に NAS を選び、Tailscale にログインして同期をオンにしたときだけ。アプリ内の Tailscale の端末の WireGuard のトンネルの中を通るので、HTTP の区間も通信路では暗号化されます |
+| Tailscale のログインと調整 | Tailscale (`login.tailscale.com` と、その制御用・中継用のサーバー) | アプリ内の端末がログイン、起動、接続するとき。送るのは、端末の名前 `infodesk-mac` など、Tailscale が端末のログインと接続に必要とするものです。記事は送りません。ログのアップロードは止めています (下記) |
 | Google へのログインとトークン | Google (`accounts.google.com`、`oauth2.googleapis.com`、`www.googleapis.com`) | ログイン、トークンの更新、ログアウト (トークンを失効させる) のとき |
 | チャット用の記事本文 | その記事の URL | エージェントが `fetch_page` を呼んだときだけ。保存しません |
 | チャット用の Web 検索 | Claude: 組み込みの WebSearch。Ollama: `https://ollama.com/api/web_search` | エージェントが Web を検索したときだけ。Ollama では API キーを設定したときだけ |
@@ -41,6 +43,14 @@ ollama.com の API キーは任意です。保存する場合は (`ollama.web_se
 Claude は CLI 経由で使うので、InfoDesk は Claude の認証情報を保存しません。
 
 [クラウド同期](12-cloud-sync.ja.md)でログインすると、Google の更新用トークンは DB ではなく macOS のキーチェーン (サービス `jp.infodesk.app.google`、アカウント `refresh_token`) に保存されます。ログアウトすると、Google 側でトークンを失効させ、キーチェーンの項目も消します。アプリが Google に求める Drive の権限は `https://www.googleapis.com/auth/drive.appdata` だけで、InfoDesk 専用の隠れた領域にしか届きません。ほかの Drive のファイルには触れません (アドレスを表示するための `openid` と `email` も求めます)。OAuth のクライアント ID とシークレットはアプリに埋め込まれます。デスクトップアプリのシークレットは、Google の扱いでは秘密とみなされません。ログインは PKCE を使い、`127.0.0.1` で一度だけ待ち受けます。
+
+保存先に NAS を選んだとき ([NAS の準備](13-nas-setup.ja.md)を参照):
+
+- NAS へは、InfoDesk の中の Tailscale の端末だけを通ります。システムの VPN は使わないので、Mac のほかのアプリには影響せず、Tailscale のアプリも要りません。
+- Tailscale の `log.tailscale.com` へのログのアップロードは、環境変数 `TS_NO_LOGS_NO_SUPPORT` で止めています。アプリの中の Go のランタイムは読み込み時に環境を読むので、InfoDesk は起動時にこの変数を付けて自分を1回再起動します。その再起動に失敗したら、Tailscale は起動しません。
+- Tailscale の状態 (端末の鍵) は、アプリのデータフォルダの `tailscale/` に権限 0700 で保存します。同期タブの「ログアウト」で、tailnet から端末が消えます。「この Mac の Tailscale の状態を消す」は、この Mac に保存した状態を消します。
+- NAS のパスワードは DB ではなく macOS のキーチェーン (サービス `jp.infodesk.app.nas`) に保存します。DB が持つのは、パスワードを設定したかどうかだけです。
+- 同期のデータは、WireGuard のトンネルの中で、Basic 認証の HTTP で NAS へ送られます。
 
 ## ページ取得の保護 (SSRF)
 
@@ -92,7 +102,7 @@ default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:*; im
 ## 限界のまとめ
 
 - API キーは平文で保存されます (上記)。
-- 同期をオンにすると、記事とダイジェストが Google ドライブにコピーされます。Google アカウントにアクセスできる人は、そこで読めます。
+- 同期をオンにすると、記事とダイジェストが Google ドライブにコピーされます。Google アカウントにアクセスできる人は、そこで読めます。NAS を保存先にしたときは NAS にコピーされ、その NAS のユーザーや Tailscale のアカウントに入れる人が届きます。
 - プロンプトインジェクションは完全には防げません。[AI チャット](06-ai-chat.ja.md)を参照してください。
 - 記事を開く、画像を読み込むと、第三者のサイトに接続します。
 - このアプリは macOS 向けのアルファ版です。外部のセキュリティレビューは受けていません。

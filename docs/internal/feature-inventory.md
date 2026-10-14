@@ -308,6 +308,12 @@
 | DBの版5 | 実装済み | [data-model.md](data-model.md) |
 | 手順書 (Google 側の準備) | 実装済み | [../12-cloud-sync.md](../12-cloud-sync.md) |
 | モバイルアプリ (Flutter) | 未実装 | 計画B。`mobile/` はまだ無い |
+| 保存先の選択(Google ドライブ / NAS)。切り替えると新しい保存先へ全部を出し直す。古い保存先は消さない | 実装済み | `sync/mod.rs`(`set_backend`、`sync.reset_pending`)、`SyncTab.tsx` |
+| NASへのWebDAV同期(Basic認証、パスワードはキーチェーン `jp.infodesk.app.nas`) | 実装済み | `crates/core/src/sync/webdav.rs`、`sync/keychain.rs` |
+| アプリ内のTailscale端末(システムVPNなし、`infodesk-mac`、状態は `tailscale/` 0700、ログアウト、状態を消す) | 実装済み | `app/src-tauri/src/tailnet.rs`、`commands/sync.rs` |
+| Tailscaleのログのアップロード停止(`TS_NO_LOGS_NO_SUPPORT`、起動時の再実行。失敗したらTailscaleを起動しない) | 実装済み | `lib.rs` |
+| NASの準備ガイド(アプリ内ダイアログと公開文書) | 実装済み | `NasGuideDialog.tsx`、[../13-nas-setup.md](../13-nas-setup.md) |
+| 本物のNASでの同期の確認(Tailscaleのログイン、承認、書き込み) | 未確認 | 自動テストは偽のWebDAVとTailscaleだけ。手動の確認一覧は計画7A2の報告 |
 | 本物のDriveでのログインと同期の確認 | 未確認 | 自動テストは偽のDriveだけ。手動の確認一覧は計画Aの報告 |
 
 ## 設計書に無い実装

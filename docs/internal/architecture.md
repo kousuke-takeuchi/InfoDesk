@@ -101,6 +101,7 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `llm/` | `mod.rs`(`LlmProvider` trait、`provider_from_settings`)、`ollama.rs`、`claude.rs`(`claude` CLIのヘッドレス実行) |
 | `page.rs` | 本文取得。内部アドレスを拒否するクライアント(`page_client`)、リダイレクトの検査、2MBと20000文字の上限 |
 | `sync/` | クラウド同期の中核。`format.rs`(Driveに置くファイルの形、操作の統合規則、ファイル名)、`drive.rs`(`DriveStore` trait とメモリ上の偽物 `MemoryDrive`)、`google.rs`(Drive API v3 の実装。`appDataFolder`、401で1回トークンを取り直す、429と5xxとレート制限は `Retryable`)、`engine.rs`(`run_sync`: 1回の同期、まとめ、保持期間)。`store/sync.rs` が操作の記録と取り込み、書き出し用の問い合わせを持つ |
+| `sync/webdav.rs` | NAS用の `DriveStore` 実装(WebDAV、Basic認証)。URLは `http://<NAS名>:5005/<フォルダ>/`。401、403、413/507、リダイレクトを利用者向けの文に直す |
 | `period.rs` | 期間の開始、終了、UTC範囲。ローカル日付、週は月曜始まり |
 | `seed.rs` | `DEFAULT_SOURCES`(22件)と `DEFAULT_SETTINGS`(18キー) |
 | `error.rs` | `Error` と `Result` |
@@ -123,6 +124,7 @@ agent/ (Node)  ... Rustに依存しない。実行時にアプリの --cli を�
 | `sidecar.rs` | Nodeサイドカーの起動、準備完了の待機、再起動、停止 |
 | `tray.rs` | メニューバーのメニューと状態行 |
 | `sync/` | `mod.rs`(`SyncStatus`、`spawn_sync`、1回の同期の組み立て、設定キー `sync.*`)、`oauth.rs`(デスクトップ向けOAuth。PKCE、`127.0.0.1:<空きポート>` で受ける、更新用トークンの取得、revoke。ビルドに埋め込んだ ID とシークレットを使う)、`keychain.rs`(macOSキーチェーン。サービス `jp.infodesk.app.google`、アカウント `refresh_token`) |
+| `tailnet.rs` | アプリ内のTailscale端末(libtailscale 0.2.2、Go製)。システムのVPNは使わず、NASへはここのループバック経由だけ。ホスト名 `infodesk-mac`、状態は app data の `tailscale/`(0700)。ログアウトと「状態を消す」(`forget`) |
 | `build.rs` | `google-oauth.json`(git管理外。ひな形は `google-oauth.example.json`)の `client_id` と `client_secret` を `INFODESK_GOOGLE_CLIENT_ID` / `INFODESK_GOOGLE_CLIENT_SECRET` としてビルドに埋め込む。無い、または壊れていれば同期は無効 |
 | `error.rs` | `AppError { message }`。Tauriは `Err` をJSONにして `invoke` のrejectへ渡す |
 | `capabilities/default.json` | メインウィンドウと `reader-toolbar` のWebViewに与える権限 |
@@ -185,6 +187,9 @@ LLMは `LlmFactory`(`provider_from_settings`)で用途(`LlmRole::Items` / `Diges
 - 保持期間: 日次の記事とダイジェストは直近60日、週次と月次は直近400日(`DAY_RETENTION`、`LONG_RETENTION`)。Mac側の送信済み `sync_ops` は30日で消す。
 - エラー: ネットワーク、429、5xx、レート制限はその回をやめて次回に回す。401で更新用トークンも使えないときは `Google の再ログインが必要です` を出して止める。同期のエラーは `SyncStatus.error` に入り、収集やダイジェストのエラー(`last_error`)とは別。
 - 認証: 更新用トークンはキーチェーンだけ。ログアウトで revoke してキーチェーンから消す。スコープは `https://www.googleapis.com/auth/drive.appdata openid email`。
+- 保存先(Plan 7A2): 設定 `sync.backend`(`gdrive` 既定 / `nas`)で `DriveStore` を切り替える。NASの設定は `sync.nas.url`、`sync.nas.user`、`sync.nas.password_set`(パスワード本体はキーチェーン、サービス `jp.infodesk.app.nas`)。保存先を変えると `sync.reset_pending` が立ち、次の同期の始めに向こうのファイルの記録(`sync_files`)を捨てて全部を出し直す。古い保存先のファイルは消さない。
+- Tailscaleのログ: tsnet は log.tailscale.com へログを送るので、`lib.rs` の `ensure_no_tailscale_logs` が起動時に `TS_NO_LOGS_NO_SUPPORT=true` を付けて自分を `exec` し直す(Goのランタイムは読み込み時に環境を写すため、後から `set_var` しても効かない)。`exec` できなければ `tailnet::refuse_boot` でTailscaleを起動しない。
+- ビルド: libtailscale のビルドスクリプトが `go build` を呼ぶので、PATH に Go が要る。`.cargo/config.toml` の `GOTOOLCHAIN=go1.25.5` で版を固定し、バイナリは約26MB増える。Go が無いと `go build command failed to start` でパニックする。公開用の手順は [../13-nas-setup.md](../13-nas-setup.md)。
 - 状態は `AppState.sync`(`SyncStatus`)と、イベント `sync-changed`(`EVENT_SYNC`)で画面へ。
 - テストは `DriveStore` の偽物(`MemoryDrive`)で行い、ネットワークにつなぐテストは無い。本物のDriveとログインは手動で確かめる。公開用の手順は [../12-cloud-sync.md](../12-cloud-sync.md)。
 

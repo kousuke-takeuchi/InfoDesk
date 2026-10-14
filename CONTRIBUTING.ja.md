@@ -15,6 +15,10 @@
 7. **コミットに AI の帰属表記を付けません。** `Co-Authored-By:` などの行をコミットメッセージに足さないでください。
 8. ドキュメントに**絵文字とエムダッシュを使いません**。
 
+## ビルドに必要なもの
+
+Rust と Node のほかに、アプリのビルドには PATH に **Go** が必要です。アプリ内の Tailscale の端末 (libtailscale) が Go で書かれているためです。`.cargo/config.toml` が `GOTOOLCHAIN=go1.25.5` を設定するので、最初のビルドでそのツールチェーンをダウンロードすることがあり、バイナリは約 26 MB 大きくなります。Go が無いと、ビルドスクリプトが `go build command failed to start` でパニックします。[はじめに](docs/02-getting-started.ja.md)を参照。
+
 ## ワークフロー
 
 1. 触る領域の仕様の節を読みます。

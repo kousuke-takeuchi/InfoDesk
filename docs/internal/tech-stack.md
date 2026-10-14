@@ -36,6 +36,7 @@
 | quick-xml | 0.42.0(`encoding`) | フィード解析の補助(`collector/feed.rs` の名前空間付き読み取りと文字コード) |
 | encoding_rs | 0.8.42 | ページ本文の文字コード変換 |
 | chrono | 0.4.45(`serde`) | 日時と期間の境界 |
+| libtailscale | 0.2.2 | アプリ内のTailscale端末(NAS同期、`app/src-tauri` だけ)。Go製のc-archiveをビルド時に作るので、PATH に Go が要る。`.cargo/config.toml` の `GOTOOLCHAIN=go1.25.5`。バイナリは約26MB増える |
 | tokio | 1.53.2 | 非同期実行、子プロセス(`claude`、Node) |
 | serde / serde_json | 1.0.229 / 1.0.151 | シリアライズ |
 | thiserror | 2.0.21 | coreのエラー型 |
@@ -79,6 +80,7 @@
 
 | ツール | 使い方 |
 |---|---|
+| Go 1.25.5 | ビルド時だけ。libtailscale のビルドスクリプトが使う。`GOTOOLCHAIN=go1.25.5` で固定(`.cargo/config.toml`)し、初回のビルドでツールチェーンを取得することがある |
 | Ollama | 要約とチャット。既定のURLは `http://localhost:11434`、既定のモデルは `gemma4:26b` |
 | `claude` CLI | Claudeを選んだときの要約(ヘッドレス実行)とチャット。パスは設定 `claude.bin` |
 | `ollama.com` のWeb検索API | 設定 `ollama.web_search_api_key` があるときだけチャットの `web_search` を有効にする |

@@ -42,6 +42,7 @@ digest, a feed and a chat panel. Your data stays in a SQLite file on your Mac.
 - **Feed and reader**: filter by period, source, unread, starred and search; open articles in an in-app reader window or the default browser. See [Feed and Reader](docs/05-feed-and-reader.md).
 - **Keyboard shortcuts**: switch views, move through the feed, read, star and collect from the keyboard; press `?` for the list. See [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md).
 - **Cloud sync**: copy articles and digests to a hidden app folder in your own Google Drive, with read and starred marks synced both ways. See [Cloud Sync](docs/12-cloud-sync.md).
+- **NAS sync**: choose a Synology NAS instead of Google Drive, reached through an in-app Tailscale node with no system VPN. See [NAS Setup](docs/13-nas-setup.md).
 - **AI chat**: ask questions about collected articles and summaries. The agent runs in a Node sidecar and can use Ollama or the `claude` CLI. See [AI Chat](docs/06-ai-chat.md).
 - **Local LLM first**: Ollama is the default provider for item summaries and digests. See [Settings](docs/07-settings.md).
 - **CLI**: the `infodesk` command collects, summarizes and prints digests from the terminal. See [CLI](docs/08-cli.md).
@@ -49,7 +50,7 @@ digest, a feed and a chat panel. Your data stays in a SQLite file on your Mac.
 
 ## Quick Start
 
-Prerequisites: macOS (Apple Silicon is what has been tested), [Rust](https://rustup.rs), Node.js 22+, and either [Ollama](https://ollama.com) with a model pulled or the [`claude` CLI](https://claude.com/claude-code).
+Prerequisites: macOS (Apple Silicon is what has been tested), [Rust](https://rustup.rs), [Go](https://go.dev/dl/) (to build), Node.js 22+, and either [Ollama](https://ollama.com) with a model pulled or the [`claude` CLI](https://claude.com/claude-code).
 
 ```bash
 git clone https://github.com/kousuke-takeuchi/InfoDesk.git
@@ -85,6 +86,7 @@ Read in order. Files are numbered.
 | 10 | [Roadmap](docs/10-roadmap.md) | What is done, known limits, open ideas |
 | 11 | [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md) | Every shortcut, and when shortcuts are ignored |
 | 12 | [Cloud Sync](docs/12-cloud-sync.md) | Copy articles and digests to your Google Drive, and the Google setup for builders |
+| 13 | [NAS Setup](docs/13-nas-setup.md) | Sync to a Synology NAS over Tailscale: setup steps, device approval and troubleshooting |
 
 Each page has a Japanese twin (`*.ja.md`). Developer documentation lives in [`docs/internal/`](docs/internal/README.md) and is written in Japanese. The design spec and implementation plans are under [`docs/superpowers/`](docs/superpowers/).
 

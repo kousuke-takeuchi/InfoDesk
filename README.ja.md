@@ -42,6 +42,7 @@ InfoDesk は RSS、GitHub、Hugging Face、arXiv、Hacker News、Google News か
 - **フィードとリーダー**: 期間、ソース、未読、スター、検索で絞り込み。記事はアプリ内の閲覧ウィンドウか既定のブラウザで開く。[フィードとリーダー](docs/05-feed-and-reader.ja.md)を参照。
 - **キーボードショートカット**: ビューの切り替え、フィードの移動、既読、スター、収集をキーボードで操作。`?` で一覧を表示。[キーボードショートカット](docs/11-keyboard-shortcuts.ja.md)を参照。
 - **クラウド同期**: 記事とダイジェストを、本人の Google ドライブのアプリ専用領域へコピー。既読とスターは双方向に同期。[クラウド同期](docs/12-cloud-sync.ja.md)を参照。
+- **NAS 同期**: Google ドライブの代わりに Synology NAS を選べます。システムの VPN を使わず、アプリ内の Tailscale の端末で NAS につなぎます。[NAS の準備](docs/13-nas-setup.ja.md)を参照。
 - **AI チャット**: 収集した記事と要約について質問できる。エージェントは Node のサイドカーで動き、Ollama または `claude` CLI を使う。[AI チャット](docs/06-ai-chat.ja.md)を参照。
 - **ローカル LLM 優先**: 記事の要約もダイジェストも、既定の提供元は Ollama。[設定](docs/07-settings.ja.md)を参照。
 - **CLI**: `infodesk` コマンドでターミナルから収集、要約、ダイジェスト表示。[CLI](docs/08-cli.ja.md)を参照。
@@ -49,7 +50,7 @@ InfoDesk は RSS、GitHub、Hugging Face、arXiv、Hacker News、Google News か
 
 ## クイックスタート
 
-必要なもの: macOS (動作確認は Apple Silicon)、[Rust](https://rustup.rs)、Node.js 22 以上、そしてモデルを取得済みの [Ollama](https://ollama.com) か [`claude` CLI](https://claude.com/claude-code) のどちらか。
+必要なもの: macOS (動作確認は Apple Silicon)、[Rust](https://rustup.rs)、[Go](https://go.dev/dl/) (ビルドに必要)、Node.js 22 以上、そしてモデルを取得済みの [Ollama](https://ollama.com) か [`claude` CLI](https://claude.com/claude-code) のどちらか。
 
 ```bash
 git clone https://github.com/kousuke-takeuchi/InfoDesk.git
@@ -85,6 +86,7 @@ cargo run -p infodesk -- digest day
 | 10 | [ロードマップ](docs/10-roadmap.ja.md) | 完了したこと、既知の制限、今後の案 |
 | 11 | [キーボードショートカット](docs/11-keyboard-shortcuts.ja.md) | すべてのショートカットと、無効になる場面 |
 | 12 | [クラウド同期](docs/12-cloud-sync.ja.md) | 記事とダイジェストを Google ドライブへ置く方法と、ビルドする人向けの Google 側の準備 |
+| 13 | [NAS の準備](docs/13-nas-setup.ja.md) | Tailscale 経由で Synology NAS へ同期する: 準備の手順、端末の承認、困ったとき |
 
 各ページに英語版があります (`*.md`)。開発者向けのドキュメントは [`docs/internal/`](docs/internal/README.md) にあり、日本語で書かれています。設計仕様と実装計画は [`docs/superpowers/`](docs/superpowers/) にあります。
 
