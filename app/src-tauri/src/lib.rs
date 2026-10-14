@@ -75,6 +75,8 @@ pub fn run() {
             app.manage(state);
             app.state::<AppState>().load_persisted();
             sync::init_status(&app.state::<AppState>());
+            // 保存済みの状態があるので、ログインは要らない。待たされるので別スレッドで始める。
+            sync::start_tailnet_if_needed(&app.state::<AppState>());
             let handle = app.handle().clone();
             app.state::<AppState>()
                 .set_sync_launcher(Arc::new(move || sync::spawn_sync(&handle)));
@@ -157,6 +159,11 @@ pub fn run() {
             commands::sync::sync_set_enabled,
             commands::sync::sync_set_device_name,
             commands::sync::sync_now,
+            commands::sync::sync_set_backend,
+            commands::sync::sync_set_nas,
+            commands::sync::tailnet_login,
+            commands::sync::tailnet_logout,
+            commands::sync::sync_test_nas,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

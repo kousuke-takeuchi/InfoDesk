@@ -13,11 +13,24 @@ use serde::Serialize;
 
 use crate::error::AppResult;
 use crate::state::{AppState, EVENT_ITEMS, EVENT_SYNC};
+use crate::tailnet::TailnetState;
+use infodesk_core::sync::webdav::{WebDavConfig, WebDavStore};
 
 pub const SETTING_ENABLED: &str = "sync.enabled";
 pub const SETTING_DEVICE_NAME: &str = "sync.device_name";
 pub const SETTING_LAST_SYNC_AT: &str = "sync.last_sync_at";
 pub const SETTING_LAST_COMPACTION_AT: &str = "sync.last_compaction_at";
+pub const SETTING_BACKEND: &str = "sync.backend";
+pub const SETTING_NAS_URL: &str = "sync.nas_url";
+pub const SETTING_NAS_USER: &str = "sync.nas_user";
+/// パスワードそのものはキーチェーンにあり、ここには入れたかどうかだけを持つ。
+pub const SETTING_NAS_PASSWORD_SET: &str = "sync.nas_password_set";
+pub const BACKEND_GOOGLE: &str = "google";
+pub const BACKEND_NAS: &str = "nas";
+pub const TAILNET_LOGIN_MESSAGE: &str = "Tailscale にログインしてください";
+pub const TAILNET_APPROVAL_MESSAGE: &str = "Tailscale の管理画面でこの端末を承認してください";
+pub const NAS_INCOMPLETE_MESSAGE: &str = "NAS の URL、ユーザー名、パスワードを入力してください";
+pub const NAS_CHECK_OK: &str = "読み書きできました";
 pub const FALLBACK_DEVICE_NAME: &str = "この Mac";
 pub const REAUTH_MESSAGE: &str = "Google の再ログインが必要です";
 /// 通信できなかった失敗 (`DriveError::Retryable`) に出す文。詳細は画面に出さない。
@@ -35,6 +48,38 @@ pub struct SyncStatus {
     pub last_sync_at: Option<DateTime<Utc>>,
     pub error: Option<String>,
     pub device_name: String,
+    /// "google" か "nas"。
+    pub backend: String,
+    pub nas_url: String,
+    pub nas_user: String,
+    pub nas_password_set: bool,
+    pub tailnet: TailnetStatusView,
+}
+
+/// 画面に出す Tailscale の状態。ログイン URL は含めない (ブラウザーで開く)。
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct TailnetStatusView {
+    /// stopped | needs_login | needs_approval | starting | running | failed
+    pub state: String,
+    pub name: Option<String>,
+    /// `failed` のときの理由。
+    pub reason: Option<String>,
+}
+
+fn tailnet_view(state: &TailnetState) -> TailnetStatusView {
+    let (name_, name, reason) = match state {
+        TailnetState::Stopped => ("stopped", None, None),
+        TailnetState::NeedsLogin { .. } => ("needs_login", None, None),
+        TailnetState::NeedsApproval => ("needs_approval", None, None),
+        TailnetState::Starting => ("starting", None, None),
+        TailnetState::Running { name, .. } => ("running", Some(name.clone()), None),
+        TailnetState::Failed { reason } => ("failed", None, Some(reason.clone())),
+    };
+    TailnetStatusView {
+        state: name_.to_string(),
+        name,
+        reason,
+    }
 }
 
 /// ホスト名の候補から端末名を選ぶ。空なら既定の「この Mac」。
@@ -82,9 +127,10 @@ pub fn refresh_status(state: &AppState) {
             s.get_setting(oauth::SETTING_ACCOUNT_EMAIL)?,
             s.get_setting(SETTING_DEVICE_NAME)?,
             s.get_setting(SETTING_LAST_SYNC_AT)?,
+            read_nas(s)?,
         ))
     });
-    let (enabled, email, name, last) = match read {
+    let (enabled, email, name, last, nas) = match read {
         Ok(v) => v,
         Err(e) => {
             let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
@@ -105,13 +151,59 @@ pub fn refresh_status(state: &AppState) {
     st.account_email = email.filter(|e| !e.is_empty());
     st.device_name = name;
     st.last_sync_at = parse_time(last);
+    let tailnet = state.tailnet.state();
+    st.backend = nas.backend.clone();
+    st.nas_url = nas.url.clone();
+    st.nas_user = nas.user.clone();
+    st.nas_password_set = nas.password_set;
+    st.tailnet = tailnet_view(&tailnet);
+    if nas.is_nas() {
+        st.signed_in = nas.complete() && matches!(tailnet, TailnetState::Running { .. });
+    }
+}
+
+/// NAS まわりの設定。
+struct NasSettings {
+    backend: String,
+    url: String,
+    user: String,
+    password_set: bool,
+}
+
+impl NasSettings {
+    fn is_nas(&self) -> bool {
+        self.backend == BACKEND_NAS
+    }
+
+    fn complete(&self) -> bool {
+        !self.url.is_empty() && !self.user.is_empty() && self.password_set
+    }
+}
+
+fn read_nas(s: &infodesk_core::Store) -> infodesk_core::Result<NasSettings> {
+    let text = |k: &str| -> infodesk_core::Result<String> {
+        Ok(s.get_setting(k)?.unwrap_or_default().trim().to_string())
+    };
+    let backend = text(SETTING_BACKEND)?;
+    Ok(NasSettings {
+        backend: if backend == BACKEND_NAS {
+            backend
+        } else {
+            BACKEND_GOOGLE.to_string()
+        },
+        url: text(SETTING_NAS_URL)?,
+        user: text(SETTING_NAS_USER)?,
+        password_set: text(SETTING_NAS_PASSWORD_SET)? == "true",
+    })
 }
 
 /// 起動時に1回呼ぶ。サインイン済みかは、保存したメールアドレスの有無で決める。
 pub fn init_status(state: &AppState) {
     refresh_status(state);
     let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
-    st.signed_in = st.available && st.account_email.is_some();
+    if st.backend != BACKEND_NAS {
+        st.signed_in = st.available && st.account_email.is_some();
+    }
 }
 
 pub fn status_now(state: &AppState) -> SyncStatus {
@@ -134,6 +226,11 @@ pub fn google_drive() -> AppResult<Arc<dyn DriveStore>> {
 
 /// 作ったクライアントを覚えておく。サインインやサインアウトで捨てる。
 fn make_drive(state: &AppState, generation: u64) -> AppResult<Arc<dyn DriveStore>> {
+    let nas = state.with_store(read_nas)?;
+    if nas.is_nas() {
+        // プロキシの口は Tailscale を起動し直すと変わるので、NAS の保存先は覚えない。
+        return nas_drive(state, &nas);
+    }
     let mut cache = state.drive_cache.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(d) = cache.as_ref() {
         return Ok(d.clone());
@@ -144,6 +241,45 @@ fn make_drive(state: &AppState, generation: u64) -> AppResult<Arc<dyn DriveStore
         *cache = Some(drive.clone());
     }
     Ok(drive)
+}
+
+/// NAS の保存先を作る。Tailscale が Running でなければ、直接つながずに止める。
+fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStore>> {
+    let proxy = match state.tailnet.state() {
+        TailnetState::Running { .. } => state.tailnet.proxy_url(),
+        TailnetState::NeedsApproval => return Err(TAILNET_APPROVAL_MESSAGE.to_string().into()),
+        _ => None,
+    };
+    let Some(proxy) = proxy else {
+        return Err(TAILNET_LOGIN_MESSAGE.to_string().into());
+    };
+    if !nas.complete() {
+        return Err(NAS_INCOMPLETE_MESSAGE.to_string().into());
+    }
+    let password = state
+        .nas_secrets
+        .get()
+        .map_err(|_| "NAS のパスワードを読めません".to_string())?
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| NAS_INCOMPLETE_MESSAGE.to_string())?;
+    (state.nas_drive_factory)(WebDavConfig {
+        url: nas.url.clone(),
+        user: nas.user.clone(),
+        password,
+        proxy: Some(proxy),
+    })
+}
+
+/// 本物の WebDAV クライアントを作る。
+pub fn webdav_drive(cfg: WebDavConfig) -> AppResult<Arc<dyn DriveStore>> {
+    match WebDavStore::new(cfg) {
+        Ok(d) => Ok(Arc::new(d)),
+        // プロキシの URL には資格情報が入っているので、メッセージに出さない。
+        Err(DriveError::Other(m)) if m.contains("proxy") => {
+            Err("NAS への接続を準備できません".to_string().into())
+        }
+        Err(e) => Err(e.to_string().into()),
+    }
 }
 
 /// 認証が変わったので、覚えているクライアントと、実行中の同期の結果を捨てる。
@@ -188,6 +324,112 @@ pub fn set_enabled(state: &AppState, enabled: bool) -> AppResult<()> {
         }
     });
     Ok(())
+}
+
+/// 保存先を切り替える。向こうにあるファイルの記録を全部捨て、次の同期で全部を送り直させる。
+pub fn set_backend(state: &AppState, backend: &str) -> AppResult<()> {
+    if backend != BACKEND_GOOGLE && backend != BACKEND_NAS {
+        return Err(format!("保存先を選べません: {backend}").into());
+    }
+    state.with_store(|s| {
+        s.clear_sync_files()?;
+        s.set_setting(SETTING_LAST_COMPACTION_AT, "")?;
+        s.set_setting(SETTING_BACKEND, backend)
+    })?;
+    reset_auth(state);
+    state.nas_rejected.store(false, Ordering::SeqCst);
+    update(state, |s| s.error = None);
+    refresh_status(state);
+    if backend == BACKEND_GOOGLE {
+        let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
+        st.signed_in = st.available && st.account_email.is_some();
+    }
+    state.notify(EVENT_SYNC);
+    Ok(())
+}
+
+/// NAS の URL、ユーザー名、パスワードを保存する。`password` が `None` なら今のパスワードのまま、
+/// 空なら消す。資格情報の拒否で止めていた同期は、ここで再開する。
+pub fn set_nas(state: &AppState, url: &str, user: &str, password: Option<&str>) -> AppResult<()> {
+    match password {
+        Some("") => {
+            state.nas_secrets.delete().map_err(neutral_keychain_error)?;
+        }
+        Some(p) => state.nas_secrets.set(p).map_err(neutral_keychain_error)?,
+        None => {}
+    }
+    state.with_store(|s| {
+        s.set_setting(SETTING_NAS_URL, url.trim())?;
+        s.set_setting(SETTING_NAS_USER, user.trim())?;
+        match password {
+            Some("") => s.set_setting(SETTING_NAS_PASSWORD_SET, "false"),
+            Some(_) => s.set_setting(SETTING_NAS_PASSWORD_SET, "true"),
+            None => Ok(()),
+        }
+    })?;
+    reset_auth(state);
+    state.nas_rejected.store(false, Ordering::SeqCst);
+    update(state, |s| s.error = None);
+    refresh_status(state);
+    Ok(())
+}
+
+fn neutral_keychain_error(_: String) -> crate::error::AppError {
+    "NAS のパスワードをキーチェーンに保存できません"
+        .to_string()
+        .into()
+}
+
+/// NAS に一時ファイルを書き、読み、消して確かめる。同期が無効でも使える。結果は画面に出す文。
+pub async fn test_nas(state: &AppState) -> String {
+    let nas = match state.with_store(read_nas) {
+        Ok(n) => n,
+        Err(e) => return e.message,
+    };
+    let drive = match nas_drive(state, &nas) {
+        Ok(d) => d,
+        Err(e) => return e.message,
+    };
+    let name = format!("infodesk-check-{}.txt", uuid::Uuid::new_v4());
+    let body = b"infodesk".to_vec();
+    let written = match drive.create(&name, body.clone(), "text/plain").await {
+        Ok(f) => f,
+        Err(e) => return e.to_string(),
+    };
+    let read = drive.download(&written.id).await;
+    let removed = drive.delete(&written.id).await;
+    match (read, removed) {
+        (Err(e), _) | (_, Err(e)) => e.to_string(),
+        (Ok(got), Ok(())) if got == body => NAS_CHECK_OK.to_string(),
+        (Ok(_), Ok(())) => "NAS から読んだ内容が書いた内容と違います".to_string(),
+    }
+}
+
+/// 起動時に Tailscale を始めるか。NAS を選び、同期が有効なとき。
+pub fn should_start_tailnet(state: &AppState) -> bool {
+    state
+        .with_store(|s| Ok((read_nas(s)?, s.get_setting(SETTING_ENABLED)?)))
+        .map(|(nas, enabled)| nas.is_nas() && enabled.as_deref() == Some("true"))
+        .unwrap_or(false)
+}
+
+/// 条件に合えば Tailscale を別スレッドで始める (start は待たされることがある)。
+pub fn start_tailnet_if_needed(state: &AppState) {
+    if should_start_tailnet(state) {
+        let tailnet = state.tailnet.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            if let Err(e) = tailnet.start() {
+                eprintln!("tailnet: start failed: {}", e.message);
+            }
+        });
+    }
+}
+
+/// Tailscale の状態が変わった (ログアウトなど)。覚えている接続を捨てて、画面に知らせる。
+pub fn tailnet_changed(state: &AppState) {
+    reset_auth(state);
+    refresh_status(state);
+    state.notify(EVENT_SYNC);
 }
 
 /// 端末名を保存する。空にすると既定 (ホスト名) に戻す。
@@ -236,20 +478,26 @@ fn record_error(state: &AppState, message: &str) {
 /// (何度頼まれても1回に束ねる)。失敗は `SyncStatus.error` にだけ記録する。
 pub async fn sync_once(state: &AppState) -> AppResult<()> {
     loop {
-        let enabled = match state.with_store(|s| s.get_setting(SETTING_ENABLED)) {
-            Ok(v) => v.as_deref() == Some("true"),
+        let read = state.with_store(|s| Ok((s.get_setting(SETTING_ENABLED)?, read_nas(s)?)));
+        let (enabled, nas) = match read {
+            Ok((v, nas)) => (v.as_deref() == Some("true"), nas),
             Err(e) => {
                 record_error(state, &e.message);
                 return Err(e);
             }
         };
-        if !enabled
-            || !state
+        let ready = if nas.is_nas() {
+            nas.complete()
+                && matches!(state.tailnet.state(), TailnetState::Running { .. })
+                && !state.nas_rejected.load(Ordering::SeqCst)
+        } else {
+            state
                 .sync
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .signed_in
-        {
+        };
+        if !enabled || !ready {
             return Ok(());
         }
         if state
@@ -361,6 +609,11 @@ async fn run_once(state: &AppState) -> AppResult<()> {
                         st.signed_in = false;
                         st.account_email = None;
                         st.error = Some(REAUTH_MESSAGE.to_string());
+                    }
+                    SyncError::Drive(DriveError::BadCredentials) => {
+                        // 設定が変わるまで再試行しない。signed_in は変えない。
+                        state.nas_rejected.store(true, Ordering::SeqCst);
+                        st.error = Some(DriveError::BadCredentials.to_string());
                     }
                     SyncError::Drive(DriveError::Retryable(_)) => {
                         st.error = Some(NETWORK_MESSAGE.to_string());
@@ -831,5 +1084,248 @@ mod tests {
                 .with_store(|s| Ok(s.get_item(id)?.unwrap().starred))
                 .unwrap()
         );
+    }
+
+    // ---- NAS ----
+
+    use crate::tailnet::{FakeTailnet, Tailnet, TailnetState};
+    use infodesk_core::sync::webdav::WebDavConfig;
+
+    fn running() -> TailnetState {
+        TailnetState::Running {
+            name: "mac".into(),
+            ip: "100.1.2.3".into(),
+        }
+    }
+
+    /// NAS を選び、設定をそろえ、偽の Tailscale と MemoryDrive を差し込む。
+    fn nas_ready(
+        state: &mut AppState,
+        tail: TailnetState,
+    ) -> (
+        Arc<FakeTailnet>,
+        Arc<MemoryDrive>,
+        Arc<Mutex<Vec<WebDavConfig>>>,
+    ) {
+        let fake = Arc::new(FakeTailnet::new(tail));
+        state.tailnet = fake.clone();
+        let drive = Arc::new(MemoryDrive::new());
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (d, log) = (drive.clone(), seen.clone());
+        state.nas_drive_factory = Arc::new(move |cfg| {
+            log.lock().unwrap().push(cfg);
+            Ok(d.clone() as Arc<dyn DriveStore>)
+        });
+        set_backend(state, "nas").unwrap();
+        set_nas(state, "https://nas.ts.net:5006/sync", "kou", Some("pw")).unwrap();
+        state
+            .with_store(|s| s.set_setting(SETTING_ENABLED, "true"))
+            .unwrap();
+        (fake, drive, seen)
+    }
+
+    #[test]
+    fn switching_backend_forgets_remote_files_and_asks_for_a_snapshot() {
+        use infodesk_core::store::SyncFileRow;
+        let (mut state, events) = test_state();
+        ready(&mut state);
+        state
+            .with_store(|s| {
+                s.put_sync_file(&SyncFileRow {
+                    name: "a".into(),
+                    kind: "out".into(),
+                    drive_id: Some("d".into()),
+                    sha256: None,
+                    updated_at: "2026-10-13T00:00:00Z".into(),
+                    fingerprint: None,
+                })?;
+                s.set_setting(SETTING_LAST_COMPACTION_AT, &Utc::now().to_rfc3339())
+            })
+            .unwrap();
+        make_drive(&state, 0).unwrap();
+        assert!(state.drive_cache.lock().unwrap().is_some());
+        events.lock().unwrap().clear();
+        set_backend(&state, "nas").unwrap();
+        assert!(
+            state
+                .with_store(|s| s.sync_files("out"))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(state.drive_cache.lock().unwrap().is_none());
+        let last = state
+            .with_store(|s| s.get_setting(SETTING_LAST_COMPACTION_AT))
+            .unwrap();
+        assert_eq!(parse_time(last), None);
+        assert_eq!(status_now(&state).backend, "nas");
+        assert!(events.lock().unwrap().contains(&EVENT_SYNC.to_string()));
+        assert!(set_backend(&state, "dropbox").is_err());
+        assert_eq!(status_now(&state).backend, "nas");
+    }
+
+    #[test]
+    fn nas_settings_are_saved_and_the_password_goes_to_the_keychain() {
+        let (state, _) = test_state();
+        set_nas(&state, " https://nas/x ", " kou ", Some("secret")).unwrap();
+        let st = status_now(&state);
+        assert_eq!(st.nas_url, "https://nas/x");
+        assert_eq!(st.nas_user, "kou");
+        assert!(st.nas_password_set);
+        assert!(!serde_json::to_string(&st).unwrap().contains("secret"));
+        assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("secret"));
+        assert_eq!(
+            state
+                .with_store(|s| s.get_setting("sync.nas_password"))
+                .unwrap(),
+            None
+        );
+        set_nas(&state, "https://nas/y", "kou", None).unwrap();
+        assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("secret"));
+        assert!(status_now(&state).nas_password_set);
+        set_nas(&state, "https://nas/y", "kou", Some("")).unwrap();
+        assert_eq!(state.nas_secrets.get().unwrap(), None);
+        assert!(!status_now(&state).nas_password_set);
+    }
+
+    #[test]
+    fn nas_needs_tailscale_and_says_what_to_do() {
+        let (mut state, _) = test_state();
+        let (fake, _, seen) = nas_ready(&mut state, TailnetState::Stopped);
+        let msg = |s: &AppState| make_drive(s, 0).err().unwrap().message;
+        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        fake.set_state(TailnetState::NeedsLogin { url: "u".into() });
+        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        fake.set_state(TailnetState::Starting);
+        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        fake.set_state(TailnetState::NeedsApproval);
+        assert_eq!(
+            msg(&state),
+            "Tailscale の管理画面でこの端末を承認してください"
+        );
+        assert!(seen.lock().unwrap().is_empty(), "never connects directly");
+        fake.set_state(running());
+        make_drive(&state, 0).unwrap();
+        let cfg = seen.lock().unwrap()[0].clone();
+        assert_eq!(cfg.url, "https://nas.ts.net:5006/sync");
+        assert_eq!((cfg.user.as_str(), cfg.password.as_str()), ("kou", "pw"));
+        assert_eq!(cfg.proxy, fake.proxy_url());
+    }
+
+    #[test]
+    fn nas_incomplete_settings_stop_with_a_message() {
+        let (mut state, _) = test_state();
+        nas_ready(&mut state, running());
+        set_nas(&state, "", "kou", None).unwrap();
+        assert!(make_drive(&state, 0).is_err());
+    }
+
+    #[tokio::test]
+    async fn nas_sync_runs_only_when_tailscale_is_running_and_settings_are_complete() {
+        let (mut state, _) = test_state();
+        let (fake, drive, _) = nas_ready(&mut state, TailnetState::Stopped);
+        sync_once(&state).await.unwrap();
+        assert!(drive.names().is_empty());
+        assert_eq!(state.sync.lock().unwrap().error, None);
+        fake.set_state(running());
+        sync_once(&state).await.unwrap();
+        assert!(drive.names().contains(&"manifest.json".to_string()));
+        assert!(refresh_and_get(&state).signed_in);
+        fake.set_state(TailnetState::Stopped);
+        assert!(!refresh_and_get(&state).signed_in);
+    }
+
+    fn refresh_and_get(state: &AppState) -> SyncStatus {
+        status_now(state)
+    }
+
+    #[tokio::test]
+    async fn bad_credentials_show_a_message_and_stop_retries_until_settings_change() {
+        let (mut state, _) = test_state();
+        let (_, drive, _) = nas_ready(&mut state, running());
+        *drive.fail_next.lock().unwrap() = Some(DriveError::BadCredentials);
+        sync_once(&state).await.unwrap();
+        let st = state.sync.lock().unwrap().clone();
+        assert_eq!(
+            st.error.as_deref(),
+            Some("NAS のユーザー名かパスワードが違います")
+        );
+        assert!(
+            refresh_and_get(&state).signed_in,
+            "signed_in is not touched"
+        );
+        *drive.fail_next.lock().unwrap() = Some(DriveError::Other("again".into()));
+        sync_once(&state).await.unwrap();
+        assert!(drive.fail_next.lock().unwrap().is_some(), "no retry");
+        assert_eq!(
+            state.sync.lock().unwrap().error.as_deref(),
+            Some("NAS のユーザー名かパスワードが違います")
+        );
+        set_nas(&state, "https://nas.ts.net:5006/sync", "kou", Some("new")).unwrap();
+        assert_eq!(state.sync.lock().unwrap().error, None);
+        sync_once(&state).await.unwrap();
+        assert!(drive.fail_next.lock().unwrap().is_none(), "retried");
+    }
+
+    #[tokio::test]
+    async fn the_nas_check_reads_and_writes_even_when_sync_is_off() {
+        let (mut state, _) = test_state();
+        let (_, drive, _) = nas_ready(&mut state, running());
+        state
+            .with_store(|s| s.set_setting(SETTING_ENABLED, "false"))
+            .unwrap();
+        assert_eq!(test_nas(&state).await, "読み書きできました");
+        assert!(drive.names().is_empty(), "the temporary file is removed");
+        *drive.fail_next.lock().unwrap() = Some(DriveError::BadCredentials);
+        assert_eq!(
+            test_nas(&state).await,
+            "NAS のユーザー名かパスワードが違います"
+        );
+        *drive.fail_next.lock().unwrap() = Some(DriveError::Retryable("x".into()));
+        assert!(test_nas(&state).await.contains("接続できません"));
+    }
+
+    #[tokio::test]
+    async fn the_nas_check_needs_tailscale_and_settings() {
+        let (mut state, _) = test_state();
+        let (fake, _, seen) = nas_ready(&mut state, TailnetState::Stopped);
+        assert_eq!(test_nas(&state).await, "Tailscale にログインしてください");
+        fake.set_state(running());
+        set_nas(&state, "https://nas/x", "", None).unwrap();
+        assert!(test_nas(&state).await.contains("入力"));
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_tailnet_state_is_mirrored_into_the_status() {
+        let (mut state, _) = test_state();
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::Stopped);
+        let view = |s: &AppState| serde_json::to_value(status_now(s).tailnet).unwrap();
+        assert_eq!(view(&state)["state"], "stopped");
+        fake.set_state(TailnetState::NeedsLogin { url: "u".into() });
+        assert_eq!(view(&state)["state"], "needs_login");
+        fake.set_state(TailnetState::NeedsApproval);
+        assert_eq!(view(&state)["state"], "needs_approval");
+        fake.set_state(TailnetState::Starting);
+        assert_eq!(view(&state)["state"], "starting");
+        fake.set_state(running());
+        assert_eq!(view(&state)["state"], "running");
+        assert_eq!(view(&state)["name"], "mac");
+        fake.set_state(TailnetState::Failed {
+            reason: "boom".into(),
+        });
+        assert_eq!(view(&state)["state"], "failed");
+        assert_eq!(view(&state)["reason"], "boom");
+    }
+
+    #[test]
+    fn the_tailnet_starts_at_launch_only_for_an_enabled_nas() {
+        let (mut state, _) = test_state();
+        nas_ready(&mut state, TailnetState::Stopped);
+        assert!(should_start_tailnet(&state));
+        set_enabled(&state, false).unwrap();
+        assert!(!should_start_tailnet(&state));
+        set_enabled(&state, true).unwrap();
+        set_backend(&state, "google").unwrap();
+        assert!(!should_start_tailnet(&state));
     }
 }

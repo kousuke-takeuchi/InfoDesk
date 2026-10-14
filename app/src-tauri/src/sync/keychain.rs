@@ -3,6 +3,10 @@ use std::sync::Mutex;
 
 pub const SERVICE: &str = "jp.infodesk.app.google";
 pub const ACCOUNT: &str = "refresh_token";
+#[cfg_attr(test, allow(dead_code))]
+pub const NAS_SERVICE: &str = "jp.infodesk.app.nas";
+#[cfg_attr(test, allow(dead_code))]
+pub const NAS_ACCOUNT: &str = "password";
 
 /// 更新用トークンの置き場。本番はキーチェーン、テストはメモリ。
 pub trait SecretStore: Send + Sync {
@@ -32,13 +36,47 @@ impl SecretStore for MemorySecretStore {
 
 /// macOS のキーチェーン (汎用パスワード)。
 #[cfg(target_os = "macos")]
-pub struct KeychainStore;
+pub struct KeychainStore {
+    service: &'static str,
+    account: &'static str,
+}
+
+#[cfg(target_os = "macos")]
+impl KeychainStore {
+    /// Google の更新用トークン。
+    pub fn google() -> Self {
+        Self {
+            service: SERVICE,
+            account: ACCOUNT,
+        }
+    }
+
+    /// NAS (WebDAV) のパスワード。
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn nas() -> Self {
+        Self {
+            service: NAS_SERVICE,
+            account: NAS_ACCOUNT,
+        }
+    }
+}
+
+/// NAS のパスワードの置き場。テストではメモリ。
+#[cfg(all(target_os = "macos", not(test)))]
+pub fn nas_store() -> std::sync::Arc<dyn SecretStore> {
+    std::sync::Arc::new(KeychainStore::nas())
+}
+
+#[cfg(any(test, not(target_os = "macos")))]
+pub fn nas_store() -> std::sync::Arc<dyn SecretStore> {
+    std::sync::Arc::new(MemorySecretStore::default())
+}
 
 #[cfg(target_os = "macos")]
 impl SecretStore for KeychainStore {
     fn get(&self) -> Result<Option<String>, String> {
         use security_framework::passwords::get_generic_password;
-        match get_generic_password(SERVICE, ACCOUNT) {
+        match get_generic_password(self.service, self.account) {
             Ok(bytes) => String::from_utf8(bytes)
                 .map(Some)
                 .map_err(|e| e.to_string()),
@@ -47,11 +85,15 @@ impl SecretStore for KeychainStore {
         }
     }
     fn set(&self, value: &str) -> Result<(), String> {
-        security_framework::passwords::set_generic_password(SERVICE, ACCOUNT, value.as_bytes())
-            .map_err(|e| format!("keychain: {e}"))
+        security_framework::passwords::set_generic_password(
+            self.service,
+            self.account,
+            value.as_bytes(),
+        )
+        .map_err(|e| format!("keychain: {e}"))
     }
     fn delete(&self) -> Result<(), String> {
-        match security_framework::passwords::delete_generic_password(SERVICE, ACCOUNT) {
+        match security_framework::passwords::delete_generic_password(self.service, self.account) {
             Ok(()) => Ok(()),
             Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
             Err(e) => Err(format!("keychain: {e}")),

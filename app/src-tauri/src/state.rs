@@ -55,6 +55,14 @@ impl AppStatus {
 pub type Notifier = Arc<dyn Fn(&str) + Send + Sync>;
 pub type DriveFactory =
     Arc<dyn Fn() -> AppResult<Arc<dyn infodesk_core::sync::drive::DriveStore>> + Send + Sync>;
+/// NAS (WebDAV) の保存先の作り方。テストで差し替える。
+pub type NasDriveFactory = Arc<
+    dyn Fn(
+            infodesk_core::sync::webdav::WebDavConfig,
+        ) -> AppResult<Arc<dyn infodesk_core::sync::drive::DriveStore>>
+        + Send
+        + Sync,
+>;
 pub type LlmFactory =
     Arc<dyn Fn(&Store, LlmRole) -> infodesk_core::Result<Box<dyn LlmProvider>> + Send + Sync>;
 
@@ -88,6 +96,12 @@ pub struct AppState {
     sync_launcher: Mutex<Option<SyncLauncher>>,
     /// アプリ内の Tailscale 端末。テストでは偽物に差し替える。
     pub tailnet: Arc<dyn crate::tailnet::Tailnet>,
+    /// NAS の保存先の作り方。
+    pub nas_drive_factory: NasDriveFactory,
+    /// NAS のパスワードの置き場。
+    pub nas_secrets: Arc<dyn crate::sync::keychain::SecretStore>,
+    /// NAS に資格情報を拒否された。NAS の設定が変わるまで同期を止める。
+    pub nas_rejected: AtomicBool,
 }
 
 pub type SyncLauncher = Arc<dyn Fn() + Send + Sync>;
@@ -114,6 +128,9 @@ impl AppState {
             drive_cache: Mutex::new(None),
             sync_launcher: Mutex::new(None),
             tailnet,
+            nas_drive_factory: Arc::new(crate::sync::webdav_drive),
+            nas_secrets: crate::sync::keychain::nas_store(),
+            nas_rejected: AtomicBool::new(false),
         }
     }
 

@@ -362,7 +362,7 @@ fn config_or_err() -> AppResult<OAuthConfig> {
 
 #[cfg(target_os = "macos")]
 fn keychain() -> Arc<dyn SecretStore> {
-    Arc::new(crate::sync::keychain::KeychainStore)
+    Arc::new(crate::sync::keychain::KeychainStore::google())
 }
 
 #[cfg(not(target_os = "macos"))]

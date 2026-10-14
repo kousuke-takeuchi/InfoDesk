@@ -545,6 +545,12 @@ impl Store {
         Ok(())
     }
 
+    /// Forget every remote file record, e.g. when the storage backend changes.
+    pub fn clear_sync_files(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM sync_files", [])?;
+        Ok(())
+    }
+
     pub fn sync_files(&self, kind: &str) -> Result<Vec<SyncFileRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT name, kind, drive_id, sha256, updated_at, fingerprint FROM sync_files \
@@ -884,5 +890,8 @@ mod tests {
         assert_eq!(s.sync_files("out").unwrap().len(), 1);
         s.delete_sync_file("a").unwrap();
         assert!(s.sync_file("a").unwrap().is_none());
+        s.clear_sync_files().unwrap();
+        assert!(s.sync_file("b").unwrap().is_none());
+        assert!(s.sync_files("in").unwrap().is_empty());
     }
 }
