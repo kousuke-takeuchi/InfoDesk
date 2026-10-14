@@ -45,6 +45,7 @@ Open the Tailscale admin console in a browser and go to the Machines page.
 - **Approve.** If your tailnet has device approval turned on, a new device waits for an admin. Find `infodesk-mac`, open its menu and choose to approve it. Until then the Sync tab shows 「Tailscale の管理画面でこの端末を承認してください」.
 - **Check.** A running node shows `infodesk-mac` as connected.
 - **Remove.** To remove the device, open its menu in the Machines list and choose to delete it. The Mac then has to log in again. Pressing "ログアウト" in the Sync tab also removes the device, because logout is sent to Tailscale first.
+- **Keep the NAS in the tailnet.** If the NAS is removed from the tailnet while a sync is running, that one sync can fall back to the Mac's normal network for its remaining requests. The next sync refuses. Turn sync off before removing the NAS.
 - **Key expiry.** A device key can expire after a set time. If it does, log in again from the Sync tab, or turn off key expiry for `infodesk-mac` in the admin console.
 
 ## 4. Switching the storage
@@ -66,7 +67,8 @@ The Sync tab shows these messages as the last sync error or as the result of "�
 | 「NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください」 | The host in the URL is not a device in your tailnet, so InfoDesk sent nothing. Use the NAS name shown in the Tailscale admin console (for example `takeuchi-nas`), its full name, or its `100.x.y.z` address, not a LAN address such as `192.168.1.10`. Check that the NAS is logged in to the same tailnet as `infodesk-mac`. |
 | 「Tailscale が停止中です」 | This Mac has logged in to Tailscale before, but the node is stopped (for example because sync is off). Press "Tailscale にログイン" to start it (no login page opens when this Mac is already logged in), or turn on "同期する". |
 | 「NAS の URL を確かめてください (転送されました)」 | The NAS redirected the request, often because the folder name or the scheme is wrong. Use `http://<NAS name>:5005/<folder>/` with the folder name that exists on the NAS, and `http` with port 5005, not `https`. |
-| 「NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)」 | Shown when you save a URL that is not a plain `http://` or `https://` address with a host, or that contains a user name or password. The URL may be left empty while you fill in the other fields. |
+| 「NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)」 | Shown when you save a URL that is not a plain `http://` address with a host, or that contains a user name or password. The URL may be left empty while you fill in the other fields. |
+| 「http:// を使ってください (Tailscale の中なので暗号化されています)」 | The URL starts with `https://`. InfoDesk connects to the NAS's Tailscale address, so the certificate name would not match and TLS would fail. Use `http://`; the traffic is already encrypted inside Tailscale. |
 | 「保存先のエラー: …」 | Any other error from the NAS, with the detail after the colon. |
 
 Other cases:

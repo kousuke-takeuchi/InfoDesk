@@ -328,6 +328,9 @@ struct Inner {
     running: bool,
     /// 利用者がログインを押した。ログイン URL が分かったら開く。`stop` で下ろす。
     wants_login: bool,
+    /// 直近に開いたログイン URL。`login` と起動スレッドで共有し、同じ URL を二重に開かない。
+    /// ログインを押し直したとき、`stop` のときに下ろす。
+    opened_login: Option<String>,
     /// 起動、停止のたびに増やす。状態の書き込みと同じロックの中で比べる。
     generation: u64,
     /// 直近の起動スレッド。次の起動はこれの終了を待ってから始める。
@@ -421,10 +424,14 @@ impl EmbeddedTailnet {
             if g.running {
                 // 起動中なら、ログイン URL が分かったときに開くよう頼むだけ。
                 g.wants_login |= interactive;
+                if interactive {
+                    g.opened_login = None;
+                }
                 return Ok(());
             }
             g.running = true;
             g.wants_login = interactive;
+            g.opened_login = None;
             g.generation += 1;
             g.state = Some(TailnetState::Starting);
             (g.generation, g.thread.take())
@@ -467,7 +474,6 @@ impl EmbeddedTailnet {
                 g.node = Some(ts);
                 g.loopback = Some(lb.clone());
             }
-            let mut opened: Option<String> = None;
             while current(&inner, gen_id) {
                 if let Ok((200, body)) = localapi(
                     &lb,
@@ -486,13 +492,17 @@ impl EmbeddedTailnet {
                             notify(EVENT_SYNC);
                         }
                         // 利用者がログインを押したときだけ開く。裏の起動では開かない。
-                        let wants = inner.lock().unwrap_or_else(|e| e.into_inner()).wants_login;
-                        if let Some(url) = url
-                            && wants
-                            && opened.as_deref() != Some(url.as_str())
-                        {
+                        // `login` が開いた URL は、ここで開き直さない。
+                        let to_open = url.filter(|url| {
+                            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+                            let fresh = g.wants_login && g.opened_login.as_deref() != Some(url);
+                            if fresh {
+                                g.opened_login = Some(url.clone());
+                            }
+                            fresh
+                        });
+                        if let Some(url) = to_open {
                             open(&url);
-                            opened = Some(url);
                         }
                     }
                 }
@@ -509,6 +519,7 @@ impl EmbeddedTailnet {
         g.generation += 1;
         g.running = false;
         g.wants_login = false;
+        g.opened_login = None;
         g.loopback = None;
         g.state = Some(TailnetState::Stopped);
         g.node.take()
@@ -648,6 +659,7 @@ impl Tailnet for EmbeddedTailnet {
                 (Some(TailnetState::NeedsLogin { url }), true) => {
                     let url = url.clone();
                     g.wants_login = true;
+                    g.opened_login = Some(url.clone());
                     Some(url)
                 }
                 _ => None,
@@ -1160,6 +1172,9 @@ mod tests {
             ["https://login.tailscale.com/a/xyz"]
         );
         assert_eq!(t.inner.lock().unwrap().generation, generation);
+        // 次の問い合わせが同じ URL をもう一度開かない。
+        std::thread::sleep(POLL_INTERVAL + Duration::from_millis(300));
+        assert_eq!(opened.lock().unwrap().len(), 1, "opened once");
         t.stop();
     }
 

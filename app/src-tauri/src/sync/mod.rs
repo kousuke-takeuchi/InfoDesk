@@ -38,6 +38,9 @@ pub const BACKEND_GDRIVE: &str = "gdrive";
 pub const BACKEND_NAS: &str = "nas";
 pub const NAS_URL_MESSAGE: &str =
     "NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)";
+/// https の NAS の URL。Tailscale の中は WireGuard で暗号化されている。
+pub const NAS_HTTPS_MESSAGE: &str =
+    "http:// を使ってください (Tailscale の中なので暗号化されています)";
 /// WebDAV クライアントを作れなかった。詳細 (プロキシの資格情報を含みうる) は出さない。
 pub const NAS_PREPARE_MESSAGE: &str = "NAS への接続を準備できません";
 pub const TAILNET_LOGIN_MESSAGE: &str = "Tailscale にログインしてください";
@@ -270,20 +273,20 @@ pub fn google_drive() -> AppResult<Arc<dyn DriveStore>> {
 }
 
 #[cfg(test)]
-fn make_drive(state: &AppState, generation: u64) -> AppResult<Arc<dyn DriveStore>> {
+async fn make_drive(state: &AppState, generation: u64) -> AppResult<Arc<dyn DriveStore>> {
     let nas = state.with_store(read_nas)?;
-    make_drive_for(state, &nas, generation)
+    make_drive_for(state, &nas, generation).await
 }
 
 /// 作ったクライアントを覚えておく。サインインやサインアウトで捨てる。
-fn make_drive_for(
+async fn make_drive_for(
     state: &AppState,
     nas: &NasSettings,
     generation: u64,
 ) -> AppResult<Arc<dyn DriveStore>> {
     if nas.is_nas() {
         // プロキシの口は Tailscale を起動し直すと変わるので、NAS の保存先は覚えない。
-        return nas_drive(state, nas);
+        return nas_drive(state, nas).await;
     }
     let mut cache = state.drive_cache.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(d) = cache.as_ref() {
@@ -300,7 +303,7 @@ fn make_drive_for(
 /// NAS の保存先を作る。Tailscale が Running でなければ、直接つながずに止める。
 /// URL のホストが tailnet の端末でなければ止める (tsnet の SOCKS5 プロキシは、tailnet にない宛先を
 /// システムのネットワークへそのまま出してしまう)。端末なら、宛先をその Tailscale の IP に書き換える。
-fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStore>> {
+async fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStore>> {
     let proxy = match state.tailnet.state() {
         TailnetState::Running { .. } => state.tailnet.proxy_url(),
         TailnetState::NeedsApproval => return Err(TAILNET_APPROVAL_MESSAGE.to_string().into()),
@@ -315,7 +318,12 @@ fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStor
     if !nas.complete() {
         return Err(NAS_INCOMPLETE_MESSAGE.to_string().into());
     }
-    let url = url_in_tailnet(state, &nas.url)?;
+    // 端末の状態の問い合わせは待たされることがある。非同期の実行環境を止めない。
+    let tailnet = state.tailnet.clone();
+    let raw = nas.url.clone();
+    let url = tokio::task::spawn_blocking(move || url_in_tailnet(tailnet.as_ref(), &raw))
+        .await
+        .map_err(|_| NAS_PREPARE_MESSAGE.to_string())??;
     let password = state
         .nas_secrets
         .get()
@@ -336,11 +344,14 @@ fn nas_drive(state: &AppState, nas: &NasSettings) -> AppResult<Arc<dyn DriveStor
 
 /// NAS の URL のホストを、tailnet の端末の Tailscale の IP に書き換える。ポートとパスはそのまま。
 /// Host ヘッダーも IP になる。Synology の WebDAV Server はポートで受けるので名前を見ない。
-fn url_in_tailnet(state: &AppState, raw: &str) -> AppResult<String> {
+fn url_in_tailnet(tailnet: &dyn crate::tailnet::Tailnet, raw: &str) -> AppResult<String> {
     let not_found = || crate::error::AppError::from(NAS_NOT_IN_TAILNET_MESSAGE.to_string());
     let mut url = url::Url::parse(raw).map_err(|_| NAS_URL_MESSAGE.to_string())?;
+    if url.scheme() == "https" {
+        return Err(NAS_HTTPS_MESSAGE.to_string().into());
+    }
     let host = url.host_str().ok_or_else(not_found)?.to_string();
-    let ip = state.tailnet.peer_addr(&host).ok_or_else(not_found)?;
+    let ip = tailnet.peer_addr(&host).ok_or_else(not_found)?;
     url.set_ip_host(ip).map_err(|_| not_found())?;
     Ok(url.to_string())
 }
@@ -460,10 +471,14 @@ fn take_reset(s: &infodesk_core::Store) -> infodesk_core::Result<bool> {
     Ok(true)
 }
 
-/// NAS の URL として使えるか。http か https で、ホストがあり、URL に資格情報を含まない。
+/// NAS の URL として使えるか。http で、ホストがあり、URL に資格情報を含まない。
+/// https は止める (宛先を Tailscale の IP に書き換えると、証明書の名前が合わず TLS が失敗する)。
 fn check_nas_url(url: &str) -> AppResult<()> {
+    if url::Url::parse(url).is_ok_and(|u| u.scheme() == "https") {
+        return Err(NAS_HTTPS_MESSAGE.to_string().into());
+    }
     let ok = url::Url::parse(url).is_ok_and(|u| {
-        matches!(u.scheme(), "http" | "https")
+        u.scheme() == "http"
             && u.host_str().is_some_and(|h| !h.is_empty())
             && u.username().is_empty()
             && u.password().is_none()
@@ -554,7 +569,7 @@ pub async fn test_nas(state: &AppState) -> String {
         Ok(n) => n,
         Err(e) => return e.message,
     };
-    let drive = match nas_drive(state, &nas) {
+    let drive = match nas_drive(state, &nas).await {
         Ok(d) => d,
         Err(e) => return e.message,
     };
@@ -748,7 +763,7 @@ async fn run_once(state: &AppState) -> AppResult<()> {
             return Err(e);
         }
     };
-    let drive = match make_drive_for(state, &nas, generation) {
+    let drive = match make_drive_for(state, &nas, generation).await {
         Ok(d) => d,
         Err(e) => {
             if !stale() {
@@ -1425,8 +1440,8 @@ mod tests {
         assert_eq!(setting(&state, "sync.nas_user"), None);
     }
 
-    #[test]
-    fn switching_backend_asks_the_next_pass_to_start_over() {
+    #[tokio::test]
+    async fn switching_backend_asks_the_next_pass_to_start_over() {
         use infodesk_core::store::SyncFileRow;
         let (mut state, events) = test_state();
         ready(&mut state);
@@ -1443,7 +1458,7 @@ mod tests {
                 s.set_setting(SETTING_LAST_COMPACTION_AT, &Utc::now().to_rfc3339())
             })
             .unwrap();
-        make_drive(&state, 0).unwrap();
+        make_drive(&state, 0).await.unwrap();
         assert!(state.drive_cache.lock().unwrap().is_some());
         events.lock().unwrap().clear();
         assert!(set_backend(&state, "nas").unwrap());
@@ -1522,17 +1537,17 @@ mod tests {
         assert!(!reset_pending(&state));
         set_nas(&state, NAS_URL, "kou", Some("other")).unwrap();
         assert!(!reset_pending(&state), "same URL");
-        set_nas(&state, "https://nas.ts.net:5006/other", "kou", None).unwrap();
+        set_nas(&state, "http://nas.ts.net:5006/other", "kou", None).unwrap();
         assert!(reset_pending(&state));
         sync_once(&state).await.unwrap();
         assert!(!reset_pending(&state));
     }
 
-    #[test]
-    fn choosing_the_same_backend_again_does_nothing() {
+    #[tokio::test]
+    async fn choosing_the_same_backend_again_does_nothing() {
         let (mut state, events) = test_state();
         ready(&mut state);
-        make_drive(&state, 0).unwrap();
+        make_drive(&state, 0).await.unwrap();
         events.lock().unwrap().clear();
         let generation = state.sync_generation.load(Ordering::SeqCst);
         assert!(!set_backend(&state, "gdrive").unwrap());
@@ -1578,7 +1593,7 @@ mod tests {
             Some("pw"),
         )
         .unwrap();
-        set_nas(&state, "https://nas.ts.net:5006/sync", "kou", None).unwrap();
+        set_nas(&state, "http://nas.ts.net:5006/sync", "kou", None).unwrap();
         assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("pw"));
     }
 
@@ -1625,13 +1640,13 @@ mod tests {
         assert_eq!(count(), 2);
     }
 
-    #[test]
-    fn a_missing_keychain_password_clears_the_flag() {
+    #[tokio::test]
+    async fn a_missing_keychain_password_clears_the_flag() {
         let (mut state, _) = test_state();
         nas_ready(&mut state, running());
         assert!(status_now(&state).nas_password_set);
         state.nas_secrets.delete().unwrap();
-        let err = make_drive(&state, 0).err().unwrap();
+        let err = make_drive(&state, 0).await.err().unwrap();
         assert_eq!(err.message, NAS_INCOMPLETE_MESSAGE);
         assert!(!status_now(&state).nas_password_set);
     }
@@ -1748,54 +1763,56 @@ mod tests {
     #[test]
     fn nas_settings_are_saved_and_the_password_goes_to_the_keychain() {
         let (state, _) = test_state();
-        set_nas(&state, " https://nas/x ", " kou ", Some("secret")).unwrap();
+        set_nas(&state, " http://nas/x ", " kou ", Some("secret")).unwrap();
         let st = status_now(&state);
-        assert_eq!(st.nas_url, "https://nas/x");
+        assert_eq!(st.nas_url, "http://nas/x");
         assert_eq!(st.nas_user, "kou");
         assert!(st.nas_password_set);
         assert!(!serde_json::to_string(&st).unwrap().contains("secret"));
         assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("secret"));
         assert_eq!(setting(&state, "sync.nas_password"), None);
         assert_eq!(setting(&state, "sync.nas.password"), None);
-        set_nas(&state, "https://nas/y", "kou", None).unwrap();
+        set_nas(&state, "http://nas/y", "kou", None).unwrap();
         assert_eq!(state.nas_secrets.get().unwrap().as_deref(), Some("secret"));
         assert!(status_now(&state).nas_password_set);
-        set_nas(&state, "https://nas/y", "kou", Some("")).unwrap();
+        set_nas(&state, "http://nas/y", "kou", Some("")).unwrap();
         assert_eq!(state.nas_secrets.get().unwrap(), None);
         assert!(!status_now(&state).nas_password_set);
     }
 
-    #[test]
-    fn nas_needs_tailscale_and_says_what_to_do() {
+    #[tokio::test]
+    async fn nas_needs_tailscale_and_says_what_to_do() {
         let (mut state, _) = test_state();
         let (fake, _, seen) = nas_ready(&mut state, TailnetState::Stopped);
-        let msg = |s: &AppState| make_drive(s, 0).err().unwrap().message;
-        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        async fn msg(s: &AppState) -> String {
+            make_drive(s, 0).await.err().unwrap().message
+        }
+        assert_eq!(msg(&state).await, "Tailscale にログインしてください");
         fake.set_state(TailnetState::NeedsLogin { url: "u".into() });
-        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        assert_eq!(msg(&state).await, "Tailscale にログインしてください");
         fake.set_state(TailnetState::Starting);
-        assert_eq!(msg(&state), "Tailscale にログインしてください");
+        assert_eq!(msg(&state).await, "Tailscale にログインしてください");
         fake.set_state(TailnetState::NeedsApproval);
         assert_eq!(
-            msg(&state),
+            msg(&state).await,
             "Tailscale の管理画面でこの端末を承認してください"
         );
         assert!(seen.lock().unwrap().is_empty(), "never connects directly");
         fake.set_state(running());
-        make_drive(&state, 0).unwrap();
+        make_drive(&state, 0).await.unwrap();
         let cfg = seen.lock().unwrap()[0].clone();
         assert_eq!(cfg.url, NAS_VIA_TAILNET);
         assert_eq!((cfg.user.as_str(), cfg.password.as_str()), ("kou", "pw"));
         assert_eq!(cfg.proxy, fake.proxy_url());
     }
 
-    #[test]
-    fn nas_incomplete_settings_stop_with_a_message() {
+    #[tokio::test]
+    async fn nas_incomplete_settings_stop_with_a_message() {
         let (mut state, _) = test_state();
         nas_ready(&mut state, running());
         set_nas(&state, NAS_URL, "", None).unwrap();
         assert_eq!(
-            make_drive(&state, 0).err().unwrap().message,
+            make_drive(&state, 0).await.err().unwrap().message,
             "NAS の URL、ユーザー名、パスワードを入力してください"
         );
     }
@@ -1867,7 +1884,7 @@ mod tests {
         let (fake, _, seen) = nas_ready(&mut state, TailnetState::Stopped);
         assert_eq!(test_nas(&state).await, "Tailscale にログインしてください");
         fake.set_state(running());
-        set_nas(&state, "https://nas/x", "", None).unwrap();
+        set_nas(&state, "http://nas/x", "", None).unwrap();
         assert_eq!(test_nas(&state).await, NAS_INCOMPLETE_MESSAGE);
         assert!(seen.lock().unwrap().is_empty());
     }
@@ -1909,8 +1926,8 @@ mod tests {
 
     // ---- tailnet の中だけ ----
 
-    #[test]
-    fn the_nas_is_reached_only_at_its_tailscale_ip() {
+    #[tokio::test]
+    async fn the_nas_is_reached_only_at_its_tailscale_ip() {
         let (mut state, _) = test_state();
         let (_, _, seen) = nas_ready(&mut state, running());
         for (url, expected) in [
@@ -1932,9 +1949,33 @@ mod tests {
         ] {
             set_nas(&state, url, "kou", None).unwrap();
             seen.lock().unwrap().clear();
-            make_drive(&state, 0).unwrap();
+            make_drive(&state, 0).await.unwrap();
             assert_eq!(seen.lock().unwrap()[0].url, expected, "{url}");
         }
+    }
+
+    #[tokio::test]
+    async fn https_nas_urls_are_refused_with_a_hint() {
+        let (mut state, _) = test_state();
+        let (_, _, seen) = nas_ready(&mut state, running());
+        let expected = "http:// を使ってください (Tailscale の中なので暗号化されています)";
+        assert_eq!(NAS_HTTPS_MESSAGE, expected);
+        // 保存の時点で止める。
+        for url in [
+            "https://takeuchi-nas:5006/infodesk/",
+            "HTTPS://takeuchi-nas/x",
+        ] {
+            let err = set_nas(&state, url, "kou", None).unwrap_err();
+            assert_eq!(err.message, expected, "{url}");
+        }
+        // 既に保存されている https の URL も、同じ文で止める。
+        state
+            .with_store(|s| s.set_setting("sync.nas.url", "https://takeuchi-nas:5006/infodesk/"))
+            .unwrap();
+        let err = make_drive(&state, 0).await.err().unwrap();
+        assert_eq!(err.message, expected);
+        assert_eq!(test_nas(&state).await, expected);
+        assert!(seen.lock().unwrap().is_empty(), "never built a client");
     }
 
     #[tokio::test]
@@ -1948,7 +1989,7 @@ mod tests {
             "http://100.100.1.99:5005/infodesk/",
         ] {
             set_nas(&state, url, "kou", None).unwrap();
-            let err = make_drive(&state, 0).err().unwrap();
+            let err = make_drive(&state, 0).await.err().unwrap();
             assert_eq!(err.message, NAS_NOT_IN_TAILNET_MESSAGE, "{url}");
             assert_eq!(test_nas(&state).await, NAS_NOT_IN_TAILNET_MESSAGE, "{url}");
             sync_once(&state).await.unwrap();

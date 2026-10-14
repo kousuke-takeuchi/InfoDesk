@@ -46,6 +46,7 @@ If you sign in for [Cloud Sync](12-cloud-sync.md), the Google refresh token is s
 
 If you choose NAS storage (see [NAS Setup](13-nas-setup.md)):
 
+- Residual risk: if the NAS is removed from the tailnet while a sync is running, that one sync can fall back to the Mac's normal network for its remaining requests. The next sync refuses. Keep the NAS in the tailnet, and turn sync off before removing it.
 - The NAS is reached only through the Tailscale node inside InfoDesk. There is no system VPN, so other apps on the Mac are not affected, and no Tailscale app is needed.
 - Sync data goes only to a device in your tailnet. The node's proxy would send a request for a host it does not know (a LAN address, or a name it cannot resolve in the tailnet) over the Mac's normal network, so InfoDesk checks first: before each sync and each connection check it reads the tailnet's device list from the node, accepts the URL's host only when it is a device's name or Tailscale IP address, and connects to that device's Tailscale IPv4 address. Any other host is refused, and no request (and no password) is sent.
 - InfoDesk touches only its own sync files in the NAS folder. Other files there are not read, listed in `manifest.json` or deleted.
