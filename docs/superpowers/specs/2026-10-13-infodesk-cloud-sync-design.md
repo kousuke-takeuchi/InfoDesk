@@ -34,7 +34,7 @@ Mac (InfoDesk.app)                Google Drive (個人, appDataFolder)          
 ```
 
 - Mac もモバイルも Google Drive API v3 を直接使う。
-- 置き場所は Drive のアプリ専用フォルダ `appDataFolder`。権限は `https://www.googleapis.com/auth/drive.appdata` だけを求める。この権限は Google の区分で non-sensitive であり、アプリの審査は要らない。
+- 置き場所は Drive のアプリ専用フォルダ `appDataFolder`。Drive の権限は `https://www.googleapis.com/auth/drive.appdata` だけを求める。ほかに、ログイン中のアカウントのメールアドレスを表示するため `openid` と `email` を求める。どれも Google の区分で non-sensitive であり、アプリの審査は要らない。
 - 同じ Google Cloud プロジェクトの OAuth クライアント (Mac 用はデスクトップ、モバイル用は iOS と Android) を使う。`appDataFolder` はプロジェクト単位で共有されるので、Mac が書いたファイルをモバイルが読める。
 
 ## 3. Drive 上のファイル
@@ -157,7 +157,7 @@ Mac の DB を作り直すと記事 id が変わる。`manifest.json` の `db_id
 
 1. 個人の Google アカウントで Google Cloud のプロジェクトを作る。
 2. Google Drive API を有効にする。
-3. OAuth 同意画面を作り、権限に `drive.appdata` だけを入れ、公開状態を「本番」にする。公開状態が「テスト」だと更新用トークンが7日で切れる。
+3. OAuth 同意画面を作り、権限に `drive.appdata` (と `openid`、`email`) だけを入れ、公開状態を「本番」にする。公開状態が「テスト」だと更新用トークンが7日で切れる。
 4. OAuth クライアントを作る: 種類「デスクトップ アプリ」(Mac 用)、「iOS」(モバイル用、バンドル ID `jp.infodesk.mobile`)。Android は後で足す。
 5. デスクトップ用の ID とシークレットを `app/src-tauri/google-oauth.json` に書く (git 管理外)。iOS 用の ID は `mobile/` の設定ファイルに書く (同じく git 管理外。計画Bで決める)。
 
