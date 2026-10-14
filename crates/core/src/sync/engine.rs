@@ -658,8 +658,22 @@ impl Pass<'_> {
             writer: input.writer.clone(),
             files,
         };
+        let existing = self.remote.get(MANIFEST).cloned();
+        if let Some(f) = &existing {
+            // `written_at` means "when the content last changed": an identical
+            // manifest (ignoring `written_at`) is not rewritten.
+            if let Ok(bytes) = self.drive.download(&f.id).await
+                && let Ok(old) = serde_json::from_slice::<Manifest>(&bytes)
+                && (Manifest {
+                    written_at: manifest.written_at.clone(),
+                    ..old
+                }) == manifest
+            {
+                return Ok(());
+            }
+        }
         let bytes = st(serde_json::to_vec(&manifest).map_err(Into::into))?;
-        let file = match self.remote.get(MANIFEST).cloned() {
+        let file = match existing {
             Some(f) => self.drive.update(&f.id, bytes, MIME_JSON).await?,
             None => self.drive.create(MANIFEST, bytes, MIME_JSON).await?,
         };
@@ -823,13 +837,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn second_sync_without_changes_writes_only_the_manifest() {
+    async fn second_sync_without_changes_writes_nothing() {
         let m = setup();
         add_item(&m, "https://a/1", "2026-10-13T03:00:00Z");
         let drive = MemoryDrive::new();
         run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
         let again = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
-        assert_eq!(again.written_files, vec!["manifest.json"]);
+        assert!(again.written_files.is_empty(), "{:?}", again.written_files);
         assert!(again.deleted_files.is_empty());
     }
 
@@ -1366,7 +1380,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(again.built_files, 0);
-        assert_eq!(again.written_files, vec![MANIFEST]);
+        assert!(again.written_files.is_empty(), "{:?}", again.written_files);
         check_manifest_hashes(&drive).await;
     }
 

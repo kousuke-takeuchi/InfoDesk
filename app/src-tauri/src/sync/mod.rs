@@ -2,6 +2,7 @@ pub mod keychain;
 pub mod oauth;
 
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::Ordering;
 
 use chrono::{DateTime, Utc};
@@ -53,12 +54,17 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
 }
 
 /// macOS のコンピューター名。取れなければホスト名、それも無理なら「この Mac」。
+/// 外部コマンドを呼ぶので、結果は1回だけ調べて覚える。
 pub fn default_device_name() -> String {
-    pick_device_name(
-        command_output("scutil", &["--get", "ComputerName"])
-            .filter(|s| !s.is_empty())
-            .or_else(|| command_output("hostname", &[])),
-    )
+    static NAME: OnceLock<String> = OnceLock::new();
+    NAME.get_or_init(|| {
+        pick_device_name(
+            command_output("scutil", &["--get", "ComputerName"])
+                .filter(|s| !s.is_empty())
+                .or_else(|| command_output("hostname", &[])),
+        )
+    })
+    .clone()
 }
 
 fn parse_time(v: Option<String>) -> Option<DateTime<Utc>> {
@@ -68,16 +74,23 @@ fn parse_time(v: Option<String>) -> Option<DateTime<Utc>> {
 
 /// 設定から読める項目を `SyncStatus` に反映する。`signed_in`、`syncing`、`error` は触らない。
 pub fn refresh_status(state: &AppState) {
-    let (enabled, email, name, last) = state
-        .with_store(|s| {
-            Ok((
-                s.get_setting(SETTING_ENABLED)?,
-                s.get_setting(oauth::SETTING_ACCOUNT_EMAIL)?,
-                s.get_setting(SETTING_DEVICE_NAME)?,
-                s.get_setting(SETTING_LAST_SYNC_AT)?,
-            ))
-        })
-        .unwrap_or_default();
+    let read = state.with_store(|s| {
+        Ok((
+            s.get_setting(SETTING_ENABLED)?,
+            s.get_setting(oauth::SETTING_ACCOUNT_EMAIL)?,
+            s.get_setting(SETTING_DEVICE_NAME)?,
+            s.get_setting(SETTING_LAST_SYNC_AT)?,
+        ))
+    });
+    let (enabled, email, name, last) = match read {
+        Ok(v) => v,
+        Err(e) => {
+            let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
+            st.available = oauth::oauth_config().is_some();
+            st.error = Some(e.message);
+            return;
+        }
+    };
     let name = pick_device_name(name).to_string();
     let name = if name == FALLBACK_DEVICE_NAME {
         default_device_name()
@@ -112,15 +125,34 @@ fn update(state: &AppState, f: impl FnOnce(&mut SyncStatus)) {
     state.notify(EVENT_SYNC);
 }
 
-fn make_drive(state: &AppState) -> AppResult<Arc<dyn DriveStore>> {
-    if let Some(d) = &state.drive_override {
+/// 本物の Google ドライブクライアントを作る。キーチェーンを読むので、頻繁には呼ばない。
+pub fn google_drive() -> AppResult<Arc<dyn DriveStore>> {
+    Ok(Arc::new(GoogleDrive::new(Arc::new(oauth::token_source()?))))
+}
+
+/// 作ったクライアントを覚えておく。サインインやサインアウトで捨てる。
+fn make_drive(state: &AppState, generation: u64) -> AppResult<Arc<dyn DriveStore>> {
+    let mut cache = state.drive_cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(d) = cache.as_ref() {
         return Ok(d.clone());
     }
-    Ok(Arc::new(GoogleDrive::new(Arc::new(oauth::token_source()?))))
+    let drive = (state.drive_factory)()?;
+    // 作っている間にサインインし直されていたら、古い認証のものは覚えない。
+    if state.sync_generation.load(Ordering::SeqCst) == generation {
+        *cache = Some(drive.clone());
+    }
+    Ok(drive)
+}
+
+/// 認証が変わったので、覚えているクライアントと、実行中の同期の結果を捨てる。
+fn reset_auth(state: &AppState) {
+    state.sync_generation.fetch_add(1, Ordering::SeqCst);
+    *state.drive_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 /// ログイン完了を反映する。エラー表示は消す。
 pub fn signed_in(state: &AppState, email: &str) {
+    reset_auth(state);
     update(state, |s| {
         s.signed_in = true;
         s.account_email = Some(email.to_string()).filter(|e| !e.is_empty());
@@ -129,6 +161,7 @@ pub fn signed_in(state: &AppState, email: &str) {
 }
 
 pub fn signed_out(state: &AppState) {
+    reset_auth(state);
     update(state, |s| {
         s.signed_in = false;
         s.account_email = None;
@@ -156,57 +189,91 @@ pub fn set_device_name(state: &AppState, name: &str) -> AppResult<()> {
     Ok(())
 }
 
-/// 実行中フラグを戻す。
+/// 実行中の印。破棄すると `syncing` と実行中フラグを戻す (パニックでも戻る)。
 struct RunGuard<'a>(&'a AppState);
+
+impl<'a> RunGuard<'a> {
+    fn begin(state: &'a AppState) -> Self {
+        update(state, |s| s.syncing = true);
+        Self(state)
+    }
+}
 
 impl Drop for RunGuard<'_> {
     fn drop(&mut self) {
+        // 先に状態を戻す。実行中フラグを先に戻すと、次の同期の `syncing` を上書きしうる。
+        update(self.0, |s| s.syncing = false);
         self.0.sync_running.store(false, Ordering::SeqCst);
     }
 }
 
-/// 同期を投げて待たない。
+/// 同期を投げて待たない。失敗は `sync_once` が `SyncStatus.error` に記録済み。
 pub fn spawn_sync(app: &tauri::AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         use tauri::Manager;
-        let _ = sync_once(&app.state::<AppState>()).await;
+        if let Err(e) = sync_once(&app.state::<AppState>()).await {
+            eprintln!("sync failed: {}", e.message);
+        }
     });
 }
 
-/// 同期を1回行う。無効、未ログイン、実行中ならすぐ戻る。失敗は `SyncStatus.error` にだけ記録する。
+fn record_error(state: &AppState, message: &str) {
+    update(state, |s| s.error = Some(message.to_string()));
+}
+
+/// 同期を1回行う。無効、未ログインならすぐ戻る。実行中なら、終わったあとにもう1回走らせる依頼を残す
+/// (何度頼まれても1回に束ねる)。失敗は `SyncStatus.error` にだけ記録する。
 pub async fn sync_once(state: &AppState) -> AppResult<()> {
-    let enabled = state
-        .with_store(|s| s.get_setting(SETTING_ENABLED))?
-        .as_deref()
-        == Some("true");
-    if !enabled || !state.sync.lock().expect("sync lock").signed_in {
-        return Ok(());
+    loop {
+        let enabled = match state.with_store(|s| s.get_setting(SETTING_ENABLED)) {
+            Ok(v) => v.as_deref() == Some("true"),
+            Err(e) => {
+                record_error(state, &e.message);
+                return Err(e);
+            }
+        };
+        if !enabled
+            || !state
+                .sync
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .signed_in
+        {
+            return Ok(());
+        }
+        if state
+            .sync_running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            state.sync_rerun.store(true, Ordering::SeqCst);
+            return Ok(());
+        }
+        let result = {
+            let _guard = RunGuard::begin(state);
+            run_once(state).await
+        };
+        if !state.sync_rerun.swap(false, Ordering::SeqCst) {
+            return result;
+        }
     }
-    if state
-        .sync_running
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return Ok(());
-    }
-    let _guard = RunGuard(state);
-    update(state, |s| s.syncing = true);
-    let result = run_once(state).await;
-    update(state, |s| s.syncing = false);
-    result
 }
 
 async fn run_once(state: &AppState) -> AppResult<()> {
-    let drive = match make_drive(state) {
+    let generation = state.sync_generation.load(Ordering::SeqCst);
+    let stale = || state.sync_generation.load(Ordering::SeqCst) != generation;
+    let drive = match make_drive(state, generation) {
         Ok(d) => d,
         Err(e) => {
-            update(state, |s| s.error = Some(e.message.clone()));
+            if !stale() {
+                record_error(state, &e.message);
+            }
             return Ok(());
         }
     };
     let now = Utc::now();
-    let (device_id, db_id, last_compaction, daily) = state.with_store(|s| {
+    let prepared = state.with_store(|s| {
         let (d, b) = s.ensure_sync_ids()?;
         Ok((
             d,
@@ -214,7 +281,14 @@ async fn run_once(state: &AppState) -> AppResult<()> {
             s.get_setting(SETTING_LAST_COMPACTION_AT)?,
             s.get_setting("schedule.daily_time")?,
         ))
-    })?;
+    });
+    let (device_id, db_id, last_compaction, daily) = match prepared {
+        Ok(v) => v,
+        Err(e) => {
+            record_error(state, &e.message);
+            return Err(e);
+        }
+    };
     let daily_time = crate::scheduler::ScheduleConfig::from_settings(|k| {
         if k == "schedule.daily_time" {
             daily.clone()
@@ -224,7 +298,12 @@ async fn run_once(state: &AppState) -> AppResult<()> {
     })
     .daily_time;
     let compact = compaction_due(parse_time(last_compaction), now, state.tz, daily_time);
-    let writer = state.sync.lock().expect("sync lock").device_name.clone();
+    let writer = state
+        .sync
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .device_name
+        .clone();
     let input = SyncInput {
         device_id,
         db_id,
@@ -251,15 +330,25 @@ async fn run_once(state: &AppState) -> AppResult<()> {
                 state.notify(EVENT_ITEMS);
             }
         }
-        Err(SyncError::Drive(DriveError::AuthExpired)) => {
-            let _ = state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
-            update(state, |s| {
-                s.signed_in = false;
-                s.account_email = None;
-                s.error = Some(REAUTH_MESSAGE.to_string());
-            });
+        Err(err) => {
+            // 取り込みのあとで失敗しても、取り込み済みの変更は画面に出す必要がある。
+            state.notify(EVENT_ITEMS);
+            if stale() {
+                // 実行中にサインインし直された。古い認証の結果は捨てる。
+                return Ok(());
+            }
+            if matches!(err, SyncError::Drive(DriveError::AuthExpired)) {
+                reset_auth(state);
+                let _ = state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
+                update(state, |s| {
+                    s.signed_in = false;
+                    s.account_email = None;
+                    s.error = Some(REAUTH_MESSAGE.to_string());
+                });
+            } else {
+                record_error(state, &err.to_string());
+            }
         }
-        Err(e) => update(state, |s| s.error = Some(e.to_string())),
     }
     Ok(())
 }
@@ -268,16 +357,209 @@ async fn run_once(state: &AppState) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::state::{EVENT_STATUS, test_state};
-    use infodesk_core::sync::drive::MemoryDrive;
+    use infodesk_core::sync::drive::{MemoryDrive, RemoteFile};
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
 
-    fn ready(state: &mut AppState) -> Arc<MemoryDrive> {
-        let drive = Arc::new(MemoryDrive::new());
-        state.drive_override = Some(drive.clone());
+    /// 差し込んだ Drive を使うようにして、同期を有効・ログイン済みにする。作った回数を返す。
+    fn use_drive(state: &mut AppState, drive: Arc<dyn DriveStore>) -> Arc<AtomicUsize> {
+        let made = Arc::new(AtomicUsize::new(0));
+        let counter = made.clone();
+        state.drive_factory = Arc::new(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Ok(drive.clone())
+        });
         state
             .with_store(|s| s.set_setting(SETTING_ENABLED, "true"))
             .unwrap();
         state.sync.lock().unwrap().signed_in = true;
+        made
+    }
+
+    fn ready(state: &mut AppState) -> Arc<MemoryDrive> {
+        let drive = Arc::new(MemoryDrive::new());
+        use_drive(state, drive.clone());
         drive
+    }
+
+    /// `list` で1回譲る Drive。他の処理が割り込める。呼ばれた回数を数え、仕込んだ失敗を返す。
+    #[derive(Default)]
+    struct Slow {
+        inner: MemoryDrive,
+        lists: AtomicUsize,
+        fail: Mutex<Option<DriveError>>,
+    }
+
+    #[async_trait::async_trait]
+    impl DriveStore for Slow {
+        async fn list(&self) -> Result<Vec<RemoteFile>, DriveError> {
+            self.lists.fetch_add(1, Ordering::SeqCst);
+            tokio::task::yield_now().await;
+            if let Some(e) = self.fail.lock().unwrap().take() {
+                return Err(e);
+            }
+            self.inner.list().await
+        }
+        async fn download(&self, id: &str) -> Result<Vec<u8>, DriveError> {
+            self.inner.download(id).await
+        }
+        async fn create(&self, n: &str, b: Vec<u8>, m: &str) -> Result<RemoteFile, DriveError> {
+            self.inner.create(n, b, m).await
+        }
+        async fn update(&self, id: &str, b: Vec<u8>, m: &str) -> Result<RemoteFile, DriveError> {
+            self.inner.update(id, b, m).await
+        }
+        async fn delete(&self, id: &str) -> Result<(), DriveError> {
+            self.inner.delete(id).await
+        }
+    }
+
+    #[tokio::test]
+    async fn the_drive_client_is_made_once_and_again_after_auth_changes() {
+        let (mut state, _) = test_state();
+        let drive = Arc::new(MemoryDrive::new());
+        let made = use_drive(&mut state, drive.clone());
+        sync_once(&state).await.unwrap();
+        sync_once(&state).await.unwrap();
+        assert_eq!(made.load(Ordering::SeqCst), 1);
+        signed_out(&state);
+        signed_in(&state, "a@b.c");
+        sync_once(&state).await.unwrap();
+        assert_eq!(made.load(Ordering::SeqCst), 2);
+        *drive.fail_next.lock().unwrap() = Some(DriveError::AuthExpired);
+        sync_once(&state).await.unwrap();
+        signed_in(&state, "a@b.c");
+        sync_once(&state).await.unwrap();
+        assert_eq!(made.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn failure_after_import_still_emits_items_changed() {
+        let (mut state, events) = test_state();
+        let drive = ready(&mut state);
+        phone_stars_an_item(&state, &drive);
+        *drive.fail_on_name.lock().unwrap() = Some("meta".into());
+        sync_once(&state).await.unwrap();
+        assert!(state.sync.lock().unwrap().error.is_some());
+        assert!(events.lock().unwrap().contains(&EVENT_ITEMS.to_string()));
+    }
+
+    #[tokio::test]
+    async fn store_errors_reach_the_sync_error() {
+        let (mut state, _) = test_state();
+        ready(&mut state);
+        let store = &state.store;
+        let _ = std::thread::scope(|sc| {
+            sc.spawn(|| {
+                let _held = store.lock().unwrap();
+                panic!("poison");
+            })
+            .join()
+        });
+        assert!(sync_once(&state).await.is_err());
+        let err = state.sync.lock().unwrap().error.clone();
+        assert!(err.unwrap().contains("poisoned"));
+        let mut state2 = test_state().0;
+        ready(&mut state2);
+        let _ = std::thread::scope(|sc| {
+            sc.spawn(|| {
+                let _held = state2.store.lock().unwrap();
+                panic!("poison");
+            })
+            .join()
+        });
+        refresh_status(&state2);
+        assert!(state2.sync.lock().unwrap().error.is_some());
+    }
+
+    #[test]
+    fn a_panic_does_not_leave_the_status_syncing() {
+        let (state, events) = test_state();
+        state.sync_running.store(true, Ordering::SeqCst);
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = RunGuard::begin(&state);
+            assert!(state.sync.lock().unwrap().syncing);
+            panic!("pass blew up");
+        }));
+        assert!(caught.is_err());
+        assert!(!state.sync.lock().unwrap().syncing);
+        assert!(!state.sync_running.load(Ordering::SeqCst));
+        assert!(events.lock().unwrap().contains(&EVENT_SYNC.to_string()));
+    }
+
+    #[tokio::test]
+    async fn requests_during_a_pass_queue_exactly_one_more() {
+        let (mut state, _) = test_state();
+        let drive = Arc::new(Slow::default());
+        use_drive(&mut state, drive.clone());
+        let (a, b, c) = tokio::join!(sync_once(&state), sync_once(&state), sync_once(&state));
+        a.unwrap();
+        b.unwrap();
+        c.unwrap();
+        assert_eq!(drive.lists.load(Ordering::SeqCst), 2);
+        assert!(!state.sync_rerun.load(Ordering::SeqCst));
+        assert!(!state.sync_running.load(Ordering::SeqCst));
+        sync_once(&state).await.unwrap();
+        assert_eq!(drive.lists.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn a_pass_that_outlives_a_sign_out_discards_its_auth_error() {
+        let (mut state, _) = test_state();
+        let drive = Arc::new(Slow::default());
+        use_drive(&mut state, drive.clone());
+        *drive.fail.lock().unwrap() = Some(DriveError::AuthExpired);
+        let relogin = async {
+            signed_out(&state);
+            signed_in(&state, "new@b.c");
+        };
+        let (r, ()) = tokio::join!(sync_once(&state), relogin);
+        r.unwrap();
+        let st = state.sync.lock().unwrap().clone();
+        assert!(st.signed_in, "the new sign-in survives");
+        assert_eq!(st.error, None);
+        assert_eq!(st.account_email.as_deref(), Some("new@b.c"));
+    }
+
+    #[test]
+    fn device_name_is_looked_up_once() {
+        assert_eq!(default_device_name(), default_device_name());
+    }
+
+    fn phone_stars_an_item(state: &AppState, drive: &MemoryDrive) -> i64 {
+        use infodesk_core::model::{ItemFilter, NewItem};
+        use infodesk_core::sync::format::{Field, Op, OpsFile, ops_file_name};
+        let id = state
+            .with_store(|s| {
+                let src = s.list_sources()?.remove(0);
+                let item = NewItem {
+                    url: "https://e.com/1".into(),
+                    title: "t".into(),
+                    excerpt: String::new(),
+                    author: None,
+                    published_at: None,
+                    score: None,
+                    image_url: None,
+                };
+                s.upsert_items(&src, &[item], &Utc::now())?;
+                Ok(s.query_items(&ItemFilter::default())?[0].id)
+            })
+            .unwrap();
+        let file = OpsFile {
+            device: "phone".into(),
+            ops: vec![Op {
+                item_id: id,
+                field: Field::Starred,
+                value: true,
+                at: "2999-01-01T00:00:00.000Z".into(),
+                device: "phone".into(),
+            }],
+        };
+        drive.put(
+            &ops_file_name("phone", Utc::now(), 1),
+            serde_json::to_vec(&file).unwrap(),
+        );
+        id
     }
 
     #[test]
@@ -399,43 +681,12 @@ mod tests {
 
     #[tokio::test]
     async fn imported_changes_emit_items_changed() {
-        use infodesk_core::model::{ItemFilter, NewItem};
-        use infodesk_core::sync::format::{Field, Op, OpsFile, ops_file_name};
         let (mut state, events) = test_state();
         let drive = ready(&mut state);
-        let id = state
-            .with_store(|s| {
-                let src = s.list_sources()?.remove(0);
-                let item = NewItem {
-                    url: "https://e.com/1".into(),
-                    title: "t".into(),
-                    excerpt: String::new(),
-                    author: None,
-                    published_at: None,
-                    score: None,
-                    image_url: None,
-                };
-                s.upsert_items(&src, &[item], &Utc::now())?;
-                Ok(s.query_items(&ItemFilter::default())?[0].id)
-            })
-            .unwrap();
         // 何も変わらない同期では記事の通知を出さない。
         sync_once(&state).await.unwrap();
         assert!(!events.lock().unwrap().contains(&EVENT_ITEMS.to_string()));
-        let file = OpsFile {
-            device: "phone".into(),
-            ops: vec![Op {
-                item_id: id,
-                field: Field::Starred,
-                value: true,
-                at: "2999-01-01T00:00:00.000Z".into(),
-                device: "phone".into(),
-            }],
-        };
-        drive.put(
-            &ops_file_name("phone", Utc::now(), 1),
-            serde_json::to_vec(&file).unwrap(),
-        );
+        let id = phone_stars_an_item(&state, &drive);
         sync_once(&state).await.unwrap();
         assert!(events.lock().unwrap().contains(&EVENT_ITEMS.to_string()));
         assert!(

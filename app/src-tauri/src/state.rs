@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, FixedOffset, Local, Utc};
@@ -53,6 +53,8 @@ impl AppStatus {
 }
 
 pub type Notifier = Arc<dyn Fn(&str) + Send + Sync>;
+pub type DriveFactory =
+    Arc<dyn Fn() -> AppResult<Arc<dyn infodesk_core::sync::drive::DriveStore>> + Send + Sync>;
 pub type LlmFactory =
     Arc<dyn Fn(&Store, LlmRole) -> infodesk_core::Result<Box<dyn LlmProvider>> + Send + Sync>;
 
@@ -74,8 +76,14 @@ pub struct AppState {
     pub sync: Mutex<crate::sync::SyncStatus>,
     /// 同期が実行中か。
     pub sync_running: AtomicBool,
-    /// テストで Google ドライブの代わりを差し込む。
-    pub drive_override: Option<Arc<dyn infodesk_core::sync::drive::DriveStore>>,
+    /// 実行中に別の同期の依頼が来たら立てる。実行中の同期が終わったあと、もう1回だけ走らせる。
+    pub sync_rerun: AtomicBool,
+    /// サインイン、サインアウトのたびに増やす。実行中の同期が古い認証の結果かを見分ける。
+    pub sync_generation: AtomicU64,
+    /// Drive クライアントの作り方。テストで差し替える。
+    pub drive_factory: DriveFactory,
+    /// 作った Drive クライアント。同期ごとに作り直さない。
+    pub drive_cache: Mutex<Option<Arc<dyn infodesk_core::sync::drive::DriveStore>>>,
     /// 同期を非同期に起動する関数。起動時に設定する (テストでは未設定)。
     sync_launcher: Mutex<Option<SyncLauncher>>,
 }
@@ -97,7 +105,10 @@ impl AppState {
             reader_lock: Mutex::new(()),
             sync: Mutex::new(crate::sync::SyncStatus::default()),
             sync_running: AtomicBool::new(false),
-            drive_override: None,
+            sync_rerun: AtomicBool::new(false),
+            sync_generation: AtomicU64::new(0),
+            drive_factory: Arc::new(crate::sync::google_drive),
+            drive_cache: Mutex::new(None),
             sync_launcher: Mutex::new(None),
         }
     }
