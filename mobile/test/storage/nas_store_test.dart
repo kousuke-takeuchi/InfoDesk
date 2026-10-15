@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:infodesk_mobile/storage/drive_store.dart';
 import 'package:infodesk_mobile/storage/nas_store.dart';
 import 'package:infodesk_mobile/storage/tailnet_port.dart';
+import 'package:tailscale/tailscale.dart';
 
 class FakeTailnet implements TailnetPort {
   FakeTailnet(this.handler, {this.peers = const {'nas': '100.64.0.7'}});
@@ -57,8 +59,53 @@ http.Response multistatus(String body, [int status = 207]) => http.Response(
   headers: {'content-type': 'application/xml; charset=utf-8'},
 );
 
-NasStore store(FakeTailnet t, {String url = 'http://nas:5005/InfoDesk/'}) =>
-    NasStore(tailnet: t, url: url, user: 'kou', password: 'pw');
+NasStore store(
+  TailnetPort t, {
+  String url = 'http://nas:5005/InfoDesk/',
+  Duration connectTimeout = const Duration(seconds: 10),
+  Duration requestTimeout = const Duration(seconds: 60),
+}) => NasStore(
+  tailnet: t,
+  url: url,
+  user: 'kou',
+  password: 'pw',
+  connectTimeout: connectTimeout,
+  requestTimeout: requestTimeout,
+);
+
+class ThrowingTailnet implements TailnetPort {
+  ThrowingTailnet({this.onClient, this.onSend, this.onPeer});
+  final Object? onClient;
+  final Object? onSend;
+  final Object? onPeer;
+
+  @override
+  Future<http.Client> client() async {
+    if (onClient != null) throw onClient!;
+    return MockClient((_) async => throw onSend!);
+  }
+
+  @override
+  Future<InternetAddress?> peerAddr(String host) async {
+    if (onPeer != null) throw onPeer!;
+    return InternetAddress('100.64.0.7');
+  }
+}
+
+class StallingTailnet implements TailnetPort {
+  StallingTailnet({required this.stallBody});
+  final bool stallBody;
+
+  @override
+  Future<http.Client> client() async => MockClient.streaming((req, _) async {
+    if (!stallBody) return Completer<http.StreamedResponse>().future;
+    return http.StreamedResponse(StreamController<List<int>>().stream, 207);
+  });
+
+  @override
+  Future<InternetAddress?> peerAddr(String host) async =>
+      InternetAddress('100.64.0.7');
+}
 
 Matcher nasError(StorageErrorKind kind, [String? message]) =>
     isA<StorageError>()
@@ -372,6 +419,122 @@ void main() {
     });
   });
 
+  group('tailscale errors', () {
+    const loginMsg = 'Tailscale にログインしてください';
+
+    test('usage errors ask for login, whichever call throws', () async {
+      for (final t in [
+        ThrowingTailnet(onClient: const TailscaleUsageException('not up')),
+        ThrowingTailnet(onSend: const TailscaleUsageException('not up')),
+      ]) {
+        await expectLater(
+          store(t).list(),
+          throwsA(nasError(StorageErrorKind.other, loginMsg)),
+        );
+      }
+    });
+
+    test('other tailscale failures are retryable, with no raw text', () async {
+      for (final t in [
+        ThrowingTailnet(onClient: const TailscaleHttpException('boom secret')),
+        ThrowingTailnet(onSend: const TailscaleHttpException('boom secret')),
+      ]) {
+        await expectLater(
+          store(t).list(),
+          throwsA(nasError(StorageErrorKind.retryable, networkMessage)),
+        );
+      }
+    });
+
+    test('a peerAddr that throws is outside the tailnet', () async {
+      final t = ThrowingTailnet(onPeer: Exception('x'));
+      await expectLater(
+        store(t).list(),
+        throwsA(nasError(StorageErrorKind.other, nasNotInTailnetMessage)),
+      );
+    });
+  });
+
+  group('timeouts', () {
+    test('no response headers in time is retryable', () async {
+      await expectLater(
+        store(
+          StallingTailnet(stallBody: false),
+          connectTimeout: const Duration(milliseconds: 20),
+          requestTimeout: const Duration(milliseconds: 500),
+        ).list(),
+        throwsA(nasError(StorageErrorKind.retryable)),
+      );
+    });
+
+    test('a stalled body hits the whole-request timeout', () async {
+      await expectLater(
+        store(
+          StallingTailnet(stallBody: true),
+          connectTimeout: const Duration(milliseconds: 500),
+          requestTimeout: const Duration(milliseconds: 50),
+        ).list(),
+        throwsA(nasError(StorageErrorKind.retryable)),
+      );
+    });
+  });
+
+  group('url handling', () {
+    test(
+      'a bracketed IPv6 host and a trailing-dot host reach peerAddr',
+      () async {
+        final seen = <String>[];
+        final t = FakeTailnet(
+          (_) async => multistatus(synology),
+          peers: {'fd7a::1': '100.64.0.7', 'nas.': '100.64.0.7'},
+        );
+        for (final u in [
+          'http://[fd7a::1]:5005/InfoDesk/',
+          'http://nas.:5005/InfoDesk/',
+        ]) {
+          await store(t, url: u).list();
+          seen.add(t.requests.last.url.host);
+        }
+        expect(seen, ['100.64.0.7', '100.64.0.7']);
+      },
+    );
+
+    test('the query string is kept', () async {
+      final t = FakeTailnet((_) async => multistatus(synology));
+      await store(t, url: 'http://nas:5005/InfoDesk/?k=v').list();
+      expect(t.requests.single.url.queryParameters, {'k': 'v'});
+    });
+
+    test('a literal %25 in the folder name is not decoded twice', () async {
+      const body = '''<D:multistatus xmlns:D="DAV:">
+<D:response><D:href>/100%25%2541/a.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>Thu, 15 Oct 2026 00:00:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
+<D:response><D:href>/100%25A/b.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>Thu, 15 Oct 2026 00:00:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
+</D:multistatus>''';
+      final t = FakeTailnet((_) async => multistatus(body));
+      final files = await store(t, url: 'http://nas/100%25A/').list();
+      expect(files.map((f) => f.name), ['b.json']);
+      expect(t.requests.single.url.path, '/100%25A/');
+    });
+
+    test('an unparseable getlastmodified is skipped', () async {
+      const body = '''<D:multistatus xmlns:D="DAV:">
+<D:response><D:href>/InfoDesk/a.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>yesterday-ish</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
+<D:response><D:href>/InfoDesk/b.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>Thu, 15 Oct 2026 00:00:00 +0000</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
+<D:response><D:href>/InfoDesk/c.json</D:href>
+<D:propstat><D:prop><D:getlastmodified>15 Oct 2026 09:00:00 +0900</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>
+</D:multistatus>''';
+      final t = FakeTailnet((_) async => multistatus(body));
+      final files = await store(t).list();
+      expect(files.map((f) => f.name), ['b.json', 'c.json']);
+      expect(files[0].modifiedTime, '2026-10-15T00:00:00Z');
+      expect(files[1].modifiedTime, '2026-10-15T00:00:00Z');
+    });
+  });
+
   group('peerAddrIn', () {
     final peers = [
       const TailnetPeer(
@@ -395,6 +558,10 @@ void main() {
       ]) {
         expect(peerAddrIn(peers, h)?.address, '100.64.0.7', reason: h);
       }
+    });
+    test('accepts a bracketed IPv6 host and trailing dots', () {
+      expect(peerAddrIn(peers, '[fd7a:115c::7]')?.address, '100.64.0.7');
+      expect(peerAddrIn(peers, 'takeuchi-nas..')?.address, '100.64.0.7');
     });
     test('prefers IPv4 and finds nothing for strangers', () {
       expect(peerAddrIn(peers, 'iphone')?.address, '100.64.0.9');

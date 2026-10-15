@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:infodesk_mobile/storage/drive_store.dart';
@@ -157,6 +160,109 @@ void main() {
     final client = MockClient((_) async => throw http.ClientException('boom'));
     await expectLater(
       GoogleDriveStore.withClient(client).list(),
+      throwsA(storageError(StorageErrorKind.retryable)),
+    );
+  });
+
+  test(
+    'a 401 with www-authenticate through AuthenticatedClient is authExpired',
+    () async {
+      final base = MockClient(
+        (_) async => http.Response(
+          '{"error":{"code":401}}',
+          401,
+          headers: {
+            'www-authenticate': 'Bearer realm="x", error="invalid_token"',
+          },
+        ),
+      );
+      final creds = auth.AccessCredentials(
+        auth.AccessToken(
+          'Bearer',
+          'tok',
+          DateTime.now().toUtc().add(const Duration(hours: 1)),
+        ),
+        null,
+        const ['scope'],
+      );
+      final client = auth.authenticatedClient(base, creds);
+      await expectLater(
+        GoogleDriveStore.withClient(client).list(),
+        throwsA(storageError(StorageErrorKind.authExpired)),
+      );
+    },
+  );
+
+  test('list asks for pageSize 1000', () async {
+    final client = MockClient((req) async {
+      expect(req.url.queryParameters['pageSize'], '1000');
+      return json({'files': []});
+    });
+    expect(await GoogleDriveStore.withClient(client).list(), isEmpty);
+  });
+
+  test('a file without id or modifiedTime is an error', () async {
+    for (final f in [
+      {'name': 'a', 'modifiedTime': '2026-10-14T03:00:00.000Z'},
+      {'id': 'a', 'name': 'a'},
+    ]) {
+      final client = MockClient(
+        (_) async => json({
+          'files': [f],
+        }),
+      );
+      await expectLater(
+        GoogleDriveStore.withClient(client).list(),
+        throwsA(storageError(StorageErrorKind.other)),
+        reason: '$f',
+      );
+    }
+  });
+
+  test('an unparseable body is retryable', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        '{not json',
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      ),
+    );
+    await expectLater(
+      GoogleDriveStore.withClient(client).list(),
+      throwsA(storageError(StorageErrorKind.retryable)),
+    );
+  });
+
+  test('a request that never completes times out as retryable', () async {
+    final client = MockClient((_) => Completer<http.Response>().future);
+    final store = GoogleDriveStore.withClient(
+      client,
+      connectTimeout: const Duration(milliseconds: 20),
+      requestTimeout: const Duration(milliseconds: 50),
+    );
+    await expectLater(
+      store.list(),
+      throwsA(storageError(StorageErrorKind.retryable)),
+    );
+  });
+
+  test('a body that stalls hits the whole-request timeout', () async {
+    final client = MockClient.streaming(
+      (req, _) async => http.StreamedResponse(
+        StreamController<List<int>>().stream,
+        200,
+        headers: {'content-type': 'application/octet-stream'},
+      ),
+    );
+    final store = GoogleDriveStore.withClient(
+      client,
+      connectTimeout: const Duration(milliseconds: 500),
+      requestTimeout: const Duration(milliseconds: 50),
+    );
+    await expectLater(
+      store.download(
+        const RemoteFile(id: 'a', name: 'x', modifiedTime: '', size: 1),
+      ),
       throwsA(storageError(StorageErrorKind.retryable)),
     );
   });

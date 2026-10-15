@@ -55,4 +55,15 @@ void main() {
       throwsA(isA<StorageError>()),
     );
   });
+
+  test(
+    'create with an existing name adds a duplicate, as Drive does',
+    () async {
+      final d = MemoryDrive();
+      final a = await d.create('ops-a.json', [1], 'application/json');
+      final b = await d.create('ops-a.json', [2], 'application/json');
+      expect(a.id, isNot(b.id));
+      expect(d.names, ['ops-a.json', 'ops-a.json']);
+    },
+  );
 }

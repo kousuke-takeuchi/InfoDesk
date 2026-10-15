@@ -89,6 +89,10 @@ class TailscaleTailnetPort implements TailnetPort {
 
   final Tailscale _ts;
 
+  /// WARNING: this client is not tailnet-only. For addresses that are not
+  /// tailnet peers it falls back to the system network (tsnet `UserDial`), so
+  /// a request to any other host would leave the tailnet. Every caller must go
+  /// through the `NasStore` peer check and the 100.x address rewrite first.
   @override
   Future<http.Client> client() async => _ts.http.client;
 

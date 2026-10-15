@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:tailscale/tailscale.dart';
 import 'package:xml/xml.dart';
 
 import 'drive_store.dart';
 import 'tailnet_port.dart';
+import 'timeouts.dart';
 
 const nasUrlMessage =
     'NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)';
@@ -15,6 +17,7 @@ const nasNotInTailnetMessage = 'NAS が Tailscale の中に見つかりません
 const nasBadCredentialsMessage = 'NAS のユーザー名かパスワードが違います';
 const nasForbiddenMessage = 'NAS のフォルダに書き込む権限がありません';
 const nasStorageFullMessage = 'NAS の空き容量が足りません';
+const nasTailscaleLoginMessage = 'Tailscale にログインしてください';
 const nasRedirectMessage = 'NAS の URL を確かめてください (転送されました)';
 
 const _propfindBody =
@@ -30,12 +33,18 @@ class NasStore implements DriveStore {
     required this.url,
     required this.user,
     required this.password,
+    this.connectTimeout = defaultConnectTimeout,
+    this.requestTimeout = defaultRequestTimeout,
   });
 
   final TailnetPort tailnet;
   final String url;
   final String user;
   final String password;
+
+  /// Limit for response headers, and for the whole request with its body.
+  final Duration connectTimeout;
+  final Duration requestTimeout;
 
   /// The folder URL with its host replaced by the peer's 100.x address.
   /// Throws before any request when the URL is not usable.
@@ -55,6 +64,8 @@ class NasStore implements DriveStore {
     InternetAddress? addr;
     try {
       addr = await tailnet.peerAddr(u.host);
+    } on TailscaleException catch (e) {
+      throw _tailscaleError(e);
     } on Exception {
       addr = null;
     }
@@ -67,6 +78,7 @@ class NasStore implements DriveStore {
       host: addr.address,
       port: u.hasPort ? u.port : null,
       pathSegments: [...segs, ''],
+      query: u.hasQuery ? u.query : null,
     );
   }
 
@@ -85,7 +97,6 @@ class NasStore implements DriveStore {
     List<int>? body,
     String? contentType,
   }) async {
-    final client = await tailnet.client();
     final req = http.Request(method, uri)
       ..followRedirects = false
       ..headers['Authorization'] =
@@ -95,7 +106,13 @@ class NasStore implements DriveStore {
     if (body != null) req.bodyBytes = body;
     final http.Response resp;
     try {
-      resp = await http.Response.fromStream(await client.send(req));
+      resp = await (() async {
+        final client = await tailnet.client();
+        final streamed = await client.send(req).timeout(connectTimeout);
+        return http.Response.fromStream(streamed);
+      })().timeout(requestTimeout);
+    } on TailscaleException catch (e) {
+      throw _tailscaleError(e);
     } on http.ClientException {
       throw const StorageError(StorageErrorKind.retryable, networkMessage);
     } on SocketException {
@@ -142,8 +159,10 @@ class NasStore implements DriveStore {
   Future<List<RemoteFile>> list() async {
     final folder = await _folder();
     final entries = await _propfind(folder, '1');
+    // pathSegments are already decoded; decoding again would corrupt a
+    // literal `%` in the folder name.
     final base = '/${folder.pathSegments.where((s) => s.isNotEmpty).join('/')}';
-    final decodedBase = _percentDecode(base).replaceAll(RegExp(r'/+$'), '');
+    final decodedBase = base.replaceAll(RegExp(r'/+$'), '');
     final files = <RemoteFile>[];
     for (final e in entries) {
       if (e.isCollection) continue;
@@ -185,6 +204,12 @@ class NasStore implements DriveStore {
   }
 }
 
+/// Never surfaces the exception text: it is English and internal.
+StorageError _tailscaleError(TailscaleException e) =>
+    e is TailscaleUsageException
+    ? const StorageError(StorageErrorKind.other, nasTailscaleLoginMessage)
+    : const StorageError(StorageErrorKind.retryable, networkMessage);
+
 StorageError _unexpectedPropfind() => const StorageError(
   StorageErrorKind.other,
   '保存先のエラー: unexpected PROPFIND response',
@@ -208,12 +233,9 @@ class _Entry {
 RemoteFile? _toRemote(String name, _Entry e) {
   final raw = e.lastModified;
   if (raw == null) return null;
-  final DateTime t;
-  try {
-    t = HttpDate.parse(raw.trim());
-  } on Exception {
-    return null;
-  }
+  final parsed = _parseHttpDate(raw.trim());
+  if (parsed == null) return null;
+  final t = parsed;
   return RemoteFile(
     id: name,
     name: name,
@@ -296,4 +318,49 @@ List<_Entry> _parseMultistatus(String text) {
     out.add(e);
   }
   return out;
+}
+
+const _months = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec', //
+];
+
+final _rfc2822 = RegExp(
+  r'^(?:[A-Za-z]{3,9},\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2,4})\s+'
+  r'(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4}|GMT|UT|Z)?$',
+  caseSensitive: false,
+);
+
+/// The `dart:io` formats (RFC 1123, RFC 850, asctime), then RFC 2822 with a
+/// numeric offset and an optional weekday, as the Mac's `parse_from_rfc2822`
+/// accepts. Null when neither fits.
+DateTime? _parseHttpDate(String s) {
+  try {
+    return HttpDate.parse(s);
+  } on Exception {
+    // fall through
+  }
+  final m = _rfc2822.firstMatch(s);
+  if (m == null) return null;
+  final month = _months.indexOf(m[2]!.toLowerCase()) + 1;
+  if (month == 0) return null;
+  var year = int.parse(m[3]!);
+  if (m[3]!.length == 2) year += year < 50 ? 2000 : 1900;
+  final zone = m[7];
+  var offsetMin = 0;
+  if (zone != null && (zone.startsWith('+') || zone.startsWith('-'))) {
+    final sign = zone.startsWith('-') ? -1 : 1;
+    offsetMin =
+        sign *
+        (int.parse(zone.substring(1, 3)) * 60 + int.parse(zone.substring(3)));
+  }
+  final day = int.parse(m[1]!);
+  final h = int.parse(m[4]!);
+  final mi = int.parse(m[5]!);
+  final sec = int.parse(m[6] ?? '0');
+  if (day < 1 || day > 31 || h > 23 || mi > 59 || sec > 60) return null;
+  final t = DateTime.utc(year, month, day, h, mi, sec);
+  // DateTime.utc rolls over invalid days (31 Feb); reject those.
+  if (t.month != month) return null;
+  return t.subtract(Duration(minutes: offsetMin));
 }

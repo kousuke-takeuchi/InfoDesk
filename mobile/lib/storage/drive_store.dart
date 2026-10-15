@@ -49,7 +49,8 @@ class MemoryDrive implements DriveStore {
   StorageError? _fail;
   int _next = 0;
 
-  /// Adds a file, or replaces the content of the one with the same name.
+  /// Upsert: adds a file, or replaces the content of the one with the same
+  /// name. Test setup helper; [create] does not behave this way.
   RemoteFile put(String name, List<int> bytes, {DateTime? modified}) {
     final existing = _files.values
         .where((e) => e.meta.name == name)
@@ -96,9 +97,18 @@ class MemoryDrive implements DriveStore {
   }
 
   @override
+  /// Like Drive, always adds a new file, even when the name already exists.
   Future<RemoteFile> create(String name, List<int> bytes, String mime) async {
     _check();
-    return put(name, bytes);
+    final id = 'm${_next++}';
+    final meta = RemoteFile(
+      id: id,
+      name: name,
+      modifiedTime: _rfc3339(DateTime.now().toUtc()),
+      size: bytes.length,
+    );
+    _files[id] = (meta: meta, bytes: List<int>.unmodifiable(bytes));
+    return meta;
   }
 }
 
