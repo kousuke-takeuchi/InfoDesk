@@ -36,9 +36,9 @@ The agent is told this context with every question. It reads an attached article
 | Provider | How it runs | Notes |
 |---|---|---|
 | Ollama | The agent calls the Ollama server at `ollama.base_url` with `ollama.model` (defaults `http://localhost:11434` and `gemma4:26b`). Context length is set to 16384. | Needs Ollama running and the model pulled. |
-| Claude | The agent runs the `claude` CLI (`claude.bin`) with the model alias `sonnet`. No session is kept on disk. | Needs the CLI signed in. The tools are passed to it as an MCP server. |
+| Claude | The agent runs the `claude` CLI (`claude.bin`) with the model in `claude.model` (default `sonnet`). No session is kept on disk. | Needs the CLI signed in. The tools are passed to it as an MCP server. |
 
-- The default provider comes from `llm.chat_provider` (default `ollama`). The selector in the panel's composer switches provider for that panel. It does not change the setting.
+- The default provider comes from `llm.chat_provider` (default `ollama`). The selector in the panel's composer lists `Ollama · <model>` for every model installed in Ollama, then `Claude · sonnet`, `Claude · opus` and `Claude · fable` (plus `Claude · <name>` when `claude.model` holds a custom name). Choosing an entry switches the provider for that panel and writes `ollama.model` or `claude.model`, the same settings the LLM tab edits. It does not change `llm.chat_provider`. When the Ollama list cannot be fetched, only the current Ollama model is shown.
 - There is no automatic fallback. If a provider fails, the error box offers a retry, a button to send the same question with the other provider, and a link to the LLM settings. Your question stays in the input.
 - Error types are reported by kind: Ollama not reachable, model missing (with the `ollama pull` command), Claude not signed in, the `infodesk` CLI failing, or other.
 

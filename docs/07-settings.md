@@ -21,8 +21,8 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 *The LLM tab. Sample data from a mocked backend.*
 
 - "要約に使うLLM": choose Ollama or Claude (claude CLI) separately for article summaries, period digests and chat. Choosing Claude does not fall back to Ollama when it fails.
-- "Ollama": the URL, the model, a connection test, and the web search API key for chat.
-- "Claude": the path of the `claude` command, a connection test, and the path of Node (used to run the chat agent).
+- "Ollama": the URL, the model (a menu of the models installed in Ollama, with a "再読み込み" button to refetch; if Ollama cannot be reached it becomes a text box), a connection test, and the web search API key for chat.
+- "Claude": the path of the `claude` command, the model (`sonnet`, `opus`, `fable`, or "その他 (名前を入力)" to type a full model name), a connection test, and the path of Node (used to run the chat agent).
 - The path fields accept a bare command name (letters, digits, `_`, `.`, `-`) or an absolute path to an existing file. A GUI app does not inherit your shell PATH, so an absolute path is the safe choice.
 
 ### Schedule tab
@@ -51,6 +51,7 @@ All settings are stored in the app database as text. Defaults are written on fir
 | `ollama.model` | `gemma4:26b` | Ollama model name. |
 | `ollama.web_search_api_key` | empty | ollama.com API key. Enables web search in chat when the provider is Ollama. |
 | `claude.bin` | `claude` | Command or absolute path of the Claude CLI. |
+| `claude.model` | `sonnet` | Claude model passed to the CLI as `--model`: `sonnet`, `opus`, `fable` or a full model name. Used for summaries, digests and chat. Empty means the CLI default for summaries and `sonnet` for chat. |
 | `node.bin` | `node` | Command or absolute path of Node (22 or newer) for the chat agent. |
 | `summary.top_n` | `20` | How many top articles per category get an article summary after each collection. Not shown in Settings. Must be a number. |
 | `schedule.collect_interval_minutes` | `180` | Minutes between collections. Values outside 1 to 10080 are clamped. An invalid value falls back to 180. |

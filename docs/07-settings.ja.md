@@ -21,8 +21,8 @@
 *LLM タブ。モックしたバックエンドのサンプルデータです。*
 
 - 「要約に使うLLM」: 記事要約、期間要約、チャットで、Ollama と Claude (claude CLI) を別々に選びます。Claude を選んでも、失敗したときに Ollama へ自動で切り替えません。
-- 「Ollama」: URL、モデル、接続テスト、チャット用の Web 検索 API キー。
-- 「Claude」: `claude` コマンドのパス、接続テスト、Node のパス (チャットのエージェントの実行に使います)。
+- 「Ollama」: URL、モデル (Ollama に入っているモデルのメニュー。「再読み込み」ボタンで取り直します。Ollama に接続できないときは入力欄になります)、接続テスト、チャット用の Web 検索 API キー。
+- 「Claude」: `claude` コマンドのパス、モデル (`sonnet`、`opus`、`fable`、または「その他 (名前を入力)」で完全なモデル名)、接続テスト、Node のパス (チャットのエージェントの実行に使います)。
 - パスの欄は、コマンド名 (英数字と `_`、`.`、`-`) か、存在するファイルの絶対パスを受け付けます。GUI アプリはシェルの PATH を引き継がないので、絶対パスが確実です。
 
 ### スケジュールタブ
@@ -51,6 +51,7 @@
 | `ollama.model` | `gemma4:26b` | Ollama のモデル名。 |
 | `ollama.web_search_api_key` | 空 | ollama.com の API キー。プロバイダーが Ollama のとき、チャットの Web 検索を有効にします。 |
 | `claude.bin` | `claude` | Claude CLI のコマンドまたは絶対パス。 |
+| `claude.model` | `sonnet` | CLI に `--model` として渡す Claude のモデル。`sonnet`、`opus`、`fable` または完全なモデル名。要約、期間要約、チャットで使います。空のときは、要約では CLI の既定、チャットでは `sonnet` です。 |
 | `node.bin` | `node` | チャットのエージェント用の Node (22 以上) のコマンドまたは絶対パス。 |
 | `summary.top_n` | `20` | 収集のたびに記事要約を付ける、カテゴリーごとの上位の件数。設定画面には出ません。数値が必要です。 |
 | `schedule.collect_interval_minutes` | `180` | 収集の間隔 (分)。1〜10080の範囲外は丸めます。不正な値は180になります。 |

@@ -36,9 +36,9 @@
 | プロバイダー | 動き方 | 備考 |
 |---|---|---|
 | Ollama | エージェントが `ollama.base_url` の Ollama サーバーを `ollama.model` で呼びます (既定は `http://localhost:11434` と `gemma4:26b`)。文脈長は 16384 です。 | Ollama の起動とモデルの取得が必要です。 |
-| Claude | エージェントが `claude` CLI (`claude.bin`) をモデル別名 `sonnet` で実行します。セッションはディスクに残しません。 | CLI にログインが必要です。ツールは MCP サーバーとして渡します。 |
+| Claude | エージェントが `claude` CLI (`claude.bin`) を `claude.model` のモデル (既定は `sonnet`) で実行します。セッションはディスクに残しません。 | CLI にログインが必要です。ツールは MCP サーバーとして渡します。 |
 
-- 既定のプロバイダーは `llm.chat_provider` (既定は `ollama`) です。パネルの入力欄にある選択で、そのパネルのプロバイダーを切り替えられます。設定の値は変わりません。
+- 既定のプロバイダーは `llm.chat_provider` (既定は `ollama`) です。パネルの入力欄にある選択には、Ollama に入っているモデルごとの `Ollama · <モデル>` と、`Claude · sonnet`、`Claude · opus`、`Claude · fable` が並びます (`claude.model` が独自の名前なら `Claude · <名前>` も出ます)。選ぶと、そのパネルのプロバイダーを切り替え、`ollama.model` または `claude.model` に書きます。LLM タブで編集する設定と同じものです。`llm.chat_provider` は変わりません。Ollama の一覧を取得できないときは、今の Ollama のモデルだけを出します。
 - 自動のフォールバックはありません。失敗したときは、エラー欄に再試行、もう一方のプロバイダーで同じ質問を送るボタン、LLM 設定へのボタンが出ます。質問は入力欄に残ります。
 - エラーは種類ごとに表示します。Ollama に接続できない、モデルがない (`ollama pull` のコマンド付き)、Claude にログインしていない、`infodesk` CLI を実行できない、その他。
 
