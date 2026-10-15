@@ -186,4 +186,12 @@ export interface TailnetStatus {
   state: TailnetState;
   name: string | null;
   reason: string | null;
+  /** 今の起動を始めた時刻 (RFC 3339)。 */
+  started_at?: string | null;
+  /** starting のときの段階 (「Tailscale のサーバーにつないでいます」など)。 */
+  phase?: string | null;
+  /** 直近の問い合わせの失敗。 */
+  last_error?: string | null;
+  /** needs_login のときだけ、ログイン URL。 */
+  login_url?: string | null;
 }

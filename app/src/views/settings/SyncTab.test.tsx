@@ -299,27 +299,117 @@ describe("SyncTab", () => {
   });
 
   it.each([
-    ["needs_login", null, null, "ログインしてください"],
-    ["needs_approval", null, null, "Tailscale の管理画面でこの端末を承認してください"],
-    ["starting", null, null, "起動中…"],
-    ["failed", null, "no route", "起動できませんでした: no route"],
-    ["stopped", null, null, "停止中"],
-  ] as const)("shows the tailnet state %s", async (state, name, reason, text) => {
+    ["needs_login", null, null, "ログインしてください", "ログインページを開く"],
+    ["needs_approval", null, null, "Tailscale の管理画面でこの端末を承認してください", "Tailscale にログイン"],
+    ["starting", null, null, "起動中…", "Tailscale にログイン"],
+    ["failed", null, "no route", "起動できませんでした: no route", "Tailscale にログイン"],
+    ["stopped", null, null, "停止中", "Tailscale にログイン"],
+  ] as const)("shows the tailnet state %s", async (state, name, reason, text, button) => {
     setupIpc({ sync_status: () => ({ ...nas, tailnet: { state, name, reason } }) });
     render(<SyncTab />);
     expect(await screen.findByText(text)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tailscale にログイン" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: button })).toBeInTheDocument();
+  });
+
+  describe("while tailscale starts", () => {
+    const start = new Date("2026-10-15T01:00:00Z");
+    const starting = (extra: Partial<SyncStatus["tailnet"]> = {}): SyncStatus => ({
+      ...nas,
+      tailnet: { state: "starting", name: null, reason: null, started_at: start.toISOString(), phase: "Tailscale のサーバーにつないでいます", last_error: null, login_url: null, ...extra },
+    });
+    const at = (secs: number) => new Date(start.getTime() + secs * 1000);
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+    it("shows the phase with the elapsed seconds, updated every second", async () => {
+      vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: at(12) });
+      try {
+        setupIpc({ sync_status: () => starting() });
+        render(<SyncTab />);
+        expect(await screen.findByText("Tailscale のサーバーにつないでいます (12 秒)")).toBeInTheDocument();
+        await tick(1000);
+        expect(screen.getByText("Tailscale のサーバーにつないでいます (13 秒)")).toBeInTheDocument();
+        await tick(2000);
+        expect(screen.getByText("Tailscale のサーバーにつないでいます (15 秒)")).toBeInTheDocument();
+        expect(screen.queryByText("時間がかかっています")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("shows the login-preparing phase", async () => {
+      vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: at(3) });
+      try {
+        setupIpc({ sync_status: () => starting({ phase: "ログインの準備をしています" }) });
+        render(<SyncTab />);
+        expect(await screen.findByText("ログインの準備をしています (3 秒)")).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("offers retry and reset after 30 seconds, with the last error", async () => {
+      vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: at(28) });
+      try {
+        const ipc = setupIpc({
+          sync_status: () => starting({ last_error: "Tailscale に問い合わせられませんでした: timed out" }),
+          tailnet_restart: () => starting(),
+          tailnet_forget: () => ({ ...nas, tailnet: { state: "stopped" as const, name: null, reason: null } }),
+        });
+        render(<SyncTab />);
+        await screen.findByText("Tailscale のサーバーにつないでいます (28 秒)");
+        expect(screen.queryByText("時間がかかっています")).not.toBeInTheDocument();
+        await tick(2000);
+        expect(screen.getByText("時間がかかっています")).toBeInTheDocument();
+        expect(screen.getByText("Tailscale に問い合わせられませんでした: timed out")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "もう一度試す" }));
+        await waitFor(() => expect(ipc.count("tailnet_restart")).toBe(1));
+        // 状態を消すのは確認してから。
+        await userEvent.click(screen.getByRole("button", { name: "状態を消してやり直す" }));
+        expect(ipc.count("tailnet_forget")).toBe(0);
+        expect(screen.getByText("Tailscale にもう一度ログインが必要になります。消しますか?")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "消す" }));
+        await waitFor(() => expect(ipc.count("tailnet_forget")).toBe(1));
+        await waitFor(() => expect(screen.getByText("停止中")).toBeInTheDocument());
+        expect(screen.queryByText("時間がかかっています")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("shows no hint before 30 seconds even with an error", async () => {
+      vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: at(5) });
+      try {
+        setupIpc({ sync_status: () => starting({ last_error: "boom" }) });
+        render(<SyncTab />);
+        await screen.findByText("Tailscale のサーバーにつないでいます (5 秒)");
+        expect(screen.queryByText("時間がかかっています")).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "もう一度試す" })).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("opens the login page again when tailscale needs a login", async () => {
+    const waiting = { ...nas, tailnet: { state: "needs_login" as const, name: null, reason: null, login_url: "https://login.tailscale.com/a/xyz" } };
+    const ipc = setupIpc({ sync_status: () => waiting, tailnet_login: () => waiting });
+    render(<SyncTab />);
+    const open = await screen.findByRole("button", { name: "ログインページを開く" });
+    expect(open).toHaveClass("btn-primary");
+    await userEvent.click(open);
+    expect(ipc.count("tailnet_login")).toBe(1);
+    expect(screen.queryByRole("button", { name: "Tailscale にログイン" })).not.toBeInTheDocument();
   });
 
   it("logs in to and out of tailscale", async () => {
     const loggedOut = { ...nas, tailnet: { state: "needs_login" as const, name: null, reason: null } };
     const ipc = setupIpc({ sync_status: () => loggedOut, tailnet_login: () => nas, tailnet_logout: () => loggedOut });
     render(<SyncTab />);
-    await userEvent.click(await screen.findByRole("button", { name: "Tailscale にログイン" }));
+    await userEvent.click(await screen.findByRole("button", { name: "ログインページを開く" }));
     expect(ipc.count("tailnet_login")).toBe(1);
     await userEvent.click(await screen.findByRole("button", { name: "ログアウト" }));
     expect(ipc.count("tailnet_logout")).toBe(1);
-    expect(await screen.findByRole("button", { name: "Tailscale にログイン" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ログインページを開く" })).toBeInTheDocument();
   });
 
   it("saves the URL and user with a null password", async () => {

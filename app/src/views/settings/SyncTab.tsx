@@ -15,13 +15,25 @@ const STORAGE_DESC = "収集した記事とダイジェストを置く場所。�
 /** Rust の `sync::NAS_CHECK_OK` と同じ文字列。成功の判定はこの文字列との一致に頼っているので、変えるときは両方そろえる。 */
 const NAS_CHECK_OK = "読み書きできました";
 const MASK = "••••••••";
+/** 起動がこれより長くかかったら、やり直しの手段を見せる。 */
+const SLOW_START_SECS = 30;
 
-function tailnetText(t: TailnetStatus): string {
+/** 起動を始めてからの秒数。分からなければ null。 */
+function elapsedSecs(t: TailnetStatus, now: number): number | null {
+  const at = t.started_at ? Date.parse(t.started_at) : NaN;
+  return Number.isNaN(at) ? null : Math.max(0, Math.floor((now - at) / 1000));
+}
+
+function tailnetText(t: TailnetStatus, now: number): string {
   switch (t.state) {
     case "running": return `接続済み · ${t.name ?? ""}`;
     case "needs_login": return "ログインしてください";
     case "needs_approval": return "Tailscale の管理画面でこの端末を承認してください";
-    case "starting": return "起動中…";
+    case "starting": {
+      const secs = elapsedSecs(t, now);
+      const phase = t.phase ?? "起動中…";
+      return secs === null ? phase : `${phase} (${secs} 秒)`;
+    }
     case "failed": return `起動できませんでした: ${t.reason ?? ""}`;
     default: return "停止中";
   }
@@ -84,12 +96,25 @@ export function SyncTab() {
   }, []);
 
   const tailnetFailed = status?.tailnet.state === "failed";
-  useEffect(() => { if (!tailnetFailed) setConfirmForget(false); }, [tailnetFailed]);
+  const tailnetStarting = status?.tailnet.state === "starting";
+  // 起動中は 1 秒ごとに経過秒を出し直す。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!tailnetStarting) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [tailnetStarting]);
+  const startSecs = status && tailnetStarting ? elapsedSecs(status.tailnet, now) : null;
+  const tailnetSlow = startSecs !== null && startSecs >= SLOW_START_SECS;
+  const canForget = tailnetFailed || tailnetSlow;
+  useEffect(() => { if (!canForget) setConfirmForget(false); }, [canForget]);
 
   if (!status) return <ErrorLine message={loadError} />;
   const isNas = status.backend === "nas";
   const usable = isNas || status.available;
   const tailnetRunning = status.tailnet.state === "running";
+  const tailnetNeedsLogin = status.tailnet.state === "needs_login";
   const canSync = isNas ? tailnetRunning && status.nas_url !== "" : status.signed_in;
   const chooseBackend = (backend: string) => {
     if ((backend === "nas") === isNas) return;
@@ -119,15 +144,28 @@ export function SyncTab() {
               </div>
               <span className="cell-status">
                 {tailnetRunning && <span className="dot dot-success" />}
-                {tailnetText(status.tailnet)}
+                {tailnetText(status.tailnet, now)}
               </span>
               {tailnetRunning ? (
                 <button className="btn" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogout())}>{busy.has("tailnet") ? "ログアウト中…" : "ログアウト"}</button>
+              ) : tailnetNeedsLogin ? (
+                // ログイン待ちなら、同じログインページを開き直す (端末は起こし直さない)。
+                <button className="btn btn-primary" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogin())}>ログインページを開く</button>
               ) : (
                 <button className="btn btn-primary" disabled={busy.has("tailnet")} onClick={() => run("tailnet", () => api.tailnetLogin())}>Tailscale にログイン</button>
               )}
             </div>
-            {tailnetFailed && (
+            {tailnetSlow && (
+              <div className="setting-row" data-testid="tailnet-slow">
+                <div className="label">
+                  <span>時間がかかっています</span>
+                  {status.tailnet.last_error && <span className="hint">{status.tailnet.last_error}</span>}
+                </div>
+                <button className="btn" disabled={busy.has("restart")} onClick={() => run("restart", () => api.tailnetRestart())}>もう一度試す</button>
+                {!confirmForget && <button className="btn" onClick={() => setConfirmForget(true)}>状態を消してやり直す</button>}
+              </div>
+            )}
+            {canForget && (confirmForget || tailnetFailed) && (
               <div className="setting-row">
                 {confirmForget ? (
                   <div className="cell-confirm">

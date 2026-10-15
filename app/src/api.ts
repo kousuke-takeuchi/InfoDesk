@@ -80,6 +80,7 @@ export const api = {
   tailnetLogin: () => invoke<SyncStatus>("tailnet_login"),
   tailnetLogout: () => invoke<SyncStatus>("tailnet_logout"),
   tailnetForget: () => invoke<SyncStatus>("tailnet_forget"),
+  tailnetRestart: () => invoke<SyncStatus>("tailnet_restart"),
   syncTestNas: () => invoke<string>("sync_test_nas"),
   syncNow: () => invoke<void>("sync_now"),
   setLaunchAtLogin: (enabled: boolean) => invoke<void>("set_launch_at_login", { enabled }),
