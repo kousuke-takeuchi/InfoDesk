@@ -153,6 +153,77 @@ void main() {
     });
   });
 
+  test('reads the gzip the Rust side wrote', () {
+    final bytes = File(
+      '../crates/core/tests/fixtures/sync/snapshot.json.gz',
+    ).readAsBytesSync();
+    expect(gunzipJson(bytes), fixture('snapshot.json'));
+  });
+
+  test('writes the gzip fixture the Rust side decodes', () {
+    final f = OpsFile(
+      device: 'dart-dev',
+      ops: [
+        Op(
+          itemId: 1,
+          field: Field.read,
+          value: true,
+          at: '2026-10-13T00:00:00.000Z',
+          device: 'dart-dev',
+        ),
+        Op(
+          itemId: 2,
+          field: Field.starred,
+          value: false,
+          at: '2026-10-13T00:00:01.456Z',
+          device: 'dart-dev',
+        ),
+      ],
+    );
+    final file = File(
+      '../crates/core/tests/fixtures/sync/ops_from_dart.json.gz',
+    );
+    if (Platform.environment['UPDATE_FIXTURES'] == '1') {
+      file.writeAsBytesSync(gzipJson(f.toJson()));
+    }
+    final back = OpsFile.fromJson(gunzipJson(file.readAsBytesSync()));
+    expect(jsonEncode(back.toJson()), jsonEncode(f.toJson()));
+  });
+
+  test('a leap second is rejected in an op at but allowed in a file stamp', () {
+    // Deliberate divergence: chrono accepts :60 in an op's `at`, Dart rejects
+    // it (a leap second has no millisecond epoch). Such an op is dropped.
+    final op = Op(
+      itemId: 1,
+      field: Field.read,
+      value: true,
+      at: '2026-12-31T23:59:60Z',
+      device: 'p',
+    );
+    expect(normalizeOp(op), isNull);
+    // File-name stamps accept :60 on both sides (shared fixture file_names).
+    expect(parseFileName('ops-x-20261231T235960000Z-0001.json')?.device, 'x');
+  });
+
+  test('normalizeOp accepts U+2212 as the offset minus', () {
+    final op = Op(
+      itemId: 1,
+      field: Field.read,
+      value: true,
+      at: '2026-10-13T00:30:00\u221205:30',
+      device: 'p',
+    );
+    expect(normalizeOp(op)!.at, '2026-10-13T06:00:00.000Z');
+  });
+
+  test('opsFileName rejects a seq outside 1..9999', () {
+    final t = DateTime.utc(2026, 10, 13);
+    expect(() => opsFileName('d', t, 0), throwsRangeError);
+    expect(() => opsFileName('d', t, 10000), throwsRangeError);
+    expect(opsFileName('d', t, 9999), endsWith('-9999.json'));
+    expect(opsFileName('d', t, 1), endsWith('-0001.json'));
+  });
+
   test('record types parse the Mac JSON', () {
     final m = Manifest.fromJson({
       'schema': 1,

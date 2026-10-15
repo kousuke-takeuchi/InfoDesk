@@ -547,4 +547,32 @@ mod tests {
             serde_json::from_slice(&serde_json::to_vec(&snap).unwrap()).unwrap();
         assert_eq!(back, snap);
     }
+
+    #[test]
+    fn committed_gzip_fixtures_decode() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sync");
+        let want: serde_json::Value = serde_json::from_str(&fixture("snapshot.json")).unwrap();
+        let gz = std::fs::read(dir.join("snapshot.json.gz")).unwrap();
+        let got: serde_json::Value = gunzip_json(&gz).unwrap();
+        assert_eq!(got, want);
+        // Written by the Dart side (mobile/test/sync/format_test.dart).
+        let gz = std::fs::read(dir.join("ops_from_dart.json.gz")).unwrap();
+        let f: OpsFile = gunzip_json(&gz).unwrap();
+        assert_eq!(f.device, "dart-dev");
+        assert_eq!(f.ops.len(), 2);
+        assert_eq!(f.ops[0].item_id, 1);
+        assert_eq!(f.ops[0].field, Field::Read);
+        assert!(f.ops[0].value);
+        assert_eq!(f.ops[1].at, "2026-10-13T00:00:01.456Z");
+    }
+
+    /// Regenerates snapshot.json.gz. Run with `-- --ignored regenerate`.
+    #[test]
+    #[ignore]
+    fn regenerate_snapshot_gzip_fixture() {
+        let snap: StateSnapshot = serde_json::from_str(&fixture("snapshot.json")).unwrap();
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/sync/snapshot.json.gz");
+        std::fs::write(p, gzip_json(&snap).unwrap()).unwrap();
+    }
 }

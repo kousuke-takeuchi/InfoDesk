@@ -8,6 +8,7 @@
   {"name": "digest-month-2026-10-01.json.gz", "kind": "digest", "period": "month", "date": "2026-10-01"},
   {"name": "ops-dev-a-20261013T010203456Z-0007.json", "kind": "ops", "device": "dev-a"},
   {"name": "ops-6f1c2a9e-1b2c-4d5e-8f90-123456789abc-20261013T000000000Z-0001.json", "kind": "ops", "device": "6f1c2a9e-1b2c-4d5e-8f90-123456789abc"},
+  {"name": "ops-dev-a-20261013T235960000Z-0001.json", "kind": "ops", "device": "dev-a"},
   {"name": "random.txt", "kind": null},
   {"name": "day-2026-13-01.json.gz", "kind": null},
   {"name": "day-2026-1-5.json.gz", "kind": null},

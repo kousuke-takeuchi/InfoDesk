@@ -422,8 +422,9 @@ String dayFileName(String date) => 'day-$date.json.gz';
 String digestFileName(String period, String start) =>
     'digest-$period-$start.json.gz';
 
-/// Callers keep `seq` within 1 to 9999 so the name stays 4 digits.
+/// Throws [RangeError] unless `seq` is within 1 to 9999 (4 digits).
 String opsFileName(String device, DateTime at, int seq) {
+  RangeError.checkValueInInterval(seq, 1, 9999, 'seq');
   final u = at.toUtc();
   return 'ops-$device-${_p(u.year, 4)}${_p(u.month, 2)}${_p(u.day, 2)}'
       'T${_p(u.hour, 2)}${_p(u.minute, 2)}${_p(u.second, 2)}'
@@ -502,7 +503,7 @@ String opTime(DateTime at) {
 
 final _rfc3339 = RegExp(
   r'^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?'
-  r'(?:[Zz]|([+-])(\d{2}):(\d{2}))$',
+  r'(?:[Zz]|([+\-\u2212])(\d{2}):(\d{2}))$',
 );
 
 int _daysFromCivil(int y, int m, int d) {
@@ -521,12 +522,15 @@ String? _rfc3339ToOpTime(String s) {
   if (m == null) return null;
   final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
   final h = int.parse(m[4]!), mi = int.parse(m[5]!), se = int.parse(m[6]!);
+  // Deliberate divergence from chrono: a leap second (:60) in an op's `at` is
+  // rejected, since it has no millisecond epoch. The op is dropped. File-name
+  // stamps still accept :60 on both sides.
   if (!_validDate(y, mo, d) || h > 23 || mi > 59 || se > 59) return null;
   var offMin = 0;
   if (m[8] != null) {
     final oh = int.parse(m[9]!), om = int.parse(m[10]!);
     if (oh > 23 || om > 59) return null;
-    offMin = (oh * 60 + om) * (m[8] == '-' ? -1 : 1);
+    offMin = (oh * 60 + om) * (m[8] == '+' ? 1 : -1);
   }
   final millis = int.parse(('${m[7] ?? ''}000').substring(0, 3));
   final epochMs =
