@@ -20,9 +20,9 @@ describe("SettingsView", () => {
   });
 
   it("opens on the tab given by initialTab", async () => {
-    const ipc = setupIpc({ get_settings: () => settings });
+    const ipc = setupIpc({ get_settings: () => settings, ollama_models: () => [] });
     render(<SettingsView status={status} initialTab="llm" />);
-    expect(await screen.findByLabelText("モデル")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Node のパス")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "LLM" })).toHaveAttribute("aria-pressed", "true");
     expect(ipc.unmocked).toEqual([]);
   });

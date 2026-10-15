@@ -13,7 +13,7 @@ vi.mock("./ChatThread", () => ({
 }));
 
 const READY = { status: "ready", url: "http://127.0.0.1:4321", token: "tok" };
-const SETTINGS = { "llm.chat_provider": "ollama", "ollama.model": "gemma4:26b" };
+const SETTINGS = { "llm.chat_provider": "ollama", "ollama.model": "gemma4:26b", "claude.model": "sonnet" };
 const THREADS = [
   { id: 2, title: "認知症の今週の動き", created_at: "2026-10-08T00:00:00Z", updated_at: "2026-10-09T00:00:00Z" },
   { id: 1, title: "GitHub の話題", created_at: "2026-10-07T00:00:00Z", updated_at: "2026-10-07T00:00:00Z" },
@@ -23,6 +23,8 @@ function base(over: Record<string, (a: any) => unknown> = {}) {
   return setupIpc({
     chat_endpoint: () => READY,
     get_settings: () => SETTINGS,
+    ollama_models: () => ["gemma4:26b", "qwen3:8b"],
+    set_setting: () => null,
     list_chat_threads: () => THREADS,
     get_chat_messages: () => [{ id: "u", role: "user", parts: [{ type: "text", text: "x" }] }],
     ...over,
@@ -50,7 +52,7 @@ describe("ChatPanel", () => {
     const chips = screen.getByRole("group", { name: "文脈" });
     expect(within(chips).getByText("医療介護")).toBeInTheDocument();
     expect(within(chips).getByText("期間: 1週間")).toBeInTheDocument();
-    expect(lastThreadProps.modelLabel).toBe("Ollama · gemma4:26b");
+    expect(lastThreadProps.ollamaModel).toBe("gemma4:26b");
     expect(lastThreadProps.context).toEqual({ scope: { kind: "category", category: "medcare", label: "医療介護" }, period: { view: "feed", range: "week" }, attachments: [] });
   });
 
@@ -259,13 +261,35 @@ describe("ChatPanel", () => {
       onRemoveAttachment: vi.fn(), onClose: vi.fn(), onOpenSettings: vi.fn(),
     };
     const { rerender } = render(<ChatPanel {...(props as any)} hidden={false} />);
-    await waitFor(() => expect(lastThreadProps?.modelLabel).toBe("Ollama · gemma4:26b"));
+    await waitFor(() => expect(lastThreadProps?.ollamaModel).toBe("gemma4:26b"));
     settings = { "llm.chat_provider": "claude", "ollama.model": "qwen3:8b" };
     rerender(<ChatPanel {...(props as any)} hidden />);
     rerender(<ChatPanel {...(props as any)} hidden={false} />);
-    await waitFor(() => expect(lastThreadProps.modelLabel).toBe("Ollama · qwen3:8b"));
+    await waitFor(() => expect(lastThreadProps.ollamaModel).toBe("qwen3:8b"));
     expect(lastThreadProps.provider).toBe("claude");
     expect(screen.getByTestId("thread")).toHaveTextContent("|claude");
+  });
+
+  it("passes the model lists and writes the shared setting when a model is picked", async () => {
+    const ipc = base();
+    renderPanel();
+    await waitFor(() => expect(lastThreadProps?.ollamaModels).toEqual(["gemma4:26b", "qwen3:8b"]));
+    expect(lastThreadProps.claudeModel).toBe("sonnet");
+    act(() => lastThreadProps.onModelChange("claude", "opus"));
+    await waitFor(() => expect(ipc.last("set_setting")).toEqual({ key: "claude.model", value: "opus" }));
+    await waitFor(() => expect(lastThreadProps.provider).toBe("claude"));
+    expect(lastThreadProps.claudeModel).toBe("opus");
+    act(() => lastThreadProps.onModelChange("ollama", "qwen3:8b"));
+    await waitFor(() => expect(ipc.last("set_setting")).toEqual({ key: "ollama.model", value: "qwen3:8b" }));
+    expect(lastThreadProps.provider).toBe("ollama");
+    expect(lastThreadProps.ollamaModel).toBe("qwen3:8b");
+  });
+
+  it("passes an empty Ollama list when the models cannot be fetched", async () => {
+    base({ ollama_models: () => { throw { message: "refused" }; } });
+    renderPanel();
+    await waitFor(() => expect(lastThreadProps?.ollamaModel).toBe("gemma4:26b"));
+    expect(lastThreadProps.ollamaModels).toEqual([]);
   });
 
   it("drops a late save for a thread opened from history and then deleted", async () => {

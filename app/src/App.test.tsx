@@ -242,7 +242,7 @@ describe("App", () => {
       await waitFor(() => expect(allItem()).toHaveTextContent("7"));
       await userEvent.click(screen.getByRole("button", { name: "チャットを開く" }));
       await userEvent.click(await screen.findByRole("button", { name: "Node のパスを設定" }));
-      expect(await screen.findByLabelText("モデル")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Node のパス")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "設定" })).toHaveAttribute("aria-current", "true");
     });
 

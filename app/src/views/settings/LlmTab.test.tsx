@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LlmTab } from "./LlmTab";
 import { setupIpc } from "../../test/ipc";
@@ -7,8 +7,13 @@ import { setupIpc } from "../../test/ipc";
 const settings = {
   "llm.items_provider": "ollama", "llm.digest_provider": "claude", "llm.chat_provider": "ollama",
   "ollama.base_url": "http://localhost:11434", "ollama.model": "gemma4:26b", "ollama.web_search_api_key": "",
-  "claude.bin": "claude", "node.bin": "node", "summary.top_n": "20",
+  "claude.bin": "claude", "claude.model": "sonnet", "node.bin": "node", "summary.top_n": "20",
 };
+
+/** Ollama と Claude の両方に「モデル」欄があるので、セクションで絞る。 */
+const ollamaSection = () => within(screen.getByRole("region", { name: "Ollama" }));
+const claudeSection = () => within(screen.getByRole("region", { name: "Claude" }));
+const findOllamaModel = async () => { await screen.findByRole("region", { name: "Ollama" }); return ollamaSection().getByLabelText("モデル"); };
 
 function deferred<T = void>() {
   let resolve!: (v: T) => void;
@@ -24,10 +29,74 @@ describe("LlmTab", () => {
     await userEvent.selectOptions(screen.getByLabelText("記事要約"), "claude");
     expect(ipc.last("set_setting")).toEqual({ key: "llm.items_provider", value: "claude" });
 
-    const model = screen.getByLabelText("モデル");
+    const model = ollamaSection().getByLabelText("モデル");
     await userEvent.clear(model);
     await userEvent.type(model, "gemma4:12b{enter}");
     expect(ipc.last("set_setting")).toEqual({ key: "ollama.model", value: "gemma4:12b" });
+  });
+
+  describe("Ollama model select", () => {
+    it("lists installed models, keeps an unlisted stored value, saves a choice and reloads", async () => {
+      let models = ["gemma4:26b", "qwen3:8b"];
+      const ipc = setupIpc({ get_settings: () => ({ ...settings, "ollama.model": "old:1b" }), set_setting: () => undefined, ollama_models: () => models });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Ollama" });
+      const select = await waitFor(() => {
+        const el = ollamaSection().getByLabelText("モデル");
+        expect(el.tagName).toBe("SELECT");
+        return el;
+      });
+      expect(select).toHaveValue("old:1b");
+      expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["gemma4:26b", "qwen3:8b", "old:1b"]);
+      await userEvent.selectOptions(select, "qwen3:8b");
+      expect(ipc.last("set_setting")).toEqual({ key: "ollama.model", value: "qwen3:8b" });
+
+      models = ["gemma4:26b", "qwen3:8b", "llama3:8b"];
+      await userEvent.click(ollamaSection().getByRole("button", { name: "再読み込み" }));
+      expect(await ollamaSection().findByRole("option", { name: "llama3:8b" })).toBeInTheDocument();
+      expect(ipc.count("ollama_models")).toBe(2);
+    });
+
+    it("falls back to a text input with a hint when Ollama is unreachable", async () => {
+      setupIpc({ get_settings: () => settings, ollama_models: () => { throw { message: "refused" }; } });
+      render(<LlmTab />);
+      expect(await screen.findByText("Ollama に接続できないため、モデル名を入力してください")).toBeInTheDocument();
+      const input = ollamaSection().getByLabelText("モデル");
+      expect(input.tagName).toBe("INPUT");
+      expect(input).toHaveValue("gemma4:26b");
+    });
+  });
+
+  describe("Claude model select", () => {
+    it("offers sonnet, opus, fable and a custom entry, and saves claude.model", async () => {
+      const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined, ollama_models: () => [] });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Claude" });
+      const select = claudeSection().getByLabelText("モデル");
+      expect(select).toHaveValue("sonnet");
+      expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["sonnet", "opus", "fable", "その他 (名前を入力)"]);
+      await userEvent.selectOptions(select, "opus");
+      expect(ipc.last("set_setting")).toEqual({ key: "claude.model", value: "opus" });
+    });
+
+    it("shows a text input for a custom name and saves it", async () => {
+      const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined, ollama_models: () => [] });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Claude" });
+      expect(claudeSection().queryByLabelText("モデル名")).not.toBeInTheDocument();
+      await userEvent.selectOptions(claudeSection().getByLabelText("モデル"), "その他 (名前を入力)");
+      const input = claudeSection().getByLabelText("モデル名");
+      await userEvent.type(input, "claude-opus-4-1{enter}");
+      expect(ipc.last("set_setting")).toEqual({ key: "claude.model", value: "claude-opus-4-1" });
+    });
+
+    it("shows a stored custom name in the text input", async () => {
+      setupIpc({ get_settings: () => ({ ...settings, "claude.model": "claude-opus-4-1" }), ollama_models: () => [] });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Claude" });
+      expect(claudeSection().getByLabelText("モデル")).toHaveValue("__other__");
+      expect(claudeSection().getByLabelText("モデル名")).toHaveValue("claude-opus-4-1");
+    });
   });
 
   it("runs connection tests and shows the result or the error", async () => {
@@ -37,7 +106,7 @@ describe("LlmTab", () => {
       test_claude: () => ({ ok: false, message: "claude: Not logged in", millis: 5000 }),
     });
     render(<LlmTab />);
-    await screen.findByLabelText("モデル");
+    await findOllamaModel();
     await userEvent.click(screen.getByRole("button", { name: "Ollama をテスト" }));
     expect(await screen.findByText(/接続済み/)).toBeInTheDocument();
     expect(screen.getByText(/0\.8秒/)).toBeInTheDocument();
@@ -102,7 +171,7 @@ describe("LlmTab", () => {
   it("clears a field's inline error when the draft returns to the stored value", async () => {
     setupIpc({ get_settings: () => settings, set_setting: () => { throw { message: "storage failed" }; } });
     render(<LlmTab />);
-    const model = await screen.findByLabelText("モデル");
+    const model = await findOllamaModel();
     await userEvent.clear(model);
     await userEvent.type(model, "x{enter}");
     await waitFor(() => expect(model).toHaveAttribute("aria-invalid", "true"));
@@ -119,7 +188,7 @@ describe("LlmTab", () => {
       set_setting: () => { if (fail) throw { message: "storage failed" }; },
     });
     render(<LlmTab />);
-    const model = await screen.findByLabelText("モデル");
+    const model = await findOllamaModel();
     await userEvent.clear(model);
     await userEvent.type(model, "x{enter}");
     await waitFor(() => expect(model).toHaveAttribute("aria-invalid", "true"));
@@ -132,7 +201,7 @@ describe("LlmTab", () => {
   it("does not save on Enter while an IME composition is active", async () => {
     const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined });
     render(<LlmTab />);
-    const model = await screen.findByLabelText("モデル");
+    const model = await findOllamaModel();
     fireEvent.change(model, { target: { value: "がんま" } });
     fireEvent.keyDown(model, { key: "Enter", isComposing: true });
     expect(ipc.count("set_setting")).toBe(0);
@@ -162,7 +231,7 @@ describe("LlmTab", () => {
       test_ollama: () => (++n === 1 ? { ok: true, message: "接続済み", millis: 800 } : gate.promise),
     });
     render(<LlmTab />);
-    await screen.findByLabelText("モデル");
+    await findOllamaModel();
     await userEvent.click(screen.getByRole("button", { name: "Ollama をテスト" }));
     expect(await screen.findByText(/接続済み/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Ollama をテスト" }));
@@ -175,7 +244,7 @@ describe("LlmTab", () => {
   it("shows a rejected probe's error without a duration", async () => {
     setupIpc({ get_settings: () => settings, test_claude: () => { throw { message: "spawn failed" }; } });
     render(<LlmTab />);
-    await screen.findByLabelText("モデル");
+    await findOllamaModel();
     await userEvent.click(screen.getByRole("button", { name: "Claude をテスト" }));
     const msg = await screen.findByText(/spawn failed/);
     expect(msg).not.toHaveTextContent("秒");
@@ -191,7 +260,7 @@ describe("LlmTab", () => {
     render(<LlmTab />);
     await userEvent.selectOptions(await screen.findByLabelText("記事要約"), "claude");
     expect(await screen.findByRole("alert")).toHaveTextContent("db locked");
-    expect(screen.getByLabelText("モデル")).toBeInTheDocument();
+    expect(ollamaSection().getByLabelText("モデル")).toBeInTheDocument();
   });
 
   it("shows a load error from get_settings", async () => {
@@ -204,7 +273,7 @@ describe("LlmTab", () => {
     const gate = deferred<{ ok: boolean; message: string; millis: number }>();
     const ipc = setupIpc({ get_settings: () => settings, test_ollama: () => gate.promise });
     render(<LlmTab />);
-    await screen.findByLabelText("モデル");
+    await findOllamaModel();
     await userEvent.click(screen.getByRole("button", { name: "Ollama をテスト" }));
     const busy = await screen.findByRole("button", { name: /テスト中/ });
     expect(busy).toBeDisabled();

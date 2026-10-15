@@ -137,6 +137,7 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::set_setting,
             commands::settings::test_ollama,
+            commands::settings::ollama_models,
             commands::settings::test_claude,
             commands::settings::set_launch_at_login,
             commands::settings::show_main_window,

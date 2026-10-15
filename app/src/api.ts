@@ -59,6 +59,7 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   testOllama: () => invoke<ProbeResult>("test_ollama"),
+  ollamaModels: () => invoke<string[]>("ollama_models"),
   testClaude: () => invoke<ProbeResult>("test_claude"),
   listChatThreads: () => invoke<ChatThread[]>("list_chat_threads"),
   createChatThread: (title: string) => invoke<ChatThread>("create_chat_thread", { title }),

@@ -18,9 +18,14 @@ export interface ChatThreadProps {
   chatKey: string;
   initialMessages: UIMessage[];
   provider: ProviderId;
-  modelLabel: string;
+  /** インストール済みの Ollama モデル。取得できなかったときは空 (今のモデルだけを出す)。 */
+  ollamaModels: string[];
+  ollamaModel: string;
+  claudeModel: string;
   context: ChatContext;
   onProviderChange(p: ProviderId): void;
+  /** 選んだプロバイダーとモデル。設定 (ollama.model / claude.model) へ書くのは呼び出し側。 */
+  onModelChange(p: ProviderId, model: string): void;
   onPersist(messages: UIMessage[]): Promise<void>;
   onOpenSettings(): void;
   /** サイドカーに接続できないときの「エージェントを再起動」。送れなかった質問を含む今の会話を渡す。 */
@@ -30,6 +35,18 @@ export interface ChatThreadProps {
 
 const OTHER: Record<ProviderId, ProviderId> = { ollama: "claude", claude: "ollama" };
 const PROVIDER_NAME: Record<ProviderId, string> = { ollama: "Ollama", claude: "Claude" };
+
+const CLAUDE_ALIASES = ["sonnet", "opus", "fable"];
+
+/** ピッカーの選択肢。Ollama は入れてあるモデル全部 (今のモデルが一覧に無ければ足す)、Claude は別名と、別名以外の今のモデル。 */
+function modelChoices(ollamaModels: string[], ollamaModel: string, claudeModel: string) {
+  const ollama = ollamaModels.includes(ollamaModel) || !ollamaModel ? ollamaModels : [...ollamaModels, ollamaModel];
+  const claude = claudeModel && !CLAUDE_ALIASES.includes(claudeModel) ? [...CLAUDE_ALIASES, claudeModel] : CLAUDE_ALIASES;
+  return [
+    ...ollama.map((m) => ({ value: `ollama:${m}`, label: `Ollama · ${m}` })),
+    ...claude.map((m) => ({ value: `claude:${m}`, label: `Claude · ${m}` })),
+  ];
+}
 
 const HTTP_URL = /^https?:\/\//i;
 
@@ -171,9 +188,12 @@ export function ChatThread(props: ChatThreadProps) {
             <div className="chat-composer-row">
               <span className="model-picker">
                 <Settings size={12} aria-hidden className="model-picker-icon" />
-                <select aria-label="LLM" value={provider} onChange={(e) => props.onProviderChange(e.target.value as ProviderId)}>
-                  <option value="ollama">{provider === "ollama" ? props.modelLabel : "Ollama"}</option>
-                  <option value="claude">Claude</option>
+                <select aria-label="LLM" value={`${provider}:${provider === "ollama" ? props.ollamaModel : props.claudeModel}`}
+                  onChange={(e) => {
+                    const i = e.target.value.indexOf(":");
+                    props.onModelChange(e.target.value.slice(0, i) as ProviderId, e.target.value.slice(i + 1));
+                  }}>
+                  {modelChoices(props.ollamaModels, props.ollamaModel, props.claudeModel).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 <ChevronDown size={12} aria-hidden className="model-picker-chevron" />
               </span>

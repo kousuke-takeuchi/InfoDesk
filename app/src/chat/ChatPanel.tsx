@@ -65,7 +65,9 @@ export function ChatPanel(props: Props) {
   const openSeq = useRef(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [provider, setProvider] = useState<ProviderId>("ollama");
-  const [model, setModel] = useState("");
+  const [ollamaModel, setOllamaModel] = useState("");
+  const [claudeModel, setClaudeModel] = useState("sonnet");
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadThreads = useCallback(() => {
@@ -81,11 +83,21 @@ export function ChatPanel(props: Props) {
       .then((s) => {
         if (!live) return;
         setProvider(s["llm.chat_provider"] === "claude" ? "claude" : "ollama");
-        setModel(s["ollama.model"] ?? "");
+        setOllamaModel(s["ollama.model"] ?? "");
+        setClaudeModel(s["claude.model"] || "sonnet");
       })
       .catch((e) => { if (live) setError(errorMessage(e)); });
+    // 取得できなければ空にして、ピッカーには今のモデルだけを出す
+    api.ollamaModels().then((m) => { if (live) setOllamaModels(m); }).catch(() => { if (live) setOllamaModels([]); });
     return () => { live = false; };
   }, [hidden]);
+
+  /** ピッカーで選んだモデルを使う。設定画面と同じ ollama.model / claude.model に書く。 */
+  const chooseModel = (p: ProviderId, m: string) => {
+    setProvider(p);
+    if (p === "ollama") setOllamaModel(m); else setClaudeModel(m);
+    api.setSetting(p === "ollama" ? "ollama.model" : "claude.model", m).catch((e) => setError(errorMessage(e)));
+  };
 
   const newThread = () => {
     setMenuOpen(false);
@@ -203,9 +215,12 @@ export function ChatPanel(props: Props) {
           chatKey={current.key}
           initialMessages={current.messages}
           provider={provider}
-          modelLabel={model ? `Ollama · ${model}` : "Ollama"}
+          ollamaModels={ollamaModels}
+          ollamaModel={ollamaModel}
+          claudeModel={claudeModel}
           context={{ scope: props.scope, period: props.period, attachments: props.attachments }}
           onProviderChange={setProvider}
+          onModelChange={chooseModel}
           onPersist={(m: UIMessage[]) => persist(current.key, m)}
           onOpenSettings={() => props.onOpenSettings("llm")}
           onRestartAgent={(messages: UIMessage[]) => restartKeeping(current.key, messages)}

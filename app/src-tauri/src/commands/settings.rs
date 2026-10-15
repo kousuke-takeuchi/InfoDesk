@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use infodesk_core::llm::LlmProvider;
 use infodesk_core::llm::claude::ClaudeProvider;
+use infodesk_core::llm::ollama;
 use infodesk_core::seed::DEFAULT_SETTINGS;
 use serde::Serialize;
 use tauri::State;
@@ -127,11 +128,16 @@ pub async fn probe_ollama(state: &AppState) -> ProbeResult {
 /// `claude -p` に短い指示を送る。利用者のCLI認証をそのまま使う。
 pub async fn probe_claude(state: &AppState) -> ProbeResult {
     let started = Instant::now();
-    let bin = match state.with_store(|s| s.get_setting_or("claude.bin", "claude")) {
-        Ok(b) => b,
+    let (bin, model) = match state.with_store(|s| {
+        Ok((
+            s.get_setting_or("claude.bin", "claude")?,
+            s.get_setting_or("claude.model", "")?,
+        ))
+    }) {
+        Ok(v) => v,
         Err(e) => return probe(false, e.message, started),
     };
-    let provider = ClaudeProvider::new(bin);
+    let provider = ClaudeProvider::new(bin).with_model(&model);
     match provider.complete("Reply with exactly: OK", "ping").await {
         Ok(_) => probe(true, "接続済み", started),
         Err(e) => probe(false, e.to_string(), started),
@@ -151,6 +157,14 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Ap
 #[tauri::command]
 pub async fn test_ollama(state: State<'_, AppState>) -> AppResult<ProbeResult> {
     Ok(probe_ollama(&state).await)
+}
+
+/// インストール済みの Ollama モデル名。接続できなければエラーを返す。
+#[tauri::command]
+pub async fn ollama_models(state: State<'_, AppState>) -> AppResult<Vec<String>> {
+    let base =
+        state.with_store(|s| s.get_setting_or("ollama.base_url", "http://localhost:11434"))?;
+    Ok(ollama::list_models(&state.http, &base).await?)
 }
 
 #[tauri::command]

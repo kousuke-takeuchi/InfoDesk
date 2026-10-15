@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UIMessage } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +13,8 @@ const ENDPOINT = { url: "http://127.0.0.1:4321", token: "tok" };
 function renderThread(over: Partial<React.ComponentProps<typeof ChatThread>> = {}) {
   const props = {
     endpoint: ENDPOINT, chatKey: "new-1", initialMessages: [] as UIMessage[], provider: "ollama" as const,
-    modelLabel: "Ollama · gemma4:26b", context: CONTEXT,
-    onProviderChange: vi.fn(), onPersist: vi.fn(async () => {}), onOpenSettings: vi.fn(),
+    ollamaModels: ["gemma4:26b", "qwen3:8b"], ollamaModel: "gemma4:26b", claudeModel: "sonnet", context: CONTEXT,
+    onProviderChange: vi.fn(), onModelChange: vi.fn(), onPersist: vi.fn(async () => {}), onOpenSettings: vi.fn(),
     suggestions: ["今日のGitHubで伸びたリポジトリを3つ選んで理由を説明して"],
     ...over,
   };
@@ -180,12 +180,34 @@ describe("ChatThread", () => {
     expect(calls[0].body.messages[0].parts[0].text).toContain("今日のGitHubで伸びた");
   });
 
-  it("shows the model and lets the user switch provider", async () => {
+  it("lists every Ollama model then the Claude aliases and reports the choice", async () => {
     setupIpc({});
     const props = renderThread();
-    expect(screen.getByRole("combobox", { name: "LLM" })).toHaveValue("ollama");
-    await userEvent.setup().selectOptions(screen.getByRole("combobox", { name: "LLM" }), "claude");
-    expect(props.onProviderChange).toHaveBeenCalledWith("claude");
+    const select = screen.getByRole("combobox", { name: "LLM" });
+    expect(select).toHaveValue("ollama:gemma4:26b");
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Ollama · gemma4:26b", "Ollama · qwen3:8b", "Claude · sonnet", "Claude · opus", "Claude · fable",
+    ]);
+    const user = userEvent.setup();
+    await user.selectOptions(select, "claude:opus");
+    expect(props.onModelChange).toHaveBeenCalledWith("claude", "opus");
+    await user.selectOptions(select, "ollama:qwen3:8b");
+    expect(props.onModelChange).toHaveBeenCalledWith("ollama", "qwen3:8b");
+  });
+
+  it("adds a custom Claude model and selects it when Claude is active", async () => {
+    setupIpc({});
+    renderThread({ provider: "claude", claudeModel: "claude-opus-4-1" });
+    const select = screen.getByRole("combobox", { name: "LLM" });
+    expect(select).toHaveValue("claude:claude-opus-4-1");
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toContain("Claude · claude-opus-4-1");
+  });
+
+  it("shows only the current Ollama model when the list could not be fetched", async () => {
+    setupIpc({});
+    renderThread({ ollamaModels: [] });
+    const labels = within(screen.getByRole("combobox", { name: "LLM" })).getAllByRole("option").map((o) => o.textContent);
+    expect(labels).toEqual(["Ollama · gemma4:26b", "Claude · sonnet", "Claude · opus", "Claude · fable"]);
   });
 
   it("shows a restart button instead of the provider switch when the agent is unreachable", async () => {
