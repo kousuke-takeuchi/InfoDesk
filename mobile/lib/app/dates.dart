@@ -66,3 +66,7 @@ String relativeTime(DateTime t, DateTime now) {
 
 /// `9:42`, as in the designs.
 String clock(DateTime t) => '${t.hour}:${two(t.minute)}';
+
+/// `9:42` for today, `10月14日 9:42` for any other day.
+String clockOrDate(DateTime t, DateTime now) =>
+    dayOnly(t) == dayOnly(now) ? clock(t) : '${t.month}月${t.day}日 ${clock(t)}';

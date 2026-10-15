@@ -408,4 +408,42 @@ void main() {
     await s.setSetting('a', '2');
     expect(await s.getSetting('a'), '2');
   });
+
+  group('ItemFilter.ids, countItems, localCounts', () {
+    test('ids limits rows and the count; empty ids matches nothing', () async {
+      await seed();
+      final one = await s.items(filter: const ItemFilter(ids: [2]));
+      expect(one.map((i) => i.record.id), [2]);
+      expect(await s.countItems(const ItemFilter(ids: [1, 3])), 2);
+      expect(await s.items(filter: const ItemFilter(ids: [])), isEmpty);
+      expect(await s.countItems(const ItemFilter(ids: [])), 0);
+      expect(await s.countItems(const ItemFilter()), 3);
+    });
+
+    test('countItems follows the other filters and offset pages', () async {
+      await seed();
+      expect(await s.countItems(const ItemFilter(category: 'tech')), 2);
+      expect(await s.countItems(const ItemFilter(topicId: 11)), 2);
+      await s.setRead(1, true, 'phone', now: t(1));
+      expect(await s.countItems(const ItemFilter(unreadOnly: true)), 2);
+      final all = await s.items();
+      final page = await s.items(limit: 2, offset: 1);
+      expect(page.map((i) => i.record.id), all.skip(1).map((i) => i.record.id));
+    });
+
+    test('markAllRead respects ids when present', () async {
+      await seed();
+      final n = await s.markAllRead(const ItemFilter(ids: [1, 2]), 'phone');
+      expect(n, 2);
+      expect(await s.countItems(const ItemFilter(unreadOnly: true)), 1);
+      expect(await s.markAllRead(const ItemFilter(ids: []), 'phone'), 0);
+      expect(await s.markAllRead(const ItemFilter(), 'phone'), 1);
+    });
+
+    test('localCounts counts items and digests', () async {
+      expect(await s.localCounts(), (items: 0, digests: 0));
+      await seed();
+      expect((await s.localCounts()).items, 3);
+    });
+  });
 }

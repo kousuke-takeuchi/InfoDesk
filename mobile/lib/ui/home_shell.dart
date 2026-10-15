@@ -59,37 +59,44 @@ class _HomeShellState extends State<HomeShell> {
             children: [
               for (var i = 0; i < _tabs.length; i++)
                 Expanded(
-                  child: GestureDetector(
-                    key: Key('tab-${_tabs[i].$1}'),
-                    behavior: HitTestBehavior.opaque,
+                  child: Semantics(
+                    button: true,
+                    selected: i == _index,
+                    label: _tabs[i].$2,
+                    excludeSemantics: true,
                     onTap: () => setState(() => _index = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: i == _index ? accentSoft : Colors.transparent,
-                        borderRadius: BorderRadius.circular(26),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            i == _index ? _tabs[i].$4 : _tabs[i].$3,
-                            size: 24,
-                            color: i == _index ? accent : inkSecondary,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _tabs[i].$2,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: i == _index
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                    child: GestureDetector(
+                      key: Key('tab-${_tabs[i].$1}'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _index = i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: i == _index ? accentSoft : Colors.transparent,
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              i == _index ? _tabs[i].$4 : _tabs[i].$3,
+                              size: 24,
                               color: i == _index ? accent : inkSecondary,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              _tabs[i].$2,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: i == _index
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: i == _index ? accent : inkSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

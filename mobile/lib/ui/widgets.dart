@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/controller.dart';
 import '../app/theme.dart';
+import '../settings/app_settings.dart';
 
 /// Pill-shaped segmented control (M-1 period, M-5 storage choice).
 class Segmented<T> extends StatelessWidget {
@@ -28,29 +29,36 @@ class Segmented<T> extends StatelessWidget {
         children: [
           for (final (v, label) in options)
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(v),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: v == value ? surface : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: v == value
-                        ? const [
-                            BoxShadow(color: Color(0x1A000000), blurRadius: 3),
-                          ]
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: v == value
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+              child: Semantics(
+                button: true,
+                selected: v == value,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(v),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: v == value ? surface : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: v == value
+                          ? const [
+                              BoxShadow(
+                                color: Color(0x1A000000),
+                                blurRadius: 3,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: v == value
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),
@@ -83,30 +91,34 @@ class FilterPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = selected ? (dark ? ink : accentSoft) : fieldFill;
     final fg = selected ? (dark ? Colors.white : accent) : ink;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: fg,
-                fontSize: 14,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 14,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -114,25 +126,39 @@ class FilterPill extends StatelessWidget {
 }
 
 class ErrorLine extends StatelessWidget {
-  const ErrorLine(this.message, {super.key});
+  const ErrorLine(this.message, {super.key, this.actionLabel, this.onAction});
   final String? message;
+
+  /// An inline button after the message, e.g. 「Google でログイン」.
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
     final m = message;
     if (m == null) return const SizedBox.shrink();
+    final line = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.error_outline, size: 18, color: danger),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(m, style: const TextStyle(color: danger, fontSize: 14)),
+        ),
+      ],
+    );
+    final label = actionLabel;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline, size: 18, color: danger),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(m, style: const TextStyle(color: danger, fontSize: 14)),
-          ),
-        ],
-      ),
+      child: label == null || onAction == null
+          ? line
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                line,
+                TextButton(onPressed: onAction, child: Text(label)),
+              ],
+            ),
     );
   }
 }
@@ -144,11 +170,19 @@ class SyncNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = controller;
+    final needsLogin =
+        c.backend == Backend.gdrive &&
+        (c.authExpired || (c.googleEmail == null && c.syncError != null));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErrorLine(controller.syncError),
-        for (final w in controller.warnings)
+        ErrorLine(
+          c.syncError,
+          actionLabel: needsLogin ? 'Google でログイン' : null,
+          onAction: needsLogin ? c.signInGoogle : null,
+        ),
+        for (final w in c.warnings)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
@@ -162,9 +196,17 @@ class SyncNotice extends StatelessWidget {
 }
 
 class RemoteImage extends StatelessWidget {
-  const RemoteImage(this.url, {super.key, this.fit = BoxFit.cover});
+  const RemoteImage(
+    this.url, {
+    super.key,
+    this.fit = BoxFit.cover,
+    this.onError,
+  });
   final String url;
   final BoxFit fit;
+
+  /// Called (after the frame) when the image cannot be loaded.
+  final VoidCallback? onError;
 
   /// Only https images are fetched, as on the Mac.
   static bool usable(String? url) =>
@@ -174,7 +216,11 @@ class RemoteImage extends StatelessWidget {
   Widget build(BuildContext context) => Image.network(
     url,
     fit: fit,
-    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    errorBuilder: (_, _, _) {
+      final cb = onError;
+      if (cb != null) WidgetsBinding.instance.addPostFrameCallback((_) => cb());
+      return const SizedBox.shrink();
+    },
     loadingBuilder: (c, child, p) =>
         p == null ? child : const ColoredBox(color: fieldFill),
   );

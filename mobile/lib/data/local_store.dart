@@ -270,8 +270,12 @@ CREATE TABLE pending_ops (
     }
     final ids = f.ids;
     if (ids != null) {
-      w.add('i.id IN (${List.filled(ids.length, '?').join(',')})');
-      a.addAll(ids);
+      if (ids.isEmpty) {
+        w.add('0');
+      } else {
+        w.add('i.id IN (${List.filled(ids.length, '?').join(',')})');
+        a.addAll(ids);
+      }
     }
     if (f.unreadOnly) w.add('COALESCE(s.read, 0) = 0');
     if (f.starredOnly) w.add('COALESCE(s.starred, 0) = 1');
@@ -477,6 +481,7 @@ CREATE TABLE pending_ops (
             unreadOnly: true,
             starredOnly: filter.starredOnly,
             search: filter.search,
+            ids: filter.ids,
           ),
         );
         final rows = await txn.rawQuery('SELECT i.id $_from $where', args);

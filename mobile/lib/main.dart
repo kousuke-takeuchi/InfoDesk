@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tailscale/tailscale.dart' show NodeState, TailscaleStatus;
 import 'package:path_provider/path_provider.dart';
@@ -75,5 +77,5 @@ Future<void> main() async {
   final controller = await buildController();
   runApp(InfoDeskApp(controller: controller));
   // The saved state loads after the first frame; a pass follows.
-  controller.start();
+  unawaited(controller.start());
 }

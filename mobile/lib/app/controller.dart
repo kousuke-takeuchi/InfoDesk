@@ -76,20 +76,33 @@ class AppController extends ChangeNotifier {
 
   /// Loads the saved state. Does not sync.
   Future<void> init() async {
-    await google.restore();
-    backend = await settings.backend();
-    onboarded = await store.getSetting(_kOnboarded) == 'true';
-    await _loadSyncInfo();
-    await _loadNas();
-    await tailnet.startOnLaunch(nas: backend == Backend.nas);
-    ready = true;
-    notifyListeners();
+    try {
+      await google.restore();
+      backend = await settings.backend();
+      onboarded = await store.getSetting(_kOnboarded) == 'true';
+      await _loadSyncInfo();
+      await _loadNas();
+      // Tailscale may take long to come up; the first frame never waits.
+      unawaited(
+        tailnet
+            .startOnLaunch(nas: backend == Backend.nas)
+            .then((_) {}, onError: (_) {}),
+      );
+    } finally {
+      ready = true;
+      notifyListeners();
+    }
   }
 
-  /// App open: load, then a first pass.
+  /// App open: load, then a first pass. Errors are shown, never thrown.
   Future<void> start() async {
-    await init();
-    if (onboarded) unawaited(sync());
+    try {
+      await init();
+      if (onboarded) unawaited(sync());
+    } catch (e) {
+      actionError = describeError(e);
+      notifyListeners();
+    }
   }
 
   Future<void> _loadSyncInfo() async {
@@ -278,31 +291,47 @@ class AppController extends ChangeNotifier {
 
   Future<String> _device() => store.deviceId();
 
-  Future<void> setRead(int id, bool value) async {
-    await store.setRead(id, value, await _device());
-    revision++;
+  /// Local writes wait for a running pass, and report failures in
+  /// [actionError] instead of throwing into a button handler.
+  Future<void> _write(Future<void> Function() job) async {
+    try {
+      await _exclusive(job);
+      actionError = null;
+      revision++;
+    } catch (e) {
+      actionError = describeError(e);
+    }
     notifyListeners();
   }
 
-  Future<void> setStarred(int id, bool value) async {
+  Future<void> setRead(int id, bool value) => _write(() async {
+    await store.setRead(id, value, await _device());
+  });
+
+  Future<void> setStarred(int id, bool value) => _write(() async {
     await store.setStarred(id, value, await _device());
-    revision++;
-    notifyListeners();
-  }
+  });
 
   Future<int> markAllRead(ItemFilter filter) async {
-    final n = await store.markAllRead(filter, await _device());
-    revision++;
-    notifyListeners();
+    var n = 0;
+    await _write(() async {
+      n = await store.markAllRead(filter, await _device());
+    });
     return n;
   }
 
-  /// Opens the article in the in-app browser and marks it read.
-  Future<void> openItem(StoredItem item) async {
+  /// Opens the article in the in-app browser and marks it read. False when
+  /// the page could not be opened.
+  Future<bool> openItem(StoredItem item) async {
     if (!item.isRead) await setRead(item.record.id, true);
     final uri = Uri.tryParse(item.record.url);
-    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
-      await openArticle(uri);
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+      return false;
+    }
+    try {
+      return await openArticle(uri);
+    } on Object {
+      return false;
     }
   }
 }

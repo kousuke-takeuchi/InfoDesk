@@ -88,7 +88,9 @@ class FakeStore implements LocalStore {
       for (final i in all)
         if (_match(i, filter)) i,
     ];
-    return limit == null ? r : r.take(limit).toList();
+    final from = offset ?? 0;
+    final tail = from >= r.length ? <StoredItem>[] : r.sublist(from);
+    return limit == null ? tail : tail.take(limit).toList();
   }
 
   @override
@@ -203,9 +205,14 @@ class FakeSettings implements AppSettings {
   Backend current = Backend.gdrive;
   NasConfig config = const NasConfig(url: '', user: '');
   final calls = <String>[];
+  Object? failBackend;
 
   @override
-  Future<Backend> backend() async => current;
+  Future<Backend> backend() async {
+    final e = failBackend;
+    if (e != null) throw e;
+    return current;
+  }
 
   @override
   Future<bool> setBackend(Backend b) async {
@@ -281,8 +288,16 @@ class FakeTailnet implements TailnetService {
   final state = ValueNotifier<TailnetState>(const TailnetStopped());
   final calls = <String>[];
 
+  /// When set, startOnLaunch does not finish until this completes.
+  Future<void>? launchHold;
+  final launches = <bool>[];
+
   @override
-  Future<void> startOnLaunch({required bool nas}) async {}
+  Future<void> startOnLaunch({required bool nas}) async {
+    launches.add(nas);
+    await launchHold;
+  }
+
   @override
   Future<void> start() async => calls.add('start');
   @override

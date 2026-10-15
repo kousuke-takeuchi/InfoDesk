@@ -91,6 +91,9 @@ class _DigestScreenState extends State<DigestScreen> {
   int _seen = -1;
   int _load = 0;
 
+  /// Images that failed to load; those items go back to the text links.
+  final _brokenImages = <int>{};
+
   AppController get c => widget.controller;
 
   @override
@@ -424,7 +427,9 @@ class _DigestScreenState extends State<DigestScreen> {
     ];
     final cards = [
       for (final i in items)
-        if (RemoteImage.usable(i.record.imageUrl)) i,
+        if (RemoteImage.usable(i.record.imageUrl) &&
+            !_brokenImages.contains(i.record.id))
+          i,
     ].take(3).toList();
     final links = [
       for (final i in items)
@@ -566,7 +571,14 @@ class _DigestScreenState extends State<DigestScreen> {
               width: double.infinity,
               child: ColoredBox(
                 color: fieldFill,
-                child: RemoteImage(i.record.imageUrl!),
+                child: RemoteImage(
+                  i.record.imageUrl!,
+                  onError: () {
+                    if (mounted) {
+                      setState(() => _brokenImages.add(i.record.id));
+                    }
+                  },
+                ),
               ),
             ),
             Padding(

@@ -81,12 +81,9 @@ class _ArticleScreenState extends State<ArticleScreen> {
   }
 
   Future<void> _openArticle() async {
-    try {
-      await c.openItem(_item!);
-      await _fetch();
-    } on Object {
-      if (mounted) setState(() => _error = '記事を開けませんでした');
-    }
+    final opened = await c.openItem(_item!);
+    await _fetch();
+    if (mounted) setState(() => _error = opened ? null : '記事を開けませんでした');
   }
 
   @override

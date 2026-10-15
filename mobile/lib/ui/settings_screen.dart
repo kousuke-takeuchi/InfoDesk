@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final written = c.macWrittenAt;
     final macText = written == null
         ? 'まだありません'
-        : '${c.macWriter ?? 'Mac'} · ${clock(written)} に書き出し';
+        : '${c.macWriter ?? 'Mac'} · ${clockOrDate(written, c.now())} に書き出し';
     return Container(
       color: groupedBackground,
       child: SafeArea(
@@ -218,8 +218,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   c.syncing
                       ? '同期中…'
                       : c.lastSyncAt == null
-                      ? '—'
-                      : clock(c.lastSyncAt!),
+                      ? 'まだありません'
+                      : clockOrDate(c.lastSyncAt!, c.now()),
                   style: const TextStyle(color: inkSecondary, fontSize: 17),
                 ),
               ),

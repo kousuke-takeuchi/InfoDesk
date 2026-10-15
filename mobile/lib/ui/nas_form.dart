@@ -21,6 +21,7 @@ class _NasFormState extends State<NasForm> {
   final _password = TextEditingController();
   final _focus = [FocusNode(), FocusNode(), FocusNode()];
   var _confirmClear = false;
+  var _skipBlur = false;
 
   AppController get c => widget.controller;
 
@@ -29,7 +30,12 @@ class _NasFormState extends State<NasForm> {
     super.initState();
     for (final f in _focus) {
       f.addListener(() {
-        if (!f.hasFocus) _save();
+        if (f.hasFocus) return;
+        if (_skipBlur) {
+          _skipBlur = false;
+          return;
+        }
+        _save();
       });
     }
   }
@@ -53,11 +59,19 @@ class _NasFormState extends State<NasForm> {
       user: _user.text,
       password: pw.isEmpty ? null : pw,
     );
+    if (!mounted) return;
     if (c.actionError == null) _password.clear();
   }
 
   Future<void> _check() async {
+    // Dropping focus would save again; save once, here.
+    final focused = _focus.where((f) => f.hasFocus).toList();
+    if (focused.isNotEmpty) {
+      _skipBlur = true;
+      focused.first.unfocus();
+    }
     await _save();
+    if (!mounted) return;
     if (c.actionError == null) await c.checkNas();
   }
 
@@ -114,7 +128,7 @@ class _NasFormState extends State<NasForm> {
           _focus[2],
           const Key('nas-password'),
           secret: true,
-          hint: (c.nasConfig.password ?? '').isEmpty ? null : '保存済み (キーチェーン)',
+          hint: (c.nasConfig.password ?? '').isEmpty ? null : '保存済み',
         ),
         ErrorLine(c.actionError),
         Row(
@@ -160,6 +174,7 @@ class _NasFormState extends State<NasForm> {
                 FilledButton(
                   onPressed: () async {
                     await c.clearNas();
+                    if (!mounted) return;
                     _url.clear();
                     _user.clear();
                     if (mounted) setState(() => _confirmClear = false);

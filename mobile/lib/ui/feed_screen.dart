@@ -20,7 +20,7 @@ enum _Range {
   final int? days;
 }
 
-const _pageSize = 300;
+const _pageSize = 100;
 
 /// M-2. With [starredOnly] it is the スター tab: the same list, starred
 /// items only.
@@ -46,6 +46,9 @@ class _FeedScreenState extends State<FeedScreen> {
   var _query = '';
   List<StoredItem> _items = const [];
   var _unread = 0;
+  var _total = 0;
+  var _loadingMore = false;
+  final _search = TextEditingController();
   MetaFile? _meta;
   var _loaded = false;
   int _seen = -1;
@@ -64,6 +67,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void dispose() {
     c.removeListener(_onController);
+    _search.dispose();
     super.dispose();
   }
 
@@ -90,14 +94,33 @@ class _FeedScreenState extends State<FeedScreen> {
     final mine = ++_load;
     final items = await c.store.items(filter: _filter(), limit: _pageSize);
     final unread = await c.store.countItems(_filter(unread: true));
+    final total = await c.store.countItems(_filter());
     final meta = await c.store.meta();
     if (!mounted || mine != _load) return;
     setState(() {
       _items = items;
+      _total = total;
       _unread = unread;
       _meta = meta;
       _loaded = true;
     });
+  }
+
+  Future<void> _more() async {
+    if (_loadingMore) return;
+    final mine = _load;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await c.store.items(
+        filter: _filter(),
+        limit: _pageSize,
+        offset: _items.length,
+      );
+      if (!mounted || mine != _load) return;
+      setState(() => _items = [..._items, ...next]);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   String get _scopeLabel {
@@ -212,7 +235,10 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
+              controller: _search,
               onChanged: (v) {
+                // Wait while the IME is still composing.
+                if (!_search.value.composing.isCollapsed) return;
                 _query = v;
                 _reload();
               },
@@ -289,6 +315,24 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             for (final i in _items)
               _Row(item: i, now: now, onTap: () => _open(i)),
+            if (_items.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  children: [
+                    Text(
+                      '$_total件中 ${_items.length}件を表示',
+                      style: const TextStyle(color: inkSecondary, fontSize: 13),
+                    ),
+                    if (_items.length < _total)
+                      TextButton(
+                        key: const Key('feed-more'),
+                        onPressed: _loadingMore ? null : _more,
+                        child: const Text('さらに表示'),
+                      ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

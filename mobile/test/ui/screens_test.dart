@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infodesk_mobile/app/app.dart';
+import 'package:infodesk_mobile/app/controller.dart';
 import 'package:infodesk_mobile/app/dates.dart';
 import 'package:infodesk_mobile/auth/tailnet_service.dart';
 import 'package:infodesk_mobile/data/local_store.dart';
@@ -528,6 +529,271 @@ void main() {
       gate.complete();
       await Future.wait([a, b]);
       expect(h.engine.runs, 1);
+    });
+  });
+
+  group('launch and lifecycle', () {
+    testWidgets('a Tailscale start that never ends does not block launch', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final h = Harness(onboarded: false);
+      h.settings.current = Backend.nas;
+      h.tailnet.launchHold = Completer<void>().future;
+      unawaited(h.controller.start());
+      await tester.pumpWidget(InfoDeskApp(controller: h.controller));
+      await tester.pumpAndSettle();
+      expect(h.controller.ready, isTrue);
+      expect(h.tailnet.launches, [true]);
+      expect(find.text('NAS (WebDAV)'), findsOneWidget);
+    });
+
+    testWidgets('a load error still gives ready and a Japanese message', (
+      tester,
+    ) async {
+      final h = Harness();
+      h.settings.failBackend = const StorageError(
+        StorageErrorKind.other,
+        '読み込めません',
+      );
+      await h.controller.start();
+      expect(h.controller.ready, isTrue);
+      expect(h.controller.actionError, '読み込めません');
+    });
+
+    testWidgets('returning to the app runs one pass', (tester) async {
+      final h = await pumpApp(tester, items: sample());
+      expect(h.engine.runs, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(h.engine.runs, 1);
+    });
+
+    testWidgets('returning before first-time setup does not sync', (
+      tester,
+    ) async {
+      final h = await pumpApp(tester, onboarded: false);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(h.engine.runs, 0);
+    });
+  });
+
+  group('feed paging and search', () {
+    testWidgets('shows 100 at a time with a count footer', (tester) async {
+      await pumpApp(
+        tester,
+        items: [
+          for (var i = 1; i <= 250; i++) FakeStore.item(rec(i, title: 'T$i')),
+        ],
+      );
+      await tab(tester, 'feed');
+      expect(find.text('250件中 100件を表示'), findsNothing);
+      final list = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('feed-more')),
+        2000,
+        scrollable: list,
+      );
+      expect(find.text('250件中 100件を表示'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('feed-more')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('feed-more')),
+        2000,
+        scrollable: list,
+      );
+      expect(find.text('250件中 200件を表示'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('feed-more')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('250件中 250件を表示'),
+        2000,
+        scrollable: list,
+      );
+      expect(find.byKey(const Key('feed-more')), findsNothing);
+    });
+
+    testWidgets('search waits while the IME is composing', (tester) async {
+      final h = await pumpApp(tester, items: sample());
+      await tab(tester, 'feed');
+      await tester.enterText(find.byType(TextField), '');
+      await tester.showKeyboard(find.byType(TextField));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'かい',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Still composing: nothing is filtered out.
+      expect(find.text('認知症の新薬'), findsOneWidget);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: '介護',
+          selection: TextSelection.collapsed(offset: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('認知症の新薬'), findsNothing);
+      expect(find.text('介護報酬の改定'), findsOneWidget);
+      expect(h.controller.ready, isTrue);
+    });
+  });
+
+  group('review fixes', () {
+    testWidgets('dates are shown when the time is not today', (tester) async {
+      await pumpApp(
+        tester,
+        setup: (h) {
+          h.store.settingsMap['last_sync_at'] = DateTime(
+            2026,
+            10,
+            14,
+            8,
+            5,
+          ).toUtc().toIso8601String();
+          h.store.settingsMap['manifest.written_at'] = DateTime(
+            2026,
+            10,
+            13,
+            7,
+            30,
+          ).toUtc().toIso8601String();
+        },
+      );
+      await tab(tester, 'settings');
+      expect(find.text('10月14日 8:05'), findsOneWidget);
+      expect(find.textContaining('10月13日 7:30'), findsOneWidget);
+    });
+
+    testWidgets('no sync yet reads まだありません', (tester) async {
+      await pumpApp(tester);
+      await tab(tester, 'settings');
+      expect(find.text('まだありません'), findsWidgets);
+    });
+
+    testWidgets('a re-login error offers Google でログイン inline', (tester) async {
+      final h = await pumpApp(tester, items: sample());
+      h.engine.failWith = const StorageError(
+        StorageErrorKind.authExpired,
+        'Google の再ログインが必要です',
+      );
+      await h.controller.sync();
+      await tab(tester, 'feed');
+      expect(find.text('Google の再ログインが必要です'), findsOneWidget);
+      await tester.tap(find.text('Google でログイン'));
+      await tester.pumpAndSettle();
+      expect(h.google.signIns, 1);
+    });
+
+    testWidgets('a broken card image sends the item back to the links', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        items: [
+          FakeStore.item(
+            rec(1, title: '認知症の新薬', image: 'https://example.com/a.png'),
+          ),
+        ],
+        setup: (h) {
+          h.store.digestFiles['day|${dateString(DateTime.now())}'] = digestFile(
+            body: '- 要点',
+          );
+        },
+      );
+      await tester.pumpAndSettle();
+      // The card shows the source line; a text link does not.
+      expect(find.text('Google News'), findsNothing);
+      expect(find.text('認知症の新薬'), findsOneWidget);
+    });
+
+    testWidgets('a page that will not open says so', (tester) async {
+      final h = Harness(items: sample());
+      h.store.settingsMap['onboarded'] = 'true';
+      final c = AppController(
+        store: h.store,
+        engine: h.engine,
+        settings: h.settings,
+        storage: h.storage,
+        google: h.google,
+        tailnet: h.tailnet,
+        openArticle: (_) async => false,
+        openExternal: (_) async => true,
+        clock: () => h.clockNow,
+      );
+      await c.init();
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(InfoDeskApp(controller: c));
+      await tester.pumpAndSettle();
+      await tab(tester, 'feed');
+      await tester.tap(find.text('認知症の新薬'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('記事を開く'));
+      await tester.pumpAndSettle();
+      expect(find.text('記事を開けませんでした'), findsOneWidget);
+    });
+
+    testWidgets('the password hint does not name the keychain', (tester) async {
+      await pumpApp(
+        tester,
+        onboarded: false,
+        setup: (h) {
+          h.settings.current = Backend.nas;
+          h.settings.config = const NasConfig(
+            url: 'http://nas/',
+            user: 'u',
+            password: 'p',
+          );
+        },
+      );
+      expect(find.text('保存済み'), findsOneWidget);
+      expect(find.textContaining('キーチェーン'), findsNothing);
+    });
+
+    testWidgets('tapping 確かめる saves once', (tester) async {
+      final h = await pumpApp(
+        tester,
+        onboarded: false,
+        setup: (h) => h.settings.current = Backend.nas,
+      );
+      await tester.enterText(
+        find.byKey(const Key('nas-url')),
+        'http://nas:5005/x/',
+      );
+      await tester.tap(find.text('確かめる'));
+      await tester.pumpAndSettle();
+      expect(
+        h.settings.calls.where((c) => c.startsWith('setNas')),
+        hasLength(1),
+      );
+      expect(h.storage.checks, 1);
+    });
+
+    testWidgets('segmented control and tabs expose button semantics', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpApp(tester, items: sample());
+      expect(
+        tester.getSemantics(find.byKey(const Key('tab-digest'))),
+        matchesSemantics(
+          label: 'ダイジェスト',
+          isButton: true,
+          isSelected: true,
+          hasTapAction: true,
+          hasSelectedState: true,
+        ),
+      );
+      handle.dispose();
     });
   });
 }
