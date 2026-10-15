@@ -52,8 +52,33 @@ pub enum TailnetState {
     },
 }
 
+/// 起動の進み具合。画面で「何秒たったか」「今どこまで来たか」を見せるために使う。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TailnetProgress {
+    /// 今の起動を始めた時刻。止まっていれば `None`。
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// LocalAPI が最後に返した BackendState (NoState、Starting、NeedsLogin など)。
+    pub backend_state: Option<String>,
+    /// 直近の問い合わせの失敗。資格情報は含まない。成功すれば消える。
+    pub last_error: Option<String>,
+}
+
+pub const PHASE_CONNECTING: &str = "Tailscale のサーバーにつないでいます";
+pub const PHASE_PREPARING_LOGIN: &str = "ログインの準備をしています";
+
+/// 起動中 (`Starting`) の段階を BackendState から決める。URL がまだない NeedsLogin は
+/// ログインの準備中。NoState、Starting、まだ問い合わせていないときはサーバーへの接続中。
+pub fn starting_phase(backend_state: Option<&str>) -> &'static str {
+    match backend_state {
+        Some("NeedsLogin") => PHASE_PREPARING_LOGIN,
+        _ => PHASE_CONNECTING,
+    }
+}
+
 pub trait Tailnet: Send + Sync {
     fn state(&self) -> TailnetState;
+    /// 起動の進み具合。
+    fn progress(&self) -> TailnetProgress;
     /// 裏で端末を起こす。ログインが要っても、ログイン画面は開かない (開くのは `login` だけ)。
     /// 古い起動処理がまだ残っていれば、その終了を待つ。メインスレッドから呼ばないこと。
     fn start(&self) -> AppResult<()>;
@@ -160,11 +185,19 @@ struct SelfJson {
 }
 
 /// LocalAPI の `/localapi/v0/status?peers=false` の JSON から状態を作る。読めない JSON は `Starting`。
+/// (起動スレッドは理由も残すため `parse_status` を使う。)
+#[cfg(test)]
 pub fn state_from_status(json: &str) -> TailnetState {
-    let Ok(s) = serde_json::from_str::<StatusJson>(json) else {
-        return TailnetState::Starting;
-    };
-    match s.backend_state.as_str() {
+    parse_status(json)
+        .map(|(_, state)| state)
+        .unwrap_or(TailnetState::Starting)
+}
+
+/// status の JSON を (BackendState, 状態) にする。読めなければ理由 (JSON の中身は含まない)。
+fn parse_status(json: &str) -> Result<(String, TailnetState), String> {
+    let s = serde_json::from_str::<StatusJson>(json)
+        .map_err(|e| format!("Tailscale の状態を読めませんでした: {e}"))?;
+    let state = match s.backend_state.as_str() {
         "NeedsLogin" if !s.auth_url.is_empty() => TailnetState::NeedsLogin { url: s.auth_url },
         "Running" => {
             let (dns, ips) = match &s.this {
@@ -187,7 +220,8 @@ pub fn state_from_status(json: &str) -> TailnetState {
         "Stopped" => TailnetState::Stopped,
         // NoState、Starting、URL がまだない NeedsLogin。
         _ => TailnetState::Starting,
-    }
+    };
+    Ok((s.backend_state, state))
 }
 
 #[derive(Deserialize)]
@@ -345,6 +379,8 @@ struct Inner {
     generation: u64,
     /// 直近の起動スレッド。次の起動はこれの終了を待ってから始める。
     thread: Option<JoinHandle<()>>,
+    /// 起動の進み具合。起動のたびに作り直し、`stop` で消す。
+    progress: TailnetProgress,
 }
 
 /// 起動した端末。手放すと閉じる。
@@ -383,6 +419,30 @@ fn commit(inner: &Mutex<Inner>, gen_id: u64, next: TailnetState, finished: bool)
     let changed = g.state.as_ref() != Some(&next);
     g.state = Some(next);
     Some(changed)
+}
+
+/// 問い合わせの結果を書く (世代が `gen_id` のままのときだけ)。成功なら状態と BackendState を
+/// 書いてエラーを消し、失敗ならエラーだけを残す (状態はそのまま)。
+/// `Some(changed)` の `changed` は、状態か進み具合が変わったか。
+fn commit_poll(
+    inner: &Mutex<Inner>,
+    gen_id: u64,
+    result: Result<(String, TailnetState), String>,
+) -> Option<bool> {
+    let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+    if g.generation != gen_id {
+        return None;
+    }
+    let before = (g.state.clone(), g.progress.clone());
+    match result {
+        Ok((backend, next)) => {
+            g.state = Some(next);
+            g.progress.backend_state = Some(backend);
+            g.progress.last_error = None;
+        }
+        Err(e) => g.progress.last_error = Some(e),
+    }
+    Some(before != (g.state.clone(), g.progress.clone()))
 }
 
 fn current(inner: &Mutex<Inner>, gen_id: u64) -> bool {
@@ -444,6 +504,10 @@ impl EmbeddedTailnet {
             g.opened_login = None;
             g.generation += 1;
             g.state = Some(TailnetState::Starting);
+            g.progress = TailnetProgress {
+                started_at: Some(chrono::Utc::now()),
+                ..TailnetProgress::default()
+            };
             (g.generation, g.thread.take())
         };
         (self.notify)(EVENT_SYNC);
@@ -485,35 +549,37 @@ impl EmbeddedTailnet {
                 g.loopback = Some(lb.clone());
             }
             while current(&inner, gen_id) {
-                if let Ok((200, body)) = localapi(
+                let result = match localapi(
                     &lb,
                     "GET",
                     "/localapi/v0/status?peers=false",
                     LOCALAPI_TIMEOUT,
                 ) {
-                    let next = state_from_status(&body);
-                    let url = match &next {
-                        TailnetState::NeedsLogin { url } => Some(url.clone()),
-                        _ => None,
-                    };
-                    // 世代の確認が通ったときだけ、通知とブラウザを開く処理に進む。
-                    if let Some(changed) = commit(&inner, gen_id, next, false) {
-                        if changed {
-                            notify(EVENT_SYNC);
+                    Ok((200, body)) => parse_status(&body),
+                    Ok((status, _)) => Err(format!("Tailscale が HTTP {status} を返しました")),
+                    Err(e) => Err(format!("Tailscale に問い合わせられませんでした: {e}")),
+                };
+                let url = match &result {
+                    Ok((_, TailnetState::NeedsLogin { url })) => Some(url.clone()),
+                    _ => None,
+                };
+                // 世代の確認が通ったときだけ、通知とブラウザを開く処理に進む。
+                if let Some(changed) = commit_poll(&inner, gen_id, result) {
+                    if changed {
+                        notify(EVENT_SYNC);
+                    }
+                    // 利用者がログインを押したときだけ開く。裏の起動では開かない。
+                    // `login` が開いた URL は、ここで開き直さない。
+                    let to_open = url.filter(|url| {
+                        let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+                        let fresh = g.wants_login && g.opened_login.as_deref() != Some(url);
+                        if fresh {
+                            g.opened_login = Some(url.clone());
                         }
-                        // 利用者がログインを押したときだけ開く。裏の起動では開かない。
-                        // `login` が開いた URL は、ここで開き直さない。
-                        let to_open = url.filter(|url| {
-                            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                            let fresh = g.wants_login && g.opened_login.as_deref() != Some(url);
-                            if fresh {
-                                g.opened_login = Some(url.clone());
-                            }
-                            fresh
-                        });
-                        if let Some(url) = to_open {
-                            open(&url);
-                        }
+                        fresh
+                    });
+                    if let Some(url) = to_open {
+                        open(&url);
                     }
                 }
                 sleep_while_current(&inner, gen_id);
@@ -532,6 +598,7 @@ impl EmbeddedTailnet {
         g.opened_login = None;
         g.loopback = None;
         g.state = Some(TailnetState::Stopped);
+        g.progress = TailnetProgress::default();
         g.node.take()
     }
 
@@ -633,6 +700,14 @@ impl Tailnet for EmbeddedTailnet {
             .state
             .clone()
             .unwrap_or(TailnetState::Stopped)
+    }
+
+    fn progress(&self) -> TailnetProgress {
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .progress
+            .clone()
     }
 
     fn start(&self) -> AppResult<()> {
@@ -772,6 +847,7 @@ pub const FAKE_STATUS: &str = r#"{"BackendState":"Running","Peer":{
 #[cfg(test)]
 pub struct FakeTailnet {
     state: Mutex<TailnetState>,
+    pub progress: Mutex<TailnetProgress>,
     proxy: Mutex<String>,
     pub status: Mutex<String>,
     pub saved_state: AtomicBool,
@@ -785,6 +861,7 @@ impl FakeTailnet {
     pub fn new(state: TailnetState) -> Self {
         Self {
             state: Mutex::new(state),
+            progress: Mutex::new(TailnetProgress::default()),
             proxy: Mutex::new("socks5h://tsnet:fake@127.0.0.1:1".to_string()),
             status: Mutex::new(FAKE_STATUS.to_string()),
             saved_state: AtomicBool::new(false),
@@ -803,6 +880,9 @@ impl FakeTailnet {
 impl Tailnet for FakeTailnet {
     fn state(&self) -> TailnetState {
         self.state.lock().unwrap().clone()
+    }
+    fn progress(&self) -> TailnetProgress {
+        self.progress.lock().unwrap().clone()
     }
     /// 裏の起動。ログイン画面は開かない。
     fn start(&self) -> AppResult<()> {
@@ -896,6 +976,51 @@ mod tests {
         wait_until("needs login from the real status", || {
             matches!(t.state(), TailnetState::NeedsLogin { .. })
         });
+        t.stop();
+    }
+
+    #[test]
+    fn the_starting_phase_follows_the_backend_state() {
+        assert_eq!(starting_phase(None), PHASE_CONNECTING);
+        assert_eq!(starting_phase(Some("NoState")), PHASE_CONNECTING);
+        assert_eq!(starting_phase(Some("Starting")), PHASE_CONNECTING);
+        assert_eq!(starting_phase(Some("NeedsLogin")), PHASE_PREPARING_LOGIN);
+        assert_eq!(PHASE_CONNECTING, "Tailscale のサーバーにつないでいます");
+        assert_eq!(PHASE_PREPARING_LOGIN, "ログインの準備をしています");
+    }
+
+    #[test]
+    fn the_poll_records_the_backend_state_and_the_start_time() {
+        let (_dir, t, _) = fake_node(REAL_NEEDS_LOGIN_NO_URL);
+        assert_eq!(t.progress(), TailnetProgress::default());
+        let before = chrono::Utc::now();
+        t.start().unwrap();
+        wait_until("the backend state", || {
+            t.progress().backend_state.as_deref() == Some("NeedsLogin")
+        });
+        let p = t.progress();
+        assert_eq!(t.state(), TailnetState::Starting);
+        assert!(p.started_at.is_some_and(|at| at >= before), "{p:?}");
+        assert_eq!(p.last_error, None);
+        t.stop();
+        assert_eq!(t.progress(), TailnetProgress::default());
+    }
+
+    #[test]
+    fn a_failed_poll_is_kept_as_the_last_error_without_the_credential() {
+        let (_dir, t, _) = fake_node_raw("HTTP/1.0 500 Internal Server Error\r\n\r\nboom");
+        t.start().unwrap();
+        wait_until("the poll error", || t.progress().last_error.is_some());
+        let err = t.progress().last_error.unwrap();
+        assert!(err.contains("500"), "{err}");
+        assert!(!err.contains(FAKE_CREDENTIAL), "{err}");
+        assert_eq!(t.state(), TailnetState::Starting);
+        t.stop();
+        // 読めない JSON も、起動中のまま理由を残す。
+        let (_dir, t, _) = fake_node("not json");
+        t.start().unwrap();
+        wait_until("the parse error", || t.progress().last_error.is_some());
+        assert!(t.progress().last_error.unwrap().contains("読めません"));
         t.stop();
     }
 
@@ -1161,8 +1286,8 @@ mod tests {
         }
     }
 
-    /// LocalAPI の偽物。どの要求にも `status` の JSON を返す。本物の端末は起こさない。
-    fn fake_localapi(status: &'static str) -> String {
+    /// LocalAPI の偽物。どの要求にも `response` (HTTP の応答そのもの) を返す。本物の端末は起こさない。
+    fn fake_localapi(response: String) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap().to_string();
         std::thread::spawn(move || {
@@ -1170,7 +1295,7 @@ mod tests {
                 let Ok(mut conn) = conn else { return };
                 let mut buf = [0u8; 4096];
                 let _ = conn.read(&mut buf);
-                let _ = write!(conn, "HTTP/1.0 200 OK\r\n\r\n{status}");
+                let _ = conn.write_all(response.as_bytes());
             }
         });
         address
@@ -1179,9 +1304,16 @@ mod tests {
     const NEEDS_LOGIN: &str =
         r#"{"BackendState":"NeedsLogin","AuthURL":"https://login.tailscale.com/a/xyz"}"#;
 
-    /// 偽の端末と LocalAPI で「起動」する `EmbeddedTailnet`。開いた URL を記録する。
+    const FAKE_CREDENTIAL: &str = "c-secret";
+
+    /// 偽の端末と LocalAPI で「起動」する `EmbeddedTailnet`。status は 200 で返す。開いた URL を記録する。
     fn fake_node(status: &'static str) -> (tempfile::TempDir, Arc<EmbeddedTailnet>, Opened) {
-        let address = fake_localapi(status);
+        fake_node_raw(&format!("HTTP/1.0 200 OK\r\n\r\n{status}"))
+    }
+
+    /// `fake_node` と同じだが、LocalAPI は `response` をそのまま返す。
+    fn fake_node_raw(response: &str) -> (tempfile::TempDir, Arc<EmbeddedTailnet>, Opened) {
+        let address = fake_localapi(response.to_string());
         let dir = tempfile::tempdir().unwrap();
         let mut t = embedded();
         t.boot = Arc::new(move |_: &Path| {
@@ -1190,7 +1322,7 @@ mod tests {
                 node,
                 Loopback {
                     address: address.clone(),
-                    credential: "c".into(),
+                    credential: FAKE_CREDENTIAL.into(),
                     proxy_user: "tsnet".into(),
                     proxy_credential: "p".into(),
                 },

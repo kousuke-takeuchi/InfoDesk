@@ -191,6 +191,7 @@ pub fn run() {
             commands::sync::tailnet_login,
             commands::sync::tailnet_logout,
             commands::sync::tailnet_forget,
+            commands::sync::tailnet_restart,
             commands::sync::sync_test_nas,
         ])
         .build(tauri::generate_context!())

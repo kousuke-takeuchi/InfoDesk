@@ -113,6 +113,20 @@ pub async fn tailnet_logout(app: AppHandle) -> AppResult<SyncStatus> {
     Ok(sync::status_now(&state))
 }
 
+/// 「もう一度試す」。Tailscale を止めてから起こし直す。起動の終わりを待つことがあるので、別スレッドで行う。
+#[tauri::command]
+pub async fn tailnet_restart(app: AppHandle) -> AppResult<SyncStatus> {
+    let tailnet = app.state::<AppState>().tailnet.clone();
+    let result =
+        tauri::async_runtime::spawn_blocking(move || sync::restart_tailnet(tailnet.as_ref()))
+            .await
+            .map_err(|e| AppError::from(format!("Tailscale を起動し直せませんでした: {e}")))?;
+    let state = app.state::<AppState>();
+    sync::tailnet_changed(&state);
+    result?;
+    Ok(sync::status_now(&state))
+}
+
 /// ログアウトせずに、この Mac の Tailscale の状態を消す。起動が失敗し続けるときの手当て。
 /// 状態ディレクトリの削除は待たされうるので、別スレッドで行う。
 #[tauri::command]

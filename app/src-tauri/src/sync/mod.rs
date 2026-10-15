@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::error::AppResult;
 use crate::state::{AppState, EVENT_ITEMS, EVENT_SYNC};
-use crate::tailnet::TailnetState;
+use crate::tailnet::{TailnetProgress, TailnetState, starting_phase};
 use infodesk_core::sync::webdav::{WebDavConfig, WebDavStore};
 
 pub const SETTING_ENABLED: &str = "sync.enabled";
@@ -77,7 +77,7 @@ pub struct SyncStatus {
     pub tailnet: TailnetStatusView,
 }
 
-/// 画面に出す Tailscale の状態。ログイン URL は含めない (ブラウザーで開く)。
+/// 画面に出す Tailscale の状態。
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct TailnetStatusView {
     /// stopped | needs_login | needs_approval | starting | running | failed
@@ -85,9 +85,17 @@ pub struct TailnetStatusView {
     pub name: Option<String>,
     /// `failed` のときの理由。
     pub reason: Option<String>,
+    /// 今の起動を始めた時刻。画面はここからの経過秒を出す。
+    pub started_at: Option<DateTime<Utc>>,
+    /// `starting` のときの段階 (「Tailscale のサーバーにつないでいます」など)。
+    pub phase: Option<String>,
+    /// 直近の問い合わせの失敗。資格情報は含まない。
+    pub last_error: Option<String>,
+    /// `needs_login` のときだけ、利用者自身のログイン URL。
+    pub login_url: Option<String>,
 }
 
-fn tailnet_view(state: &TailnetState) -> TailnetStatusView {
+fn tailnet_view(state: &TailnetState, progress: &TailnetProgress) -> TailnetStatusView {
     let (name_, name, reason) = match state {
         TailnetState::Stopped => ("stopped", None, None),
         TailnetState::NeedsLogin { .. } => ("needs_login", None, None),
@@ -100,6 +108,14 @@ fn tailnet_view(state: &TailnetState) -> TailnetStatusView {
         state: name_.to_string(),
         name,
         reason,
+        started_at: progress.started_at,
+        phase: matches!(state, TailnetState::Starting)
+            .then(|| starting_phase(progress.backend_state.as_deref()).to_string()),
+        last_error: progress.last_error.clone(),
+        login_url: match state {
+            TailnetState::NeedsLogin { url } => Some(url.clone()),
+            _ => None,
+        },
     }
 }
 
@@ -173,12 +189,13 @@ pub fn refresh_status(state: &AppState) {
     st.device_name = name;
     st.last_sync_at = parse_time(last);
     let tailnet = state.tailnet.state();
+    let progress = state.tailnet.progress();
     st.backend = nas.backend.clone();
     st.nas_url = nas.url.clone();
     st.nas_user = nas.user.clone();
     st.nas_password_set = nas.password_set;
     let was_running = st.tailnet.state == "running";
-    st.tailnet = tailnet_view(&tailnet);
+    st.tailnet = tailnet_view(&tailnet, &progress);
     let running = matches!(tailnet, TailnetState::Running { .. });
     if nas.is_nas() {
         st.signed_in = nas.complete() && running;
@@ -635,6 +652,13 @@ pub fn backend_is_nas(state: &AppState) -> bool {
 pub fn stop_tailnet(state: &AppState) -> tauri::async_runtime::JoinHandle<()> {
     let tailnet = state.tailnet.clone();
     tauri::async_runtime::spawn_blocking(move || tailnet.stop())
+}
+
+/// 「もう一度試す」。端末を止めてから起こし直す (ログイン画面は開かない)。
+/// 起動の終わりを待つことがあるので、メインスレッドから呼ばないこと。
+pub fn restart_tailnet(tailnet: &dyn crate::tailnet::Tailnet) -> AppResult<()> {
+    tailnet.stop();
+    tailnet.start()
 }
 
 /// Tailscale の状態が変わった (ログアウトなど)。覚えている接続を捨てて、画面に知らせる。
@@ -1341,7 +1365,7 @@ mod tests {
     // ---- NAS ----
 
     use crate::sync::keychain::SecretStore;
-    use crate::tailnet::{FakeTailnet, Tailnet, TailnetState};
+    use crate::tailnet::{FakeTailnet, Tailnet, TailnetProgress, TailnetState};
     use infodesk_core::sync::webdav::WebDavConfig;
 
     /// 偽の tailnet (`FAKE_STATUS`) にいる NAS。同期はその Tailscale の IP に向かう。
@@ -1909,6 +1933,60 @@ mod tests {
         });
         assert_eq!(view(&state)["state"], "failed");
         assert_eq!(view(&state)["reason"], "boom");
+    }
+
+    #[test]
+    fn retry_stops_then_starts_without_opening_the_login_page() {
+        let fake = FakeTailnet::new(TailnetState::Starting);
+        restart_tailnet(&fake).unwrap();
+        assert_eq!(fake.stops.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(fake.starts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(fake.opened.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_tailnet_progress_is_shown_while_starting() {
+        let (mut state, _) = test_state();
+        let (fake, _, _) = nas_ready(&mut state, TailnetState::Starting);
+        let view = |s: &AppState| serde_json::to_value(status_now(s).tailnet).unwrap();
+        let started: DateTime<Utc> = "2026-10-15T01:00:00Z".parse().unwrap();
+        *fake.progress.lock().unwrap() = TailnetProgress {
+            started_at: Some(started),
+            backend_state: None,
+            last_error: None,
+        };
+        let v = view(&state);
+        assert_eq!(v["started_at"], "2026-10-15T01:00:00Z");
+        assert_eq!(v["phase"], "Tailscale のサーバーにつないでいます");
+        assert_eq!(v["last_error"], serde_json::Value::Null);
+        assert_eq!(v["login_url"], serde_json::Value::Null);
+        for backend in ["NoState", "Starting"] {
+            fake.progress.lock().unwrap().backend_state = Some(backend.into());
+            assert_eq!(
+                view(&state)["phase"],
+                "Tailscale のサーバーにつないでいます",
+                "{backend}"
+            );
+        }
+        // URL がまだない NeedsLogin。
+        {
+            let mut p = fake.progress.lock().unwrap();
+            p.backend_state = Some("NeedsLogin".into());
+            p.last_error = Some("Tailscale が HTTP 500 を返しました".into());
+        }
+        let v = view(&state);
+        assert_eq!(v["phase"], "ログインの準備をしています");
+        assert_eq!(v["last_error"], "Tailscale が HTTP 500 を返しました");
+        // URL が分かったら、段階ではなくログイン URL を出す。
+        fake.set_state(TailnetState::NeedsLogin {
+            url: "https://login.tailscale.com/a/xyz".into(),
+        });
+        let v = view(&state);
+        assert_eq!(v["state"], "needs_login");
+        assert_eq!(v["phase"], serde_json::Value::Null);
+        assert_eq!(v["login_url"], "https://login.tailscale.com/a/xyz");
+        fake.set_state(running());
+        assert_eq!(view(&state)["login_url"], serde_json::Value::Null);
     }
 
     #[test]
