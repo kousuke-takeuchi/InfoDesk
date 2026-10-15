@@ -31,10 +31,16 @@ class SyncReport {
 /// devices' ops, and writes this device's own ops. Nothing is recorded as
 /// done until it has been applied, so a failed pass is simply run again.
 class SyncEngine {
-  SyncEngine(this._store, this._drive);
+  SyncEngine(LocalStore store, DriveStore drive)
+    : this.lazy(store, () async => drive);
+
+  /// [driveFor] is called at the start of every pass, so each pass gets a
+  /// fresh store (its Google client can expire between passes).
+  SyncEngine.lazy(this._store, this._driveFor);
 
   final LocalStore _store;
-  final DriveStore _drive;
+  final Future<DriveStore> Function() _driveFor;
+  late DriveStore _drive;
   Future<SyncReport>? _running;
 
   /// A call while a pass is running returns that pass's future.
@@ -48,6 +54,7 @@ class SyncEngine {
 
   Future<SyncReport> _pass(DateTime now) async {
     final report = SyncReport();
+    _drive = await _driveFor();
     final byName = <String, RemoteFile>{};
     for (final f in await _drive.list()) {
       if (parseFileName(f.name) != null) byName[f.name] = f;
@@ -71,6 +78,8 @@ class SyncEngine {
       return report;
     }
 
+    await _store.setSetting('manifest.written_at', manifest.writtenAt);
+    await _store.setSetting('manifest.writer', manifest.writer);
     if (manifest.dbId != await _store.dbId()) {
       await _store.resetForDbId(manifest.dbId);
     }

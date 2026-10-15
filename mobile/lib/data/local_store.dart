@@ -24,6 +24,7 @@ class ItemFilter {
     this.unreadOnly = false,
     this.starredOnly = false,
     this.search,
+    this.ids,
   });
   final String? periodStart;
   final String? periodEnd;
@@ -32,6 +33,9 @@ class ItemFilter {
   final bool unreadOnly;
   final bool starredOnly;
   final String? search;
+
+  /// Only these item ids.
+  final List<int>? ids;
 }
 
 /// An item with its local state. A missing stamp means false.
@@ -264,6 +268,11 @@ CREATE TABLE pending_ops (
       );
       a.add(f.topicId);
     }
+    final ids = f.ids;
+    if (ids != null) {
+      w.add('i.id IN (${List.filled(ids.length, '?').join(',')})');
+      a.addAll(ids);
+    }
     if (f.unreadOnly) w.add('COALESCE(s.read, 0) = 0');
     if (f.starredOnly) w.add('COALESCE(s.starred, 0) = 1');
     final q = f.search?.trim();
@@ -339,6 +348,19 @@ CREATE TABLE pending_ops (
           starred: _stamp(r['starred'], r['starred_at'], r['starred_device']),
         ),
     ];
+  }
+
+  Future<int> countItems(ItemFilter filter) async {
+    final (where, args) = _where(filter);
+    final r = await _db.rawQuery('SELECT COUNT(*) AS n $_from $where', args);
+    return r.first['n'] as int;
+  }
+
+  /// Rows held on the device, for the settings screen.
+  Future<({int items, int digests})> localCounts() async {
+    final i = await _db.rawQuery('SELECT COUNT(*) AS n FROM items');
+    final d = await _db.rawQuery('SELECT COUNT(*) AS n FROM digests');
+    return (items: i.first['n'] as int, digests: d.first['n'] as int);
   }
 
   static Stamp? _stamp(Object? v, Object? at, Object? dev) => v == null

@@ -281,6 +281,28 @@ void main() {
     expect(await store.syncedFile('day-2026-10-10.json.gz'), isNull);
   });
 
+  test('the lazy engine builds a fresh store for every pass', () async {
+    publish();
+    var built = 0;
+    final lazy = SyncEngine.lazy(store, () async {
+      built++;
+      return drive;
+    });
+    await lazy.runOnce(now: now);
+    await lazy.runOnce(now: now);
+    expect(built, 2);
+  });
+
+  test(
+    'the manifest writer and time are kept for the settings screen',
+    () async {
+      publish();
+      await engine.runOnce(now: now);
+      expect(await store.getSetting('manifest.writer'), isNotNull);
+      expect(await store.getSetting('manifest.written_at'), isNotNull);
+    },
+  );
+
   test('unparsable ops file warns once and is not retried', () async {
     publish();
     mac.put('ops-other-20261010T020000000Z-0001.json', utf8.encode('{nope'));
@@ -404,6 +426,8 @@ class _ThrowingDayStore implements LocalStore {
   Future<void> upsertDay(DayFile day) async => throw StateError('disk full');
   @override
   Future<String?> dbId() => s.dbId();
+  @override
+  Future<void> setSetting(String k, String v) => s.setSetting(k, v);
   @override
   Future<void> resetForDbId(String id) => s.resetForDbId(id);
   @override
