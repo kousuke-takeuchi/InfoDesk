@@ -129,13 +129,23 @@ pub fn restore_sigpipe(saved: &SigpipeDisposition) {
     }
 }
 
+/// Go は nil のスライスや map を `null` で書く (ログイン前の `"TailscaleIPs": null` など)。
+/// `#[serde(default)]` は項目がないときにしか効かないので、`null` も既定値として読む。
+fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
+}
+
 #[derive(Deserialize)]
 struct StatusJson {
-    #[serde(rename = "BackendState", default)]
+    #[serde(rename = "BackendState", default, deserialize_with = "null_as_default")]
     backend_state: String,
-    #[serde(rename = "AuthURL", default)]
+    #[serde(rename = "AuthURL", default, deserialize_with = "null_as_default")]
     auth_url: String,
-    #[serde(rename = "TailscaleIPs", default)]
+    #[serde(rename = "TailscaleIPs", default, deserialize_with = "null_as_default")]
     ips: Vec<String>,
     #[serde(rename = "Self")]
     this: Option<SelfJson>,
@@ -143,9 +153,9 @@ struct StatusJson {
 
 #[derive(Deserialize)]
 struct SelfJson {
-    #[serde(rename = "DNSName", default)]
+    #[serde(rename = "DNSName", default, deserialize_with = "null_as_default")]
     dns_name: String,
-    #[serde(rename = "TailscaleIPs", default)]
+    #[serde(rename = "TailscaleIPs", default, deserialize_with = "null_as_default")]
     ips: Vec<String>,
 }
 
@@ -188,11 +198,11 @@ struct PeersJson {
 
 #[derive(Deserialize)]
 struct PeerJson {
-    #[serde(rename = "HostName", default)]
+    #[serde(rename = "HostName", default, deserialize_with = "null_as_default")]
     host_name: String,
-    #[serde(rename = "DNSName", default)]
+    #[serde(rename = "DNSName", default, deserialize_with = "null_as_default")]
     dns_name: String,
-    #[serde(rename = "TailscaleIPs", default)]
+    #[serde(rename = "TailscaleIPs", default, deserialize_with = "null_as_default")]
     ips: Vec<String>,
 }
 
@@ -846,6 +856,47 @@ mod tests {
                 url: "https://login.tailscale.com/a/abc".into()
             }
         );
+    }
+
+    /// 本物の LocalAPI (libtailscale 0.2.2) が返した NeedsLogin の status (値は伏せた)。
+    /// Go の nil スライスは `null` になる (`"TailscaleIPs": null`、`"Peer": null`)。
+    const REAL_NEEDS_LOGIN: &str = include_str!("testdata/status_needs_login.json");
+    const REAL_NEEDS_LOGIN_NO_URL: &str = include_str!("testdata/status_needs_login_no_url.json");
+
+    #[test]
+    fn the_real_needs_login_status_carries_the_auth_url() {
+        assert_eq!(
+            state_from_status(REAL_NEEDS_LOGIN),
+            TailnetState::NeedsLogin {
+                url: "https://login.tailscale.com/a/xyz".into()
+            }
+        );
+        assert_eq!(
+            state_from_status(REAL_NEEDS_LOGIN_NO_URL),
+            TailnetState::Starting
+        );
+    }
+
+    #[test]
+    fn a_peer_with_null_ips_does_not_hide_the_others() {
+        let j = r#"{"BackendState":"Running","Peer":{
+          "nodekey:aa":{"HostName":"takeuchi-nas","DNSName":"takeuchi-nas.tail1234.ts.net.",
+            "TailscaleIPs":["100.100.1.5"]},
+          "nodekey:cc":{"HostName":"old","DNSName":"","TailscaleIPs":null}}}"#;
+        assert_eq!(
+            peer_addr_in_status(j, "takeuchi-nas"),
+            Some("100.100.1.5".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn the_poll_reaches_needs_login_with_the_real_status() {
+        let (_dir, t, _) = fake_node(REAL_NEEDS_LOGIN);
+        t.start().unwrap();
+        wait_until("needs login from the real status", || {
+            matches!(t.state(), TailnetState::NeedsLogin { .. })
+        });
+        t.stop();
     }
 
     #[test]
