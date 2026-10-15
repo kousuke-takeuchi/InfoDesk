@@ -24,6 +24,12 @@ describe("defaultModels.claude model", () => {
   it("falls back to sonnet when the setting is missing or empty", () => {
     expect(idOf({})).toBe("sonnet");
     expect(idOf({ "claude.model": "" })).toBe("sonnet");
+    expect(idOf({ "claude.model": "  " })).toBe("sonnet");
+  });
+  it("rejects a name that the CLI could read as a flag", () => {
+    expect(() => idOf({ "claude.model": "--dangerously-skip-permissions" })).toThrow(/claude\.model/);
+    expect(() => idOf({ "claude.model": "a b" })).toThrow(/claude\.model/);
+    expect(idOf({ "claude.model": "sonnet[1m]" })).toBe("sonnet[1m]");
   });
 });
 

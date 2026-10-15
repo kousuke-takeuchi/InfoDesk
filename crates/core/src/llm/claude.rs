@@ -19,6 +19,16 @@ pub struct ClaudeProvider {
     model: String,
 }
 
+/// `claude.model` に使えるモデル名か。CLI の引数がフラグとして読まれないよう、
+/// 先頭の `-` を拒み、文字を英数字と `. _ : - [ ]` に限る (`sonnet[1m]` のような指定を通すため `[]` も許す)。
+pub fn is_valid_model_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('-')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._:-[]".contains(c))
+}
+
 impl ClaudeProvider {
     pub fn new(bin: impl Into<PathBuf>) -> Self {
         Self::with_timeout(bin, CLAUDE_TIMEOUT)
@@ -48,6 +58,12 @@ impl LlmProvider for ClaudeProvider {
     /// 作業ディレクトリを一時ディレクトリにし、`--setting-sources project` で
     /// 利用者のグローバル設定 (フックなど) が出力に混ざることを防ぐ。
     async fn complete(&self, system: &str, prompt: &str) -> Result<String> {
+        if !self.model.is_empty() && !is_valid_model_name(&self.model) {
+            return Err(Error::Invalid(format!(
+                "claude.model: invalid model name '{}'",
+                self.model
+            )));
+        }
         let mut cmd = Command::new(&self.bin);
         cmd.args([
             "-p",
@@ -166,6 +182,41 @@ mod tests {
         p.complete("s", "p").await.unwrap();
         let args = std::fs::read_to_string(dir.path().join("args.txt")).unwrap();
         assert!(!args.lines().any(|a| a == "--model"));
+    }
+
+    #[test]
+    fn model_names_are_validated() {
+        for ok in [
+            "sonnet",
+            "opus",
+            "fable",
+            "claude-opus-4-1",
+            "sonnet[1m]",
+            "a.b:c_d",
+        ] {
+            assert!(is_valid_model_name(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "-x",
+            "--dangerously-skip-permissions",
+            "a b",
+            "a;b",
+            "a/b",
+            "モデル",
+        ] {
+            assert!(!is_valid_model_name(bad), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_a_model_that_looks_like_a_flag_without_running_the_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = fake_claude(dir.path(), r#"{"is_error":false,"result":"ok"}"#, 0);
+        let p = ClaudeProvider::new(bin).with_model("--dangerously-skip-permissions");
+        let err = p.complete("s", "p").await.unwrap_err();
+        assert!(err.to_string().contains("claude.model"), "{err}");
+        assert!(!dir.path().join("args.txt").exists());
     }
 
     #[tokio::test]

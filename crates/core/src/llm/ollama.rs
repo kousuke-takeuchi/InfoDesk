@@ -28,10 +28,21 @@ impl OllamaProvider {
     }
 }
 
+/// モデル一覧の取得を待つ上限。設定画面を待たせないよう短くする。
+pub const LIST_MODELS_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// インストール済みのモデル名を `GET {base_url}/api/tags` から取る。
 pub async fn list_models(http: &reqwest::Client, base_url: &str) -> Result<Vec<String>> {
+    list_models_within(http, base_url, LIST_MODELS_TIMEOUT).await
+}
+
+async fn list_models_within(
+    http: &reqwest::Client,
+    base_url: &str,
+    timeout: Duration,
+) -> Result<Vec<String>> {
     let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
-    let resp = http.get(&url).send().await?;
+    let resp = http.get(&url).timeout(timeout).send().await?;
     let status = resp.status();
     if !status.is_success() {
         return Err(Error::Llm(format!("ollama {status}: {url}")));
@@ -136,6 +147,29 @@ mod tests {
             .mount(&server)
             .await;
         assert!(list_models(&http, &server.uri()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn listing_models_gives_up_after_the_timeout() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"models": []}))
+                    .set_delay(Duration::from_secs(5)),
+            )
+            .mount(&server)
+            .await;
+        let http = reqwest::Client::new();
+        let started = std::time::Instant::now();
+        assert!(
+            list_models_within(&http, &server.uri(), Duration::from_millis(200))
+                .await
+                .is_err()
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(LIST_MODELS_TIMEOUT <= Duration::from_secs(5));
     }
 
     #[tokio::test]
