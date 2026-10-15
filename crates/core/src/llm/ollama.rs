@@ -28,6 +28,25 @@ impl OllamaProvider {
     }
 }
 
+/// インストール済みのモデル名を `GET {base_url}/api/tags` から取る。
+pub async fn list_models(http: &reqwest::Client, base_url: &str) -> Result<Vec<String>> {
+    let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+    let resp = http.get(&url).send().await?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(Error::Llm(format!("ollama {status}: {url}")));
+    }
+    let value: serde_json::Value = resp.json().await?;
+    Ok(value["models"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|m| m["name"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
 #[async_trait]
 impl LlmProvider for OllamaProvider {
     fn name(&self) -> String {
@@ -90,6 +109,33 @@ mod tests {
         let p = OllamaProvider::new(&format!("{}/", server.uri()), "m1").unwrap();
         assert_eq!(p.name(), "ollama:m1");
         assert_eq!(p.complete("sys", "hello").await.unwrap(), "返答です。");
+    }
+
+    #[tokio::test]
+    async fn lists_installed_models() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "models": [{"name": "gemma4:26b"}, {"name": "qwen3:8b"}]
+            })))
+            .mount(&server)
+            .await;
+        let http = reqwest::Client::new();
+        let got = list_models(&http, &format!("{}/", server.uri()))
+            .await
+            .unwrap();
+        assert_eq!(got, vec!["gemma4:26b", "qwen3:8b"]);
+
+        assert!(list_models(&http, "http://127.0.0.1:1").await.is_err());
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+        assert!(list_models(&http, &server.uri()).await.is_err());
     }
 
     #[tokio::test]

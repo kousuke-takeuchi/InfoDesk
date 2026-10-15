@@ -15,6 +15,8 @@ pub const CLAUDE_TIMEOUT: Duration = Duration::from_secs(600);
 pub struct ClaudeProvider {
     bin: PathBuf,
     timeout: Duration,
+    /// `--model` に渡す値 (別名または完全なモデル名)。空なら CLI の既定に任せる。
+    model: String,
 }
 
 impl ClaudeProvider {
@@ -26,7 +28,13 @@ impl ClaudeProvider {
         Self {
             bin: bin.into(),
             timeout,
+            model: String::new(),
         }
+    }
+
+    pub fn with_model(mut self, model: &str) -> Self {
+        self.model = model.trim().to_string();
+        self
     }
 }
 
@@ -40,19 +48,23 @@ impl LlmProvider for ClaudeProvider {
     /// 作業ディレクトリを一時ディレクトリにし、`--setting-sources project` で
     /// 利用者のグローバル設定 (フックなど) が出力に混ざることを防ぐ。
     async fn complete(&self, system: &str, prompt: &str) -> Result<String> {
-        let mut child = Command::new(&self.bin)
-            .args([
-                "-p",
-                "--tools",
-                "",
-                "--output-format",
-                "json",
-                "--no-session-persistence",
-                "--setting-sources",
-                "project",
-                "--system-prompt",
-                system,
-            ])
+        let mut cmd = Command::new(&self.bin);
+        cmd.args([
+            "-p",
+            "--tools",
+            "",
+            "--output-format",
+            "json",
+            "--no-session-persistence",
+            "--setting-sources",
+            "project",
+            "--system-prompt",
+            system,
+        ]);
+        if !self.model.is_empty() {
+            cmd.args(["--model", &self.model]);
+        }
+        let mut child = cmd
             .current_dir(std::env::temp_dir())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -137,6 +149,23 @@ mod tests {
         );
         let stdin = std::fs::read_to_string(dir.path().join("stdin.txt")).unwrap();
         assert_eq!(stdin, "本文プロンプト");
+    }
+
+    #[tokio::test]
+    async fn passes_model_only_when_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = fake_claude(dir.path(), r#"{"is_error":false,"result":"ok"}"#, 0);
+        let p = ClaudeProvider::new(bin.clone()).with_model("opus");
+        p.complete("s", "p").await.unwrap();
+        let args = std::fs::read_to_string(dir.path().join("args.txt")).unwrap();
+        let args: Vec<&str> = args.lines().collect();
+        let i = args.iter().position(|a| *a == "--model").unwrap();
+        assert_eq!(args[i + 1], "opus");
+
+        let p = ClaudeProvider::new(bin).with_model("  ");
+        p.complete("s", "p").await.unwrap();
+        let args = std::fs::read_to_string(dir.path().join("args.txt")).unwrap();
+        assert!(!args.lines().any(|a| a == "--model"));
     }
 
     #[tokio::test]

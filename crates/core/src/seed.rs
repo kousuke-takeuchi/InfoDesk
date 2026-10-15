@@ -132,6 +132,7 @@ pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("ollama.model", "gemma4:26b"),
     ("ollama.web_search_api_key", ""),
     ("claude.bin", "claude"),
+    ("claude.model", "sonnet"),
     ("node.bin", "node"),
     ("summary.top_n", "20"),
     ("schedule.collect_interval_hours", "3"),
@@ -222,6 +223,10 @@ mod tests {
         assert_eq!(
             store.get_setting("ollama.model").unwrap().as_deref(),
             Some("gemma4:26b")
+        );
+        assert_eq!(
+            store.get_setting("claude.model").unwrap().as_deref(),
+            Some("sonnet")
         );
         assert_eq!(
             store.get_setting("schedule.daily_time").unwrap().as_deref(),

@@ -30,7 +30,7 @@ pub fn clean_output(raw: &str) -> Result<String> {
 
 /// 設定から、用途に対応するプロバイダーを作る。
 /// 設定キー: `llm.items_provider` / `llm.digest_provider` (`ollama` または `claude`)、
-/// `ollama.base_url`、`ollama.model`、`claude.bin`。
+/// `ollama.base_url`、`ollama.model`、`claude.bin`、`claude.model`。
 pub fn provider_from_settings(store: &Store, role: LlmRole) -> Result<Box<dyn LlmProvider>> {
     let key = match role {
         LlmRole::Items => "llm.items_provider",
@@ -41,9 +41,10 @@ pub fn provider_from_settings(store: &Store, role: LlmRole) -> Result<Box<dyn Ll
             &store.get_setting_or("ollama.base_url", "http://localhost:11434")?,
             &store.get_setting_or("ollama.model", "gemma4:26b")?,
         )?)),
-        "claude" => Ok(Box::new(claude::ClaudeProvider::new(
-            store.get_setting_or("claude.bin", "claude")?,
-        ))),
+        "claude" => Ok(Box::new(
+            claude::ClaudeProvider::new(store.get_setting_or("claude.bin", "claude")?)
+                .with_model(&store.get_setting_or("claude.model", "")?),
+        )),
         other => Err(Error::Invalid(format!("{key}: unknown provider '{other}'"))),
     }
 }
