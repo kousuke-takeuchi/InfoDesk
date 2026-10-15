@@ -6,12 +6,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tailscale/tailscale.dart';
 
 import '../storage/tailnet_port.dart';
+import 'backup_exclusion.dart';
 
 const tailnetHostname = 'infodesk-mobile';
 const phaseConnecting = 'Tailscale のサーバーにつないでいます';
 const phasePreparingLogin = 'ログインの準備をしています';
-const tailnetLoginMessage = 'Tailscale にログインしてください';
 const tailnetStoppedMessage = 'Tailscale が停止中です';
+const tailnetStateUnreadableMessage =
+    'Tailscale の状態を読めません。「状態を消してやり直す」を押してください';
+const tailnetInitMessage = 'Tailscale を初期化できません';
+const tailnetBackupMessage = 'Tailscale の状態をバックアップから除外できません';
 const tailnetApprovalMessage = 'Tailscale の管理画面でこの端末を承認してください';
 
 sealed class TailnetState {
@@ -76,10 +80,19 @@ abstract class TailnetNode {
   Future<bool> hasSavedState();
 }
 
+/// [RealTailnetNode.create] could not set the node up. [message] is Japanese.
+class TailnetInitError implements Exception {
+  const TailnetInitError(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 bool _initialized = false;
 
 /// The real node over `Tailscale.instance`. State is kept under the app
-/// support directory. Log upload to Tailscale is switched off.
+/// support directory, excluded from backup. Log upload to Tailscale is
+/// switched off.
 class RealTailnetNode implements TailnetNode {
   RealTailnetNode._(this._ts, this._stateDir);
 
@@ -88,16 +101,37 @@ class RealTailnetNode implements TailnetNode {
   final Tailscale _ts;
   final String _stateDir;
 
-  static Future<RealTailnetNode> create() async {
-    final base = await getApplicationSupportDirectory();
+  @visibleForTesting
+  static void resetForTest() => _initialized = false;
+
+  /// Throws [TailnetInitError] when the state directory cannot be excluded
+  /// from backup or `Tailscale.init` fails. The parameters are for tests.
+  static Future<RealTailnetNode> create({
+    Future<Directory> Function()? supportDir,
+    BackupExclusion? backup,
+    void Function({required String stateDir, required String appId})? init,
+  }) async {
+    final base = await (supportDir ?? getApplicationSupportDirectory)();
     final dir = Directory('${base.path}/tailnet');
     await dir.create(recursive: true);
+    try {
+      await (backup ?? BackupExclusion()).exclude(dir.path);
+    } on Object {
+      throw const TailnetInitError(tailnetBackupMessage);
+    }
     if (!_initialized) {
-      Tailscale.init(stateDir: dir.path, appId: appId, noLogsNoSupport: true);
+      try {
+        (init ?? _realInit)(stateDir: dir.path, appId: appId);
+      } on Object {
+        throw const TailnetInitError(tailnetInitMessage);
+      }
       _initialized = true;
     }
     return RealTailnetNode._(Tailscale.instance, dir.path);
   }
+
+  static void _realInit({required String stateDir, required String appId}) =>
+      Tailscale.init(stateDir: stateDir, appId: appId, noLogsNoSupport: true);
 
   @override
   Stream<NodeState> get onStateChange => _ts.onStateChange;
@@ -172,34 +206,53 @@ class TailnetService {
     _sub ??= _node.onStateChange.listen((_) => unawaited(_refresh()));
     state.value = TailnetStarting(phaseConnecting, _clock());
     try {
-      _apply(await _node.up(tailnetHostname));
+      _apply(await _upRetryingOrphan());
     } on TailscaleException catch (e) {
+      _openWhenUrl = false;
       state.value = TailnetFailed(_reason(e));
-    } on Exception catch (e) {
+    } catch (e) {
+      _openWhenUrl = false;
       state.value = TailnetFailed(e.toString());
+    }
+  }
+
+  /// An orphaned state key (a key without its state file) cannot be used for
+  /// anything, so the identity is forgotten and the start tried once more.
+  Future<TailscaleStatus> _upRetryingOrphan() async {
+    try {
+      return await _node.up(tailnetHostname);
+    } on TailscaleOperationException catch (e) {
+      if (e.code != TailscaleErrorCode.orphanedStateKey) rethrow;
+      await _node.forgetLocalIdentity();
+      return _node.up(tailnetHostname);
     }
   }
 
   /// The user pressed "Tailscale にログイン": start if needed and open the
   /// login URL. When the URL is not known yet it opens as soon as it arrives.
   Future<void> login() async {
-    _openWhenUrl = true;
     final cur = state.value;
+    if (cur is TailnetRunning || cur is TailnetNeedsApproval) return;
     if (cur is TailnetNeedsLogin) {
-      _openWhenUrl = false;
       await _open(cur.url);
       return;
     }
+    _openWhenUrl = true;
     await start();
   }
 
+  /// Logs out at the control server. tailscale keeps the local state after
+  /// logout, so the identity is forgotten as well (as on the Mac).
   Future<void> logout() async {
     _openWhenUrl = false;
     try {
       await _node.logout();
+      await _node.forgetLocalIdentity();
       state.value = const TailnetStopped();
     } on TailscaleException catch (e) {
       state.value = TailnetFailed(_reason(e));
+    } catch (e) {
+      state.value = TailnetFailed(e.toString());
     }
   }
 
@@ -212,13 +265,21 @@ class TailnetService {
       state.value = const TailnetStopped();
     } on TailscaleException catch (e) {
       state.value = TailnetFailed(_reason(e));
+    } catch (e) {
+      state.value = TailnetFailed(e.toString());
     }
   }
 
   Future<void> stop() async {
     _openWhenUrl = false;
-    await _node.down();
-    state.value = const TailnetStopped();
+    try {
+      await _node.down();
+      state.value = const TailnetStopped();
+    } on TailscaleException catch (e) {
+      state.value = TailnetFailed(_reason(e));
+    } catch (e) {
+      state.value = TailnetFailed(e.toString());
+    }
   }
 
   Future<void> _refresh() async {
@@ -226,6 +287,8 @@ class TailnetService {
       _apply(await _node.status());
     } on TailscaleException catch (e) {
       state.value = TailnetFailed(_reason(e));
+    } catch (e) {
+      state.value = TailnetFailed(e.toString());
     }
   }
 
@@ -265,5 +328,12 @@ class TailnetService {
     state.value = TailnetStarting(phase, at);
   }
 
-  String _reason(TailscaleException e) => e.message;
+  String _reason(TailscaleException e) {
+    if (e is TailscaleOperationException &&
+        (e.code == TailscaleErrorCode.missingStateKey ||
+            e.code == TailscaleErrorCode.orphanedStateKey)) {
+      return tailnetStateUnreadableMessage;
+    }
+    return e.message;
+  }
 }

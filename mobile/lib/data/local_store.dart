@@ -623,6 +623,15 @@ CREATE TABLE pending_ops (
   /// are kept.
   Future<void> clearLocalCopy() => _db.transaction(_wipeData);
 
+  /// For a switch to another storage: wipes the data and the synced-file
+  /// records, but keeps the unsent ops, so reads and stars made on this phone
+  /// still go out. Settings are kept.
+  Future<void> clearForNewStorage() => _db.transaction((txn) async {
+    for (final t in _dataTables) {
+      if (t != 'pending_ops') await txn.delete(t);
+    }
+  });
+
   Future<void> _wipeData(DatabaseExecutor x) async {
     for (final t in _dataTables) {
       await x.delete(t);

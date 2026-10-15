@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../data/local_store.dart';
+import '../storage/drive_store.dart' show StorageError, StorageErrorKind;
 import '../storage/nas_store.dart' show nasHttpsMessage, nasUrlMessage;
 
 enum Backend { gdrive, nas }
@@ -70,6 +71,9 @@ class NasConfig {
       url.isNotEmpty && user.isNotEmpty && (password ?? '').isNotEmpty;
 }
 
+const nasPasswordSaveMessage = 'NAS のパスワードをキーチェーンに保存できません';
+const nasPasswordReadMessage = 'NAS のパスワードを読めません';
+
 const _kBackend = 'backend';
 const _kNasUrl = 'nas.url';
 const _kNasUser = 'nas.user';
@@ -89,19 +93,26 @@ class AppSettings {
       : Backend.gdrive;
 
   /// Switching wipes the local copy and the synced-file records, so the next
-  /// pass imports everything from the new storage. Returns whether it changed.
+  /// pass imports everything from the new storage. Unsent reads and stars are
+  /// kept. Returns whether it changed.
   Future<bool> setBackend(Backend b) async {
     if (await backend() == b) return false;
-    await _store.clearLocalCopy();
+    await _store.clearForNewStorage();
     await _store.setSetting(_kBackend, b.name);
     return true;
   }
 
-  Future<NasConfig> nas() async => NasConfig(
-    url: await _store.getSetting(_kNasUrl) ?? '',
-    user: await _store.getSetting(_kNasUser) ?? '',
-    password: await _secrets.read(_kNasPassword),
-  );
+  Future<NasConfig> nas() async {
+    final url = await _store.getSetting(_kNasUrl) ?? '';
+    final user = await _store.getSetting(_kNasUser) ?? '';
+    final String? password;
+    try {
+      password = await _secrets.read(_kNasPassword);
+    } on Object {
+      throw const StorageError(StorageErrorKind.other, nasPasswordReadMessage);
+    }
+    return NasConfig(url: url, user: user, password: password);
+  }
 
   /// An empty [url] is allowed (not entered yet). A null [password] keeps the
   /// saved one; an empty one removes it. While NAS is the backend, a changed
@@ -116,18 +127,50 @@ class AppSettings {
       final bad = validateNasUrl(trimmed);
       if (bad != null) throw InvalidSetting(bad);
     }
-    final old = await _store.getSetting(_kNasUrl) ?? '';
-    if (trimmed != old && await backend() == Backend.nas) {
-      await _store.clearLocalCopy();
-    }
-    await _store.setSetting(_kNasUrl, trimmed);
-    await _store.setSetting(_kNasUser, user.trim());
+    // The password goes first: it is the part that can fail on a locked
+    // keychain, and then nothing else has changed.
+    String? previous;
+    var passwordWritten = false;
     if (password != null) {
-      if (password.isEmpty) {
+      try {
+        previous = await _secrets.read(_kNasPassword);
+        passwordWritten = true;
+        if (password.isEmpty) {
+          await _secrets.delete(_kNasPassword);
+        } else {
+          await _secrets.write(_kNasPassword, password);
+        }
+      } on Object {
+        if (passwordWritten) await _restorePassword(previous);
+        throw const StorageError(
+          StorageErrorKind.other,
+          nasPasswordSaveMessage,
+        );
+      }
+    }
+    try {
+      final old = await _store.getSetting(_kNasUrl) ?? '';
+      if (trimmed != old && await backend() == Backend.nas) {
+        await _store.clearForNewStorage();
+      }
+      await _store.setSetting(_kNasUrl, trimmed);
+      await _store.setSetting(_kNasUser, user.trim());
+    } on Object {
+      if (passwordWritten) await _restorePassword(previous);
+      rethrow;
+    }
+  }
+
+  /// Best effort: puts the earlier password back after a failed save.
+  Future<void> _restorePassword(String? previous) async {
+    try {
+      if (previous == null) {
         await _secrets.delete(_kNasPassword);
       } else {
-        await _secrets.write(_kNasPassword, password);
+        await _secrets.write(_kNasPassword, previous);
       }
+    } on Object {
+      // The keychain is not usable; nothing more to do.
     }
   }
 

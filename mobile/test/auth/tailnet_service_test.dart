@@ -16,6 +16,12 @@ class FakeNode implements TailnetNode {
   int forgets = 0;
   int downs = 0;
   Object? logoutError;
+  Object? forgetError;
+  Object? downError;
+  Object? statusError;
+
+  /// Errors `up` throws first, one per call, before it succeeds.
+  final upErrors = <Object>[];
 
   @override
   Stream<NodeState> get onStateChange => events.stream;
@@ -23,6 +29,7 @@ class FakeNode implements TailnetNode {
   @override
   Future<TailscaleStatus> up(String hostname) async {
     ups++;
+    if (upErrors.isNotEmpty) throw upErrors.removeAt(0);
     final e = upError;
     if (e != null) throw e;
     final g = upGate;
@@ -32,24 +39,34 @@ class FakeNode implements TailnetNode {
   }
 
   @override
-  Future<TailscaleStatus> status() async => current;
+  Future<TailscaleStatus> status() async {
+    final e = statusError;
+    if (e != null) throw e;
+    return current;
+  }
 
   @override
   Future<void> logout() async {
     logouts++;
     final e = logoutError;
     if (e != null) throw e;
-    saved = false;
+    // Like tailscale 0.9.0: logout keeps the local state.
   }
 
   @override
   Future<void> forgetLocalIdentity() async {
     forgets++;
+    final e = forgetError;
+    if (e != null) throw e;
     saved = false;
   }
 
   @override
-  Future<void> down() async => downs++;
+  Future<void> down() async {
+    downs++;
+    final e = downError;
+    if (e != null) throw e;
+  }
 
   @override
   Future<bool> hasSavedState() async => saved;
@@ -242,6 +259,145 @@ void main() {
     expect(node.forgets, 1);
     expect(node.logouts, 0);
     expect(svc.state.value, isA<TailnetStopped>());
+  });
+
+  group('logout forgets the identity', () {
+    test(
+      'a successful logout also forgets, so hasSavedState is false',
+      () async {
+        node.saved = true;
+        node.next = st(NodeState.running, ips: ['100.64.0.9']);
+        await svc.start();
+        await svc.logout();
+        expect(node.logouts, 1);
+        expect(node.forgets, 1);
+        expect(await svc.hasSavedState(), isFalse);
+        expect(svc.state.value, isA<TailnetStopped>());
+      },
+    );
+
+    test('a failed logout keeps the identity', () async {
+      node.saved = true;
+      node.logoutError = const TailscaleLogoutException('no network');
+      await svc.logout();
+      expect(node.forgets, 0);
+      expect(await svc.hasSavedState(), isTrue);
+      expect(svc.state.value, isA<TailnetFailed>());
+    });
+
+    test('a failed forget after logout is Failed', () async {
+      node.forgetError = const TailscaleForgetLocalIdentityException('busy');
+      await svc.logout();
+      expect(svc.state.value, isA<TailnetFailed>());
+    });
+  });
+
+  group('the login flag does not go stale', () {
+    final url = 'https://login.tailscale.com/a/9';
+
+    test('login while Running does not arm the browser', () async {
+      node.next = st(NodeState.running, ips: ['100.64.0.9']);
+      await svc.start();
+      await svc.login();
+      expect(opened, isEmpty);
+      await svc.stop();
+      node.next = st(NodeState.needsLogin, url: url);
+      await svc.start();
+      expect(svc.state.value, isA<TailnetNeedsLogin>());
+      expect(opened, isEmpty);
+    });
+
+    test('login while NeedsApproval does not arm the browser', () async {
+      node.next = st(NodeState.needsMachineAuth);
+      await svc.start();
+      await svc.login();
+      await svc.stop();
+      node.next = st(NodeState.needsLogin, url: url);
+      await svc.start();
+      expect(opened, isEmpty);
+    });
+
+    test('a failed start after login clears the flag', () async {
+      node.upError = const TailscaleUpException('timeout');
+      await svc.login();
+      expect(svc.state.value, isA<TailnetFailed>());
+      node.upError = null;
+      node.next = st(NodeState.needsLogin, url: url);
+      await svc.start();
+      expect(svc.state.value, isA<TailnetNeedsLogin>());
+      expect(opened, isEmpty);
+    });
+
+    test('a non-Tailscale start failure clears the flag too', () async {
+      node.upError = StateError('boom');
+      await svc.login();
+      expect(svc.state.value, isA<TailnetFailed>());
+      node.upError = null;
+      node.next = st(NodeState.needsLogin, url: url);
+      await svc.start();
+      expect(opened, isEmpty);
+    });
+  });
+
+  group('state key errors', () {
+    const hint = 'Tailscale の状態を読めません。「状態を消してやり直す」を押してください';
+    TailscaleUpException up(TailscaleErrorCode c) =>
+        TailscaleUpException('x', code: c);
+
+    test('missingStateKey shows the hint and does not retry', () async {
+      node.upError = up(TailscaleErrorCode.missingStateKey);
+      await svc.start();
+      expect((svc.state.value as TailnetFailed).reason, hint);
+      expect(node.forgets, 0);
+      expect(node.ups, 1);
+    });
+
+    test('orphanedStateKey forgets and retries the start once', () async {
+      node.upErrors.add(up(TailscaleErrorCode.orphanedStateKey));
+      node.next = st(
+        NodeState.needsLogin,
+        url: 'https://login.tailscale.com/a/1',
+      );
+      await svc.start();
+      expect(node.forgets, 1);
+      expect(node.ups, 2);
+      expect(svc.state.value, isA<TailnetNeedsLogin>());
+      expect(opened, isEmpty);
+    });
+
+    test('a second orphanedStateKey is the hint, no more retries', () async {
+      node.upError = up(TailscaleErrorCode.orphanedStateKey);
+      await svc.start();
+      expect(node.forgets, 1);
+      expect(node.ups, 2);
+      expect((svc.state.value as TailnetFailed).reason, hint);
+    });
+
+    test('a failing forget during the retry is Failed', () async {
+      node.upErrors.add(up(TailscaleErrorCode.orphanedStateKey));
+      node.forgetError = const TailscaleForgetLocalIdentityException('busy');
+      await svc.start();
+      expect(node.ups, 1);
+      expect(svc.state.value, isA<TailnetFailed>());
+    });
+  });
+
+  group('non-Tailscale errors are caught', () {
+    test('stop with a failing down is Failed', () async {
+      node.downError = StateError('boom');
+      await svc.stop();
+      expect(svc.state.value, isA<TailnetFailed>());
+    });
+
+    test('a status failure after an event is Failed', () async {
+      node.next = st(NodeState.running, ips: ['100.64.0.9']);
+      await svc.start();
+      node.statusError = StateError('boom');
+      node.events.add(NodeState.running);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(svc.state.value, isA<TailnetFailed>());
+    });
   });
 
   group('startOnLaunch', () {

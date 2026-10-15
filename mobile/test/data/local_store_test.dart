@@ -160,6 +160,24 @@ void main() {
     expect(await s.dbId(), 'x');
   });
 
+  test(
+    'clearForNewStorage wipes data and synced files but keeps unsent ops',
+    () async {
+      await seed();
+      await s.putSyncedFile('day-2026-10-10.json.gz', 'h', 'day');
+      await s.setRead(1, true, 'phone', now: t(1));
+      await s.setSetting('k', 'v');
+      final before = await s.pendingOps();
+      expect(before, isNotEmpty);
+      await s.clearForNewStorage();
+      expect(await s.items(), isEmpty);
+      expect(await s.syncedFile('day-2026-10-10.json.gz'), isNull);
+      final after = await s.pendingOps();
+      expect(after.map((o) => o.op.itemId), before.map((o) => o.op.itemId));
+      expect(await s.getSetting('k'), 'v');
+    },
+  );
+
   test('deviceId is a stable UUID v4 that survives resets', () async {
     final id = await s.deviceId();
     expect(

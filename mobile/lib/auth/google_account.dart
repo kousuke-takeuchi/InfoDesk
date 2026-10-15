@@ -11,6 +11,23 @@ const googleScopes = <String>[
   'email',
 ];
 
+/// Runs [_run] once successfully. A failed run is forgotten, so the next call
+/// tries again.
+class LazyInit {
+  LazyInit(this._run);
+
+  final Future<void> Function() _run;
+  Future<void>? _f;
+
+  Future<void> ready() {
+    final f = _f ??= _run();
+    return f.catchError((Object e) {
+      if (identical(_f, f)) _f = null;
+      throw e;
+    });
+  }
+}
+
 /// The part of google_sign_in the app uses, so tests never reach native code.
 abstract class GoogleAuthPort {
   /// A session left from an earlier launch, without any UI. The email, or null.
@@ -34,11 +51,11 @@ class GoogleSignInPort implements GoogleAuthPort {
     : _gs = signIn ?? GoogleSignIn.instance;
 
   final GoogleSignIn _gs;
-  Future<void>? _init;
+  late final LazyInit _init = LazyInit(_gs.initialize);
   GoogleSignInAccount? _account;
   String? _token;
 
-  Future<void> _ready() => _init ??= _gs.initialize();
+  Future<void> _ready() => _init.ready();
 
   @override
   Future<String?> restore() async {
@@ -96,7 +113,8 @@ class GoogleAccount {
   Future<void> restore() async {
     try {
       _email = await _port.restore();
-    } on GoogleSignInException {
+    } on Object {
+      // Nothing to show or log: the user just signs in again.
       _email = null;
     }
   }
@@ -119,10 +137,14 @@ class GoogleAccount {
   /// Throws an [StorageErrorKind.authExpired] error when the user has to sign
   /// in again.
   Future<GoogleDriveStore> driveStore() async {
-    final c = await _port.client();
-    if (c == null) {
-      throw const StorageError(StorageErrorKind.authExpired, reauthMessage);
+    try {
+      final c = await _port.client();
+      if (c != null) return GoogleDriveStore.withClient(c);
+    } on StorageError {
+      rethrow;
+    } on Object {
+      // A GoogleSignInException or anything else raw: sign in again.
     }
-    return GoogleDriveStore.withClient(c);
+    throw const StorageError(StorageErrorKind.authExpired, reauthMessage);
   }
 }

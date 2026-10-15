@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infodesk_mobile/data/local_store.dart';
 import 'package:infodesk_mobile/settings/app_settings.dart';
+import 'package:infodesk_mobile/storage/drive_store.dart';
 import 'package:infodesk_mobile/sync/format.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -8,6 +9,33 @@ import '../data/local_store_test.dart' show item;
 
 const urlMsg = 'NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)';
 const httpsMsg = 'http:// を使ってください (Tailscale の中なので暗号化されています)';
+
+/// A secure storage that can be made to fail, like a locked keychain.
+class ThrowingSecrets extends MemorySecretStore {
+  bool failRead = false;
+  bool failWrite = false;
+  bool failDelete = false;
+  @override
+  Future<String?> read(String key) async {
+    if (failRead) throw StateError('keychain read');
+    return super.read(key);
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    if (failWrite) throw StateError('keychain write');
+    return super.write(key, value);
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    if (failDelete) throw StateError('keychain delete');
+    return super.delete(key);
+  }
+}
+
+const saveFailMessage = 'NAS のパスワードをキーチェーンに保存できません';
+const readFailMessage = 'NAS のパスワードを読めません';
 
 void main() {
   sqfliteFfiInit();
@@ -117,6 +145,71 @@ void main() {
         expect((await settings.nas()).complete, isFalse);
       },
     );
+
+    test('switching backend keeps unsent reads and stars', () async {
+      await store.upsertDay(DayFile(date: '2026-10-10', items: [item(1)]));
+      await store.setRead(1, true, 'phone');
+      await settings.setBackend(Backend.nas);
+      expect(await store.items(), isEmpty);
+      expect((await store.pendingOps()).map((o) => o.op.itemId), [1]);
+    });
+
+    test('a failing password write throws and saves nothing', () async {
+      final bad = ThrowingSecrets();
+      final st = AppSettings(store, bad);
+      await st.setNas(url: 'http://nas/a/', user: 'k', password: 'old');
+      bad.failWrite = true;
+      await expectLater(
+        st.setNas(url: 'http://other/b/', user: 'k2', password: 'new'),
+        throwsA(
+          isA<StorageError>().having(
+            (e) => e.message,
+            'message',
+            saveFailMessage,
+          ),
+        ),
+      );
+      expect(await store.getSetting('nas.url'), 'http://nas/a/');
+      expect(await store.getSetting('nas.user'), 'k');
+      bad.failWrite = false;
+      expect((await st.nas()).password, 'old');
+    });
+
+    test('a failing password delete throws the same error', () async {
+      final bad = ThrowingSecrets();
+      final st = AppSettings(store, bad);
+      await st.setNas(url: 'http://nas/a/', user: 'k', password: 'old');
+      bad.failDelete = true;
+      await expectLater(
+        st.setNas(url: 'http://nas/a/', user: 'k', password: ''),
+        throwsA(isA<StorageError>()),
+      );
+    });
+
+    test('a failing database write rolls the password back', () async {
+      await settings.setNas(url: 'http://nas/a/', user: 'k', password: 'old');
+      await store.close();
+      await expectLater(
+        settings.setNas(url: 'http://nas/a/', user: 'k2', password: 'new'),
+        throwsA(anything),
+      );
+      expect(secrets.values['nas.password'], 'old');
+      store = await LocalStore.inMemory(factory: databaseFactoryFfi);
+    });
+
+    test('a failing password read is a StorageError', () async {
+      final bad = ThrowingSecrets()..failRead = true;
+      await expectLater(
+        AppSettings(store, bad).nas(),
+        throwsA(
+          isA<StorageError>().having(
+            (e) => e.message,
+            'message',
+            readFailMessage,
+          ),
+        ),
+      );
+    });
 
     test('a bad URL saves nothing', () async {
       expect(

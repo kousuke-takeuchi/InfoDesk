@@ -41,7 +41,10 @@ class StorageFactory {
       case TailnetStopped() when await tailnet.hasSavedState():
         throw const StorageError(StorageErrorKind.other, tailnetStoppedMessage);
       default:
-        throw const StorageError(StorageErrorKind.other, tailnetLoginMessage);
+        throw const StorageError(
+          StorageErrorKind.other,
+          nasTailscaleLoginMessage,
+        );
     }
     final nas = await settings.nas();
     if (!nas.complete) {

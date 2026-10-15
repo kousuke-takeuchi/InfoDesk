@@ -15,6 +15,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:tailscale/tailscale.dart';
 
 import '../auth/google_account_test.dart' show FakePort;
+import '../settings/app_settings_test.dart'
+    show ThrowingSecrets, readFailMessage;
 import '../auth/tailnet_service_test.dart' show FakeNode, st;
 
 void main() {
@@ -109,6 +111,39 @@ void main() {
       await tailnet.start();
       await fillNas();
       expect(await factory.build(), isA<NasStore>());
+    });
+  });
+
+  group('secure storage failures', () {
+    test('buildNas and checkNas report an unreadable password', () async {
+      final secrets = ThrowingSecrets();
+      final cfg = AppSettings(store, secrets);
+      await cfg.setBackend(Backend.nas);
+      await cfg.setNas(
+        url: 'http://nas:5005/infodesk/',
+        user: 'k',
+        password: 'pw',
+      );
+      node.next = st(NodeState.running, ips: ['100.64.0.7']);
+      await tailnet.start();
+      final f = StorageFactory(
+        settings: cfg,
+        google: GoogleAccount(port),
+        tailnet: tailnet,
+        nasPort: () => port2,
+      );
+      secrets.failRead = true;
+      await expectLater(
+        f.buildNas(),
+        throwsA(
+          isA<StorageError>().having(
+            (e) => e.message,
+            'message',
+            readFailMessage,
+          ),
+        ),
+      );
+      expect(await f.checkNas(), readFailMessage);
     });
   });
 
