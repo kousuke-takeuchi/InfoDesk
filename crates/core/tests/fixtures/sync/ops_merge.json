@@ -1,0 +1,23 @@
+{
+  "ops": [
+    {"item_id": 1, "field": "read", "value": true, "at": "2026-10-13T00:00:01.000Z", "device": "mac"},
+    {"item_id": 1, "field": "read", "value": false, "at": "2026-10-13T09:00:02+09:00", "device": "phone"},
+    {"item_id": 1, "field": "starred", "value": true, "at": "2026-10-13T00:00:03Z", "device": "phone"},
+    {"item_id": 2, "field": "read", "value": true, "at": "2026-10-13T00:00:01.000Z", "device": "a"},
+    {"item_id": 2, "field": "read", "value": false, "at": "2026-10-13T00:00:01.000Z", "device": "b"},
+    {"item_id": 3, "field": "read", "value": false, "at": "2026-10-13T00:00:01.000Z", "device": "d"},
+    {"item_id": 3, "field": "read", "value": true, "at": "2026-10-13T00:00:01.000Z", "device": "d"},
+    {"item_id": 4, "field": "read", "value": true, "at": "garbage", "device": "phone"},
+    {"item_id": 4, "field": "read", "value": true, "at": "2026-10-13T00:00:01Z", "device": ""},
+    {"item_id": 5, "field": "starred", "value": true, "at": "2026-10-13T00:00:01.400123Z", "device": "phone"}
+  ],
+  "expected_state": {
+    "1": {
+      "read": {"value": false, "at": "2026-10-13T00:00:02.000Z", "device": "phone"},
+      "starred": {"value": true, "at": "2026-10-13T00:00:03.000Z", "device": "phone"}
+    },
+    "2": {"read": {"value": false, "at": "2026-10-13T00:00:01.000Z", "device": "b"}, "starred": null},
+    "3": {"read": {"value": true, "at": "2026-10-13T00:00:01.000Z", "device": "d"}, "starred": null},
+    "5": {"read": null, "starred": {"value": true, "at": "2026-10-13T00:00:01.400Z", "device": "phone"}}
+  }
+}

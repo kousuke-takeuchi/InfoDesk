@@ -489,4 +489,62 @@ mod tests {
             assert_eq!(parse_file_name(n), None, "{n}");
         }
     }
+
+    fn fixture(name: &str) -> String {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/sync")
+            .join(name);
+        std::fs::read_to_string(p).unwrap()
+    }
+
+    #[test]
+    fn shared_file_name_fixtures() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(&fixture("file_names.json")).unwrap();
+        for c in cases {
+            let name = c["name"].as_str().unwrap();
+            let date = c["date"]
+                .as_str()
+                .map(|d| NaiveDate::parse_from_str(d, DATE_FMT).unwrap());
+            let want = match c["kind"].as_str() {
+                None => None,
+                Some("manifest") => Some(FileKind::Manifest),
+                Some("meta") => Some(FileKind::Meta),
+                Some("snapshot") => Some(FileKind::Snapshot),
+                Some("day") => Some(FileKind::Day(date.unwrap())),
+                Some("digest") => Some(FileKind::Digest(
+                    Period::parse(c["period"].as_str().unwrap()).unwrap(),
+                    date.unwrap(),
+                )),
+                Some("ops") => Some(FileKind::Ops {
+                    device: c["device"].as_str().unwrap().into(),
+                }),
+                Some(k) => panic!("{k}"),
+            };
+            assert_eq!(parse_file_name(name), want, "{name}");
+        }
+    }
+
+    #[test]
+    fn shared_ops_merge_fixture() {
+        let v: serde_json::Value = serde_json::from_str(&fixture("ops_merge.json")).unwrap();
+        let ops: Vec<Op> = serde_json::from_value(v["ops"].clone()).unwrap();
+        let want: BTreeMap<i64, ItemState> =
+            serde_json::from_value(v["expected_state"].clone()).unwrap();
+        let mut state = BTreeMap::new();
+        for o in ops.iter().filter_map(normalize_op) {
+            apply_op(&mut state, &o);
+        }
+        assert_eq!(state, want);
+    }
+
+    #[test]
+    fn shared_snapshot_fixture_round_trips() {
+        let snap: StateSnapshot = serde_json::from_str(&fixture("snapshot.json")).unwrap();
+        assert_eq!(snap.covers.len(), 2);
+        assert!(snap.state[&10].read.as_ref().unwrap().value);
+        let back: StateSnapshot =
+            serde_json::from_slice(&serde_json::to_vec(&snap).unwrap()).unwrap();
+        assert_eq!(back, snap);
+    }
 }

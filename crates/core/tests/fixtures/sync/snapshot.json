@@ -1,0 +1,7 @@
+{
+  "covers": ["ops-mac-20261013T000000000Z-0001.json", "ops-phone-20261013T000100000Z-0002.json"],
+  "state": {
+    "10": {"read": {"value": true, "at": "2026-10-13T00:00:01.000Z", "device": "mac"}, "starred": null},
+    "42": {"read": null, "starred": {"value": false, "at": "2026-10-13T00:00:02.500Z", "device": "phone"}}
+  }
+}
