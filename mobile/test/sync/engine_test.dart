@@ -242,23 +242,43 @@ void main() {
     expect(drive.downloads, ['manifest.json']);
   });
 
-  test('own ops files are skipped', () async {
+  test('after a local wipe the own uploaded ops come back', () async {
     publish();
+    await engine.runOnce(now: now);
     final dev = await store.deviceId();
-    mem.put(
-      opsFileName(dev, DateTime.utc(2026, 10, 10, 3), 1),
-      utf8.encode(
-        jsonEncode(
-          OpsFile(
-            device: dev,
-            ops: [op(2, Field.starred, true, '2026-10-10T03:00:00.000Z', dev)],
-          ).toJson(),
-        ),
-      ),
-    );
+    await store.setStarred(2, true, dev, now: now);
+    await engine.runOnce(now: now);
+    expect(opsFiles().length, 1);
+    await store.clearLocalCopy();
+    expect(await store.deviceId(), dev);
     final r = await engine.runOnce(now: now);
-    expect(r.appliedOps, 0);
-    expect((await row(2)).isStarred, isFalse);
+    expect(r.appliedOps, 1);
+    expect((await row(2)).isStarred, isTrue);
+    expect(await store.pendingOps(), isEmpty);
+    expect(r.uploadedOps, 0);
+  });
+
+  test(
+    'a normal second pass does not download the own uploaded file',
+    () async {
+      publish();
+      await engine.runOnce(now: now);
+      await store.setStarred(2, true, await store.deviceId(), now: now);
+      await engine.runOnce(now: now);
+      drive.downloads.clear();
+      await engine.runOnce(now: now);
+      expect(drive.downloads, ['manifest.json']);
+    },
+  );
+
+  test('a store write failure propagates and records nothing', () async {
+    publish();
+    final bad = _ThrowingDayStore(store);
+    await expectLater(
+      SyncEngine(bad, drive).runOnce(now: now),
+      throwsA(isA<StateError>()),
+    );
+    expect(await store.syncedFile('day-2026-10-10.json.gz'), isNull);
   });
 
   test('unparsable ops file warns once and is not retried', () async {
@@ -374,4 +394,29 @@ class _FailingOn implements DriveStore {
     if (failCreate) _boom();
     return inner.create(name, bytes, mime);
   }
+}
+
+/// A store whose day writes fail, like a full disk.
+class _ThrowingDayStore implements LocalStore {
+  _ThrowingDayStore(this.s);
+  final LocalStore s;
+  @override
+  Future<void> upsertDay(DayFile day) async => throw StateError('disk full');
+  @override
+  Future<String?> dbId() => s.dbId();
+  @override
+  Future<void> resetForDbId(String id) => s.resetForDbId(id);
+  @override
+  Future<SyncedFile?> syncedFile(String name) => s.syncedFile(name);
+  @override
+  Future<void> putMeta(MetaFile m) => s.putMeta(m);
+  @override
+  Future<void> putSyncedFile(
+    String name,
+    String sha256,
+    String kind, {
+    bool imported = true,
+  }) => s.putSyncedFile(name, sha256, kind, imported: imported);
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

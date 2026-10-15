@@ -99,17 +99,19 @@ class SyncEngine {
         report.warnings.add('$name のハッシュが一致しないため取り込みませんでした');
         continue;
       }
+      // Only decode and parse failures are warnings; store errors propagate.
+      final Object parsed;
       try {
         final json = gunzipJson(bytes);
         switch (kind) {
           case FileKindType.meta:
-            await _store.putMeta(MetaFile.fromJson(json));
+            parsed = MetaFile.fromJson(json);
           case FileKindType.day:
-            await _store.upsertDay(DayFile.fromJson(json));
+            parsed = DayFile.fromJson(json);
           case FileKindType.digest:
-            await _store.upsertDigests(DigestFile.fromJson(json));
+            parsed = DigestFile.fromJson(json);
           case FileKindType.snapshot:
-            await _store.applySnapshot(StateSnapshot.fromJson(json));
+            parsed = StateSnapshot.fromJson(json);
           default:
             continue;
         }
@@ -117,18 +119,31 @@ class SyncEngine {
         report.warnings.add('$name を読めませんでした');
         continue;
       }
+      switch (parsed) {
+        case MetaFile():
+          await _store.putMeta(parsed);
+        case DayFile():
+          await _store.upsertDay(parsed);
+        case DigestFile():
+          await _store.upsertDigests(parsed);
+        case StateSnapshot():
+          await _store.applySnapshot(parsed);
+      }
       await _store.putSyncedFile(name, e.value.sha256, kind.name);
       report.downloaded++;
     }
 
-    // Other devices' ops, oldest first.
+    // Every ops file, this device's own included (after a local wipe they
+    // may be the only copy of its marks), oldest first.
     final me = await _store.deviceId();
-    final others = [
-      for (final f in byName.values)
-        if (parseFileName(f.name)!.kind == FileKindType.ops &&
-            parseFileName(f.name)!.device != me)
-          f,
-    ]..sort((a, b) => _opsOrder(a.name).compareTo(_opsOrder(b.name)));
+    final others =
+        [
+          for (final f in byName.values)
+            if (parseFileName(f.name)!.kind == FileKindType.ops) f,
+        ]..sort((a, b) {
+          final c = _opsOrder(a.name).compareTo(_opsOrder(b.name));
+          return c != 0 ? c : a.name.compareTo(b.name);
+        });
     for (final f in others) {
       final rec = await _store.syncedFile(f.name);
       if (rec != null && rec.imported) continue;
@@ -153,11 +168,11 @@ class SyncEngine {
     final pending = await _store.pendingOps();
     if (pending.isNotEmpty) {
       final file = OpsFile(device: me, ops: [for (final p in pending) p.op]);
-      await _drive.create(
-        opsFileName(me, now, 1),
-        utf8.encode(jsonEncode(file.toJson())),
-        'application/json',
-      );
+      final name = opsFileName(me, now, 1);
+      final body = utf8.encode(jsonEncode(file.toJson()));
+      await _drive.create(name, body, 'application/json');
+      // Already applied here, so this install never downloads it again.
+      await _store.putSyncedFile(name, sha256.convert(body).toString(), 'ops');
       await _store.markOpsSent([for (final p in pending) p.id]);
       report.uploadedOps = pending.length;
     }
@@ -172,8 +187,9 @@ class SyncEngine {
   };
 
   /// Sort key: the time stamp and sequence at the end of the name.
+  static final _opsStamp = RegExp(r'-(\d{8}T\d{9}Z-\d{4})\.json$');
   static String _opsOrder(String name) {
-    final m = RegExp(r'-(\d{8}T\d{9}Z-\d{4})\.json$').firstMatch(name);
+    final m = _opsStamp.firstMatch(name);
     return m?[1] ?? name;
   }
 }
