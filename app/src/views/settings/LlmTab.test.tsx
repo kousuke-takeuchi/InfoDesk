@@ -65,6 +65,39 @@ describe("LlmTab", () => {
       expect(input.tagName).toBe("INPUT");
       expect(input).toHaveValue("gemma4:26b");
     });
+
+    it("offers 再読み込み in the fallback and switches to the select once Ollama answers", async () => {
+      let up = false;
+      setupIpc({ get_settings: () => settings, ollama_models: () => { if (!up) throw { message: "refused" }; return ["gemma4:26b", "qwen3:8b"]; } });
+      render(<LlmTab />);
+      await screen.findByText("Ollama に接続できないため、モデル名を入力してください");
+      up = true;
+      await userEvent.click(ollamaSection().getByRole("button", { name: "再読み込み" }));
+      await waitFor(() => expect(ollamaSection().getByLabelText("モデル").tagName).toBe("SELECT"));
+      expect(ollamaSection().getByRole("option", { name: "qwen3:8b" })).toBeInTheDocument();
+    });
+
+    it("ignores a list that arrives after a newer request for a changed URL", async () => {
+      let url = "http://localhost:11434";
+      const slow = deferred<string[]>();
+      let n = 0;
+      setupIpc({
+        get_settings: () => ({ ...settings, "ollama.base_url": url }),
+        set_setting: (a) => { if (a.key === "ollama.base_url") url = a.value; },
+        ollama_models: () => { n += 1; return n === 2 ? slow.promise : n === 1 ? ["first:1"] : ["new:1"]; },
+      });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Ollama" });
+      expect(await ollamaSection().findByRole("option", { name: "first:1" })).toBeInTheDocument();
+      await userEvent.click(ollamaSection().getByRole("button", { name: "再読み込み" }));
+      const urlField = ollamaSection().getByLabelText("URL");
+      await userEvent.clear(urlField);
+      await userEvent.type(urlField, "http://other:11434{enter}");
+      expect(await ollamaSection().findByRole("option", { name: "new:1" })).toBeInTheDocument();
+      await act(async () => { slow.resolve(["stale:1"]); await slow.promise; });
+      expect(ollamaSection().queryByRole("option", { name: "stale:1" })).not.toBeInTheDocument();
+      expect(ollamaSection().getByRole("option", { name: "new:1" })).toBeInTheDocument();
+    });
   });
 
   describe("Claude model select", () => {
@@ -88,6 +121,19 @@ describe("LlmTab", () => {
       const input = claudeSection().getByLabelText("モデル名");
       await userEvent.type(input, "claude-opus-4-1{enter}");
       expect(ipc.last("set_setting")).toEqual({ key: "claude.model", value: "claude-opus-4-1" });
+    });
+
+    it("rejects a custom name that could be read as a CLI flag", async () => {
+      const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined, ollama_models: () => [] });
+      render(<LlmTab />);
+      await screen.findByRole("region", { name: "Claude" });
+      await userEvent.selectOptions(claudeSection().getByLabelText("モデル"), "その他 (名前を入力)");
+      await userEvent.type(claudeSection().getByLabelText("モデル名"), "--dangerously-skip-permissions{enter}");
+      expect(claudeSection().getByText(/英数字/)).toBeInTheDocument();
+      expect(ipc.count("set_setting")).toBe(0);
+      await userEvent.clear(claudeSection().getByLabelText("モデル名"));
+      await userEvent.type(claudeSection().getByLabelText("モデル名"), "sonnet[[1m]{enter}");
+      expect(ipc.last("set_setting")).toEqual({ key: "claude.model", value: "sonnet[1m]" });
     });
 
     it("shows a stored custom name in the text input", async () => {

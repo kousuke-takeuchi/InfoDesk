@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { ErrorLine } from "../../components/ErrorLine";
 import { errorMessage, type ProbeResult } from "../../types";
@@ -24,21 +24,27 @@ const OTHER = "__other__";
 function useOllamaModels(baseUrl: string) {
   const [models, setModels] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
+  // 最後に出した要求の番号。古い要求 (URL を変える前の再読み込みなど) の結果で上書きしない
+  const seq = useRef(0);
   const reload = useCallback(() => {
-    let live = true;
+    const mine = ++seq.current;
     setLoading(true);
-    api.ollamaModels().then((m) => { if (live) setModels(m); }).catch(() => { if (live) setModels(null); }).finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
+    api.ollamaModels()
+      .then((m) => { if (seq.current === mine) setModels(m); })
+      .catch(() => { if (seq.current === mine) setModels(null); })
+      .finally(() => { if (seq.current === mine) setLoading(false); });
   }, []);
-  // URL を変えたら取り直す
-  useEffect(() => reload(), [reload, baseUrl]);
+  // URL を変えたら取り直す。アンマウント後の結果は捨てる
+  useEffect(() => { reload(); }, [reload, baseUrl]);
+  useEffect(() => () => { seq.current += 1; }, []);
   return { models, loading, reload };
 }
 
 function OllamaModelField({ baseUrl, value, onSave }: { baseUrl: string; value: string; onSave: (v: string) => Promise<ActionResult> }) {
   const { models, loading, reload } = useOllamaModels(baseUrl);
+  const reloadButton = <button className="btn" disabled={loading} onClick={reload}>再読み込み</button>;
   if (!models) {
-    return <SettingField id="ollama-model" label="モデル" hint={loading ? undefined : "Ollama に接続できないため、モデル名を入力してください"} value={value} onSave={onSave} />;
+    return <SettingField id="ollama-model" label="モデル" hint={loading ? undefined : "Ollama に接続できないため、モデル名を入力してください"} value={value} onSave={onSave} action={reloadButton} />;
   }
   const options = withStoredOption(models.map((m) => ({ id: m, label: m })), value);
   return (
@@ -47,9 +53,15 @@ function OllamaModelField({ baseUrl, value, onSave }: { baseUrl: string; value: 
       <select id="ollama-model" className="field" style={{ width: 260 }} value={value} onChange={(e) => void onSave(e.target.value)}>
         {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
       </select>
-      <button className="btn" disabled={loading} onClick={reload}>再読み込み</button>
+      {reloadButton}
     </div>
   );
+}
+
+/** core の is_valid_model_name と同じ規則。CLI の引数がフラグとして読まれないよう先頭の "-" を拒む。空は既定に任せる。 */
+function validateClaudeModel(v: string): string | null {
+  const name = v.trim();
+  return name === "" || /^[A-Za-z0-9._:[\]][A-Za-z0-9._:[\]-]*$/.test(name) ? null : "英数字と . _ : - [ ] だけ (先頭に - は使えない)";
 }
 
 function ClaudeModelField({ value, onSave }: { value: string; onSave: (v: string) => Promise<ActionResult> }) {
@@ -70,7 +82,8 @@ function ClaudeModelField({ value, onSave }: { value: string; onSave: (v: string
           <option value={OTHER}>その他 (名前を入力)</option>
         </select>
       </div>
-      {custom && <SettingField id="claude-model-custom" label="モデル名" hint="完全なモデル名。空ならclaude CLIの既定" value={isAlias ? "" : value} onSave={onSave} />}
+      {custom && <SettingField id="claude-model-custom" label="モデル名" hint="別名または完全なモデル名。空ならチャットは sonnet、要約は claude CLI の既定" value={isAlias ? "" : value}
+        validate={validateClaudeModel} normalize={(v) => v.trim()} onSave={onSave} />}
     </>
   );
 }

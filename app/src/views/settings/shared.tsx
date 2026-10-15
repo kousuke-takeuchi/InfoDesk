@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../../api";
 import { errorMessage, type Settings } from "../../types";
 
@@ -62,10 +62,11 @@ export function isImeEnter(e: KeyboardEvent): boolean {
  * 保存に失敗しても入力値は残す (value が変わったときだけ draft を差し替える)。
  * 保存の失敗は欄の横にも出し、この欄の保存が成功するか入力値を保存済みの値に戻すまで残す
  * (上部の actionError は別の操作の成功で消えるため、それだけでは失敗した欄が分からなくなる)。
+ * action は欄の右に置くボタンなど。
  */
-export function SettingField({ id, label, value, onSave, hint, type = "text", width = 260, validate, normalize }: {
+export function SettingField({ id, label, value, onSave, hint, type = "text", width = 260, validate, normalize, action }: {
   id: string; label: string; value: string; onSave: (v: string) => Promise<ActionResult>; hint?: string; type?: string; width?: number;
-  validate?: (v: string) => string | null; normalize?: (v: string) => string;
+  validate?: (v: string) => string | null; normalize?: (v: string) => string; action?: ReactNode;
 }) {
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function SettingField({ id, label, value, onSave, hint, type = "text", wi
         aria-describedby={!invalid && failed ? errorId : undefined}
         onChange={(e) => { setDraft(e.target.value); sent.current = null; if (e.target.value === value) setFailed(null); }} onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter" && !isImeEnter(e)) commit(); }} />
+      {action}
     </div>
   );
 }
