@@ -5,8 +5,8 @@ import { claudeCode } from "ai-sdk-provider-claude-code";
 export type ProviderId = "ollama" | "claude";
 export type Settings = Record<string, string>;
 
-/** チャットで使う Claude のモデル。InfoDesk の他の設定と同じく CLI 経由で使う。 */
-export const CLAUDE_CHAT_MODEL = "sonnet";
+/** `claude.model` が空のときに使う Claude のモデル。InfoDesk の他の設定と同じく CLI 経由で使う。 */
+export const CLAUDE_DEFAULT_MODEL = "sonnet";
 
 /** Ollama のチャットの文脈長。core の要約 (gemma4:26b) と同じ値。既定のままだと長いツール結果や会話が黙って切れる。 */
 export const OLLAMA_NUM_CTX = 16384;
@@ -31,7 +31,7 @@ export const defaultModels: ModelFactory = {
       options: { num_ctx: OLLAMA_NUM_CTX },
     }),
   claude: (s, o) =>
-    claudeCode(CLAUDE_CHAT_MODEL, {
+    claudeCode(s["claude.model"]?.trim() || CLAUDE_DEFAULT_MODEL, {
       pathToClaudeCodeExecutable: s["claude.bin"] || "claude",
       systemPrompt: o.instructions,
       mcpServers: o.mcpServers as never,

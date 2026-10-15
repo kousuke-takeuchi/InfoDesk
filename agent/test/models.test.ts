@@ -14,6 +14,19 @@ describe("defaultModels.ollama", () => {
   });
 });
 
+describe("defaultModels.claude model", () => {
+  const opts = { instructions: "x", mcpServers: {}, allowedTools: [] };
+  const idOf = (s: Record<string, string>) => (defaultModels.claude(s, opts) as unknown as { modelId: string }).modelId;
+  it("uses claude.model from the settings", () => {
+    expect(idOf({ "claude.model": "opus" })).toBe("opus");
+    expect(idOf({ "claude.model": "claude-opus-4-1" })).toBe("claude-opus-4-1");
+  });
+  it("falls back to sonnet when the setting is missing or empty", () => {
+    expect(idOf({})).toBe("sonnet");
+    expect(idOf({ "claude.model": "" })).toBe("sonnet");
+  });
+});
+
 describe("step budget", () => {
   it("leaves room for plan updates on both providers", () => {
     expect(MAX_STEPS).toBe(20);
