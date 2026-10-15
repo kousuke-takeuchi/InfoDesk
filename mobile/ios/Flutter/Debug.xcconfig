@@ -1,0 +1,9 @@
+#include "Generated.xcconfig"
+#include? "Secrets.xcconfig"
+
+// Xcode 27's lipo rejects `lipo <file> -verify_arch arm64 x86_64` ("requires
+// exactly one input file"). flutter_tools runs that check in the scheme
+// pre-action ("Run Prepare Flutter Framework Script"), which sees the
+// unfiltered ARCHS ("arm64 x86_64") of a generic simulator build and ignores
+// EXCLUDED_ARCHS. Pin the simulator build to arm64 so the check gets one arch.
+ARCHS[sdk=iphonesimulator*] = arm64
