@@ -4,7 +4,7 @@
 
 InfoDesk can copy what it collects to your own Google Drive, so that a phone app can read it. This page explains what sync does, how to use it, the one-time Google setup a developer must do before building the app, what is stored on Drive, and what to do when something goes wrong.
 
-The mobile app itself is not part of this release. This release contains the Mac side only.
+The phone side is the mobile app; see [Mobile App](14-mobile-app.md).
 
 ## 1. What it does
 
@@ -76,7 +76,7 @@ Notes:
 - **No verification needed.** `drive.appdata` is a non-sensitive scope, so Google does not require an app review for it.
 - **The file is git-ignored.** `app/src-tauri/google-oauth.json` is listed in `.gitignore`. Do not commit it. For a desktop app, Google does not treat the client secret as confidential, but it still should not go into a public repository.
 - **A missing or broken file** disables sync. A file that is not valid JSON also prints a build warning.
-- The same Google Cloud project is meant to serve the future mobile client (an iOS OAuth client), because the app-only Drive folder is shared per project.
+- The same Google Cloud project serves the mobile client (an iOS OAuth client, see [Mobile App](14-mobile-app.md)), because the app-only Drive folder is shared per project.
 
 ## 5. What is stored on Drive
 
@@ -113,6 +113,6 @@ If you reset the Mac database, its article ids change. On its next sync the Mac 
 - **A phone mark does not show up on the Mac.** Marks are imported at each sync. Press "今すぐ同期" on the Mac.
 - To stop sync, turn off "同期する", or press "ログアウト". Files already on Drive stay there until you remove them from Drive's "Manage apps" settings.
 
-For NAS problems, see the troubleshooting table in [NAS Setup](13-nas-setup.md).
+For phone problems, see [Mobile App](14-mobile-app.md). For NAS problems, see the troubleshooting table in [NAS Setup](13-nas-setup.md).
 
 See [Settings](07-settings.md) for the settings keys and [Privacy and Security](09-privacy-and-security.md) for what is sent to Google.

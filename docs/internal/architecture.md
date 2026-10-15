@@ -193,6 +193,22 @@ LLMは `LlmFactory`(`provider_from_settings`)で用途(`LlmRole::Items` / `Diges
 - 状態は `AppState.sync`(`SyncStatus`)と、イベント `sync-changed`(`EVENT_SYNC`)で画面へ。
 - テストは `DriveStore` の偽物(`MemoryDrive`)で行い、ネットワークにつなぐテストは無い。本物のDriveとログインは手動で確かめる。公開用の手順は [../12-cloud-sync.md](../12-cloud-sync.md)。
 
+### モバイルアプリ(`mobile/lib/`)
+
+Flutter製(バンドルID `jp.infodesk.mobile`)。Macが書いた同期フォルダを読み、既読とスターを `ops-*` で返す。使い方は [../14-mobile-app.md](../14-mobile-app.md)。
+
+| フォルダ | 役割 |
+|---|---|
+| `sync/` | `format.dart`(ファイル名、manifest、day、digest、スナップショット、opsの読み書き)、`engine.dart`(1回の同期: 一覧、manifest、ハッシュが変わったファイルの取り込み、全opsの取り込み、自分の未送信opsの書き出し) |
+| `data/` | `local_store.dart`: 端末内のSQLite(sqflite)。記事、ダイジェスト、既読とスター、未送信ops、取り込み済みファイルの記録、設定 |
+| `storage/` | `DriveStore`(`drive_store.dart`)の実装。`google_drive_store.dart`(appDataFolder)、`nas_store.dart`(WebDAV。Tailscaleの端末のIPへ、tailnetの端末だけ許可)、`tailnet_port.dart`、`storage_factory.dart`(保存先に応じて作る、`checkNas`) |
+| `auth/` | `google_account.dart`(`drive.appdata`のサインイン)、`tailnet_service.dart`(Tailscaleの端末の開始、ログイン、ログアウト、状態を消す、ログのアップロード停止)、`backup_exclusion.dart`(状態のフォルダをバックアップから除外) |
+| `settings/` | `app_settings.dart`(保存先、NASのURLとユーザー。パスワードは`flutter_secure_storage`)、`nas_guide.dart`(Macの`NasGuideDialog.tsx`と同じ文面) |
+| `app/` | `controller.dart`(`AppController`: 画面が読む状態と操作、同期とストレージ変更を直列化)、`app.dart`(再開時の同期)、`errors.dart`(日本語のメッセージだけを画面へ) |
+| `ui/` | 画面: `home_shell.dart`(4タブ)、`digest_screen.dart`、`feed_screen.dart`、`article_screen.dart`、`settings_screen.dart`、`first_launch.dart`、`nas_form.dart`、`tailnet_section.dart` |
+
+同期のタイミングは、起動、再開、引っ張って更新、「今すぐ同期」。ビルドの前提(Flutter 3.44.7、Xcode 27、`arch -arm64`、`ARCHS`の固定、Go、`Secrets.xcconfig`)は `mobile/README.md`。
+
 ### スケジューラー(`scheduler.rs`)
 
 - 15秒ごとに起き(`TICK`、`MissedTickBehavior::Delay`)、設定と最終実行の記録から「実行すべきジョブ」を計算する(`due_jobs`)。時計ではなく記録との差で判定するので、停止中に逃した分は次の起動または復帰で1回だけ補われる。

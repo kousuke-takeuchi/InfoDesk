@@ -1,4 +1,4 @@
-**English: [13-nas-setup.md](13-nas-setup.md)** | ← [前: クラウド同期](12-cloud-sync.ja.md)
+**English: [13-nas-setup.md](13-nas-setup.md)** | ← [前: クラウド同期](12-cloud-sync.ja.md) | 次: [モバイルアプリ →](14-mobile-app.ja.md)
 
 # NAS の準備 (Synology の WebDAV を Tailscale で使う)
 

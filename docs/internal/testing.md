@@ -13,10 +13,14 @@
 | サイドカー | `agent/` | `npm test -- --run` | Vitest(Node環境)。`TZ=Asia/Tokyo` はスクリプトが付ける |
 | サイドカーの型 | `agent/` | `npm run typecheck` | `tsc --noEmit` |
 | サイドカーのビルド | `agent/` | `npm run build` | 型検査のあと `dist/agent.mjs` を作る。`node dist/agent.mjs --check` が `ok` を出せば読み込みは通る |
+| モバイル | `mobile/` | `flutter test` | Flutterのユニットとウィジェットのテスト。偽のGoogle、偽のTailscale、偽のNAS、`sqflite_common_ffi` のSQLite |
+| モバイルの静的解析 | `mobile/` | `flutter analyze` | lintと型 |
 
 `app/package.json` と `agent/package.json` の `test` は `vitest`(`--run` なしでは監視モード)なので、1回だけ走らせるときは `--run` を付ける。Rustの全体は、リポジトリ直下で `cargo test`(ワークスペース全体)でも走る。
 
 アプリを動かして確かめるときは、先に `agent` で `npm run build` を実行しておく(デバッグビルドは `agent/dist/agent.mjs` を探す)。手順は [02-getting-started](../02-getting-started.md)。
+
+モバイルのコマンドは、Rosetta上のシェルでは `arch -arm64` で包む(`uname -m` が `x86_64` のとき)。例: `arch -arm64 /bin/bash -c 'export PATH=/opt/homebrew/bin:$HOME/develop/flutter/bin:/usr/bin:/bin:/usr/sbin:/sbin; cd mobile && flutter test'`。iOSシミュレーター向けのビルドは `cd mobile && flutter build ios --simulator --debug`(同じ包み方)。詳細は `mobile/README.md`。Googleのログイン、本物のNASとTailscale、Macとの印の往復は自動テストにできず、手動で確かめる([../14-mobile-app.md](../14-mobile-app.md) の10節)。
 
 ## 2. 方針
 

@@ -43,6 +43,7 @@ digest, a feed and a chat panel. Your data stays in a SQLite file on your Mac.
 - **Keyboard shortcuts**: switch views, move through the feed, read, star and collect from the keyboard; press `?` for the list. See [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md).
 - **Cloud sync**: copy articles and digests to a hidden app folder in your own Google Drive, with read and starred marks synced both ways. See [Cloud Sync](docs/12-cloud-sync.md).
 - **NAS sync**: choose a Synology NAS instead of Google Drive, reached through an in-app Tailscale node with no system VPN. See [NAS Setup](docs/13-nas-setup.md).
+- **Mobile app**: a Flutter reader for iOS that shows the digest, feed and articles, and syncs read and starred marks both ways, through Google Drive or the NAS. See [Mobile App](docs/14-mobile-app.md).
 - **AI chat**: ask questions about collected articles and summaries. The agent runs in a Node sidecar and can use Ollama or the `claude` CLI. See [AI Chat](docs/06-ai-chat.md).
 - **Local LLM first**: Ollama is the default provider for item summaries and digests. See [Settings](docs/07-settings.md).
 - **CLI**: the `infodesk` command collects, summarizes and prints digests from the terminal. See [CLI](docs/08-cli.md).
@@ -87,6 +88,7 @@ Read in order. Files are numbered.
 | 11 | [Keyboard Shortcuts](docs/11-keyboard-shortcuts.md) | Every shortcut, and when shortcuts are ignored |
 | 12 | [Cloud Sync](docs/12-cloud-sync.md) | Copy articles and digests to your Google Drive, and the Google setup for builders |
 | 13 | [NAS Setup](docs/13-nas-setup.md) | Sync to a Synology NAS over Tailscale: setup steps, device approval and troubleshooting |
+| 14 | [Mobile App](docs/14-mobile-app.md) | Read the digest, feed and articles on your phone, with read and starred marks synced both ways; the developer build |
 
 Each page has a Japanese twin (`*.ja.md`). Developer documentation lives in [`docs/internal/`](docs/internal/README.md) and is written in Japanese. The design spec and implementation plans are under [`docs/superpowers/`](docs/superpowers/).
 

@@ -76,6 +76,31 @@
 | esbuild | 0.28.2 | `agent/dist/agent.mjs` に1ファイルへ束ねる(`build.mjs`、target node22) |
 | TypeScript / Vitest | ~6.0.3 / ^5.0.3 | |
 
+## モバイル(`mobile/`)
+
+バージョンは `mobile/pubspec.yaml` と `pubspec.lock` から読んだ(2026-10-15時点)。Flutter 3.44.7(Dart 3.12.2)、Xcode 27。
+
+| パッケージ | 版(lock) | 用途 |
+|---|---|---|
+| `google_sign_in` | 7.2.0 | Googleのサインイン(`drive.appdata`) |
+| `googleapis` | 17.0.0 | Drive API |
+| `googleapis_auth` | 2.3.4 | Drive用の認証つきHTTPクライアント |
+| `extension_google_sign_in_as_googleapis_auth` | 3.0.0 | `google_sign_in` と `googleapis_auth` の橋渡し |
+| `tailscale` | 0.9.0 | アプリ内のTailscale端末。ビルド時にGoでネイティブのライブラリを作る |
+| `sqflite` | 2.4.4+2 | 端末内のSQLite |
+| `http` | 1.6.0 | WebDAV(NAS) |
+| `url_launcher` | 6.3.3 | アプリ内のブラウザとシステムのブラウザ |
+| `flutter_secure_storage` | 11.2.0 | NASのパスワード(キーチェーン) |
+| `path_provider` | 2.1.6 | アプリのサポートフォルダ |
+| `archive` | 4.5.2 | gzipのJSONの展開 |
+| `crypto` | 3.0.7 | SHA-256(ハッシュの照合) |
+| `xml` | 7.0.1 | WebDAVのPROPFIND応答の解析 |
+| `cupertino_icons` | 1.0.9 | アイコン |
+| `flutter_lints`(dev) | 6.0.0 | lint |
+| `sqflite_common_ffi`(dev) | 2.4.4 | テストでのSQLite |
+
+Goは1.26以降をPATHに置く(MacのRust側は1.25.5に固定している点と別)。iOSのデプロイターゲットは15.0。
+
 ## 外部ツール
 
 | ツール | 使い方 |

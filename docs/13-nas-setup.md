@@ -1,4 +1,4 @@
-**日本語: [13-nas-setup.ja.md](13-nas-setup.ja.md)** | ← [Cloud Sync](12-cloud-sync.md)
+**日本語: [13-nas-setup.ja.md](13-nas-setup.ja.md)** | ← [Cloud Sync](12-cloud-sync.md) | Next: [Mobile App →](14-mobile-app.md)
 
 # NAS Setup (Synology WebDAV over Tailscale)
 

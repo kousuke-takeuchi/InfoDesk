@@ -20,6 +20,7 @@ The work was done in plans. Each line below is one plan.
 - **Plan 6, shortcuts and freshness**: keyboard shortcuts with an in-app list (`?`), collection intervals down to 1 minute, daily digests made once a day (collection no longer rebuilds today's digest), and a refetch when the window regains focus or the date changes. See [Keyboard Shortcuts](11-keyboard-shortcuts.md).
 - **Plan 7A, cloud sync (Mac side)**: a sync engine that writes articles, digests and read and starred changes to the hidden app folder of your Google Drive, Google sign-in (OAuth with PKCE, token in the macOS Keychain), a Sync tab in Settings, and database migration v5. See [Cloud Sync](12-cloud-sync.md).
 - **Plan 7A2, NAS storage**: a choice between Google Drive and a Synology NAS (WebDAV) as the sync storage, an in-app Tailscale node that reaches the NAS without a system VPN, NAS credentials in the Keychain, and an in-app setup guide. See [NAS Setup](13-nas-setup.md).
+- **Plan 7B, mobile app**: a Flutter reader for iOS (`mobile/`) with the digest, feed and article screens, read and starred marks synced both ways, sign-in for Google Drive or the NAS over an in-app Tailscale node, and a local copy on the phone. See [Mobile App](14-mobile-app.md).
 
 ## Known limits
 
@@ -31,7 +32,7 @@ The work was done in plans. Each line below is one plan.
 - **Chat is read-only and bounded.** The agent cannot change your data. Each answer is limited to 20 steps (Ollama) or 20 turns (Claude), and Ollama chat uses a 16384 token context.
 - **Chat history cannot be renamed in the UI.** Titles come from the first question. (The store supports renaming, the panel does not offer it.)
 - **Claude has no automatic fallback.** If Claude fails, nothing switches to Ollama by itself.
-- **Single user.** No multiple users. Sync writes to Google Drive or a Synology NAS, and the mobile app is not built yet (Plan 7B).
+- **Single user.** No multiple users. Sync writes to Google Drive or a Synology NAS, and the mobile app only reads and marks (see [Mobile App](14-mobile-app.md)).
 - **Sync needs your own Google credentials.** A build without `app/src-tauri/google-oauth.json` has Google Drive sync disabled. See [Cloud Sync](12-cloud-sync.md).
 - **Building needs Go.** The in-app Tailscale node is written in Go. See [Getting Started](02-getting-started.md).
 - **No notifications.** The menu bar shows status and unread counts, but InfoDesk does not send push notifications.

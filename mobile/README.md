@@ -34,6 +34,9 @@ It writes `GOOGLE_IOS_CLIENT_ID` and `GOOGLE_IOS_REVERSED_CLIENT_ID`, which
 with `#include?`, so a missing file is not a build error, but Google sign-in
 needs it.
 
+The Google sign-in itself cannot be tested without a real client id; the
+automated tests use fakes for Google, Tailscale and the NAS.
+
 ## Test and analyze
 
 ```sh
@@ -53,6 +56,12 @@ xcrun simctl io booted screenshot /tmp/infodesk.png
 
 The first build takes several minutes (Swift packages and the Go build for
 tailscale); later builds are faster.
+
+### Real device
+
+A real device needs a signing team.
+
+For how to use the app, see [docs/14-mobile-app.md](../docs/14-mobile-app.md).
 
 ### Why `ARCHS[sdk=iphonesimulator*] = arm64`
 

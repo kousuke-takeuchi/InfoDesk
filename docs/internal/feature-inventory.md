@@ -307,7 +307,7 @@
 | 同期タブ | 実装済み | `SyncTab.tsx`。同期のエラーは収集のエラーと別の行 |
 | DBの版5 | 実装済み | [data-model.md](data-model.md) |
 | 手順書 (Google 側の準備) | 実装済み | [../12-cloud-sync.md](../12-cloud-sync.md) |
-| モバイルアプリ (Flutter) | 未実装 | 計画B。`mobile/` はまだ無い |
+| モバイルアプリ (Flutter) | 実装済み | 計画B。18節 |
 | 保存先の選択(Google ドライブ / NAS)。切り替えると新しい保存先へ全部を出し直す。古い保存先は消さない | 実装済み | `sync/mod.rs`(`set_backend`、`sync.reset_pending`)、`SyncTab.tsx` |
 | NASへのWebDAV同期(Basic認証、パスワードはキーチェーン `jp.infodesk.app.nas`) | 実装済み | `crates/core/src/sync/webdav.rs`、`sync/keychain.rs` |
 | アプリ内のTailscale端末(システムVPNなし、`infodesk-mac`、状態は `tailscale/` 0700、ログアウト、状態を消す) | 実装済み | `app/src-tauri/src/tailnet.rs`、`commands/sync.rs` |
@@ -315,6 +315,26 @@
 | NASの準備ガイド(アプリ内ダイアログと公開文書) | 実装済み | `NasGuideDialog.tsx`、[../13-nas-setup.md](../13-nas-setup.md) |
 | 本物のNASでの同期の確認(Tailscaleのログイン、承認、書き込み) | 未確認 | 自動テストは偽のWebDAVとTailscaleだけ。手動の確認一覧は計画7A2の報告 |
 | 本物のDriveでのログインと同期の確認 | 未確認 | 自動テストは偽のDriveだけ。手動の確認一覧は計画Aの報告 |
+
+## 18. モバイルアプリ (Plan 7B)
+
+[クラウド同期の設計書](../superpowers/specs/2026-10-13-infodesk-cloud-sync-design.md)の6節。根拠は `mobile/lib/` のファイル。手順書は [../14-mobile-app.md](../14-mobile-app.md)。
+
+| 項目 | 状態 | 備考 |
+|---|---|---|
+| ダイジェスト(今日、週、月)、フィード(期間、カテゴリー、トピック、未読のみ、スター、検索)、記事の画面 | 実装済み | `ui/digest_screen.dart`、`feed_screen.dart`、`article_screen.dart` |
+| 4タブ(ダイジェスト、フィード、スター、設定) | 実装済み | `ui/home_shell.dart` |
+| 既読とスターの双方向同期(`ops-*` を書き、他端末のopsを取り込む) | 実装済み | `sync/engine.dart`、`data/local_store.dart` |
+| 同期は起動、再開、引っ張って更新、今すぐ同期 | 実装済み | `app/app.dart`、`app/controller.dart` |
+| 端末内のSQLiteの控えと「控えを削除」(未送信の印は失われる) | 実装済み | `data/local_store.dart`、`ui/settings_screen.dart` |
+| 保存先の選択(Google ドライブ / NAS)。切り替えで控えを消し、未送信の印は残す | 実装済み | `settings/app_settings.dart`、`ui/first_launch.dart` |
+| Googleのサインイン(`drive.appdata`) | 実装済み | `auth/google_account.dart`。iOSのクライアントIDは `Secrets.xcconfig`(git管理外) |
+| NAS(WebDAV)をアプリ内のTailscale端末(`infodesk-mobile`)経由で使う。確かめるは一覧だけで一時ファイルを書かない | 実装済み | `storage/nas_store.dart`、`auth/tailnet_service.dart`、`storage/storage_factory.dart` |
+| Tailscaleのログのアップロード停止、状態のバックアップ除外、パスワードはキーチェーン | 実装済み | `auth/tailnet_service.dart`(`noLogsNoSupport`)、`auth/backup_exclusion.dart`、`settings/app_settings.dart` |
+| NASの準備ガイド(Macと同じ文面) | 実装済み | `settings/nas_guide.dart` |
+| Androidのビルドと動作 | 未確認 | iOSのシミュレーターだけで確認した |
+| 実機での動作 | 未確認 | 署名のチームが要る |
+| 本物のGoogleのログインと同期、本物のNASのTailscaleログインと同期、印のMacとの往復 | 未確認 | 自動テストは偽の保存先と偽のTailscale。手動の確認一覧は [../14-mobile-app.md](../14-mobile-app.md) の10節 |
 
 ## 設計書に無い実装
 
