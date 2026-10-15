@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:sqflite/sqflite.dart';
 
@@ -94,7 +95,11 @@ class LocalStore {
     final f = factory ?? databaseFactory;
     final db = await f.openDatabase(
       path,
-      options: OpenDatabaseOptions(version: _version, onCreate: _create),
+      options: OpenDatabaseOptions(
+        version: _version,
+        onCreate: _create,
+        onUpgrade: _upgrade,
+      ),
     );
     return LocalStore._(db);
   }
@@ -103,6 +108,17 @@ class LocalStore {
       open(inMemoryDatabasePath, factory: factory);
 
   Future<void> close() => _db.close();
+
+  /// Migrations run here, one `if` per schema version, oldest first:
+  ///
+  ///     if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
+  ///
+  /// Bump [_version] and make [_create] build the newest schema directly.
+  static Future<void> _upgrade(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {}
 
   static Future<void> _create(Database db, int version) async {
     await db.execute('''
@@ -122,6 +138,10 @@ CREATE TABLE items (
   fetched_at TEXT NOT NULL
 )''');
     await db.execute('CREATE INDEX items_date ON items(date)');
+    await db.execute(
+      'CREATE INDEX items_fetched ON items(fetched_at DESC, id DESC)',
+    );
+    await db.execute('CREATE INDEX items_category ON items(category)');
     await db.execute('''
 CREATE TABLE item_topics (
   item_id INTEGER NOT NULL,
@@ -269,7 +289,10 @@ CREATE TABLE pending_ops (
     int? offset,
   }) async {
     final (where, args) = _where(filter);
-    final lim = limit != null ? 'LIMIT $limit OFFSET ${offset ?? 0}' : '';
+    // SQLite needs a LIMIT before OFFSET; -1 means no limit.
+    final lim = limit != null || offset != null
+        ? 'LIMIT ${limit ?? -1} OFFSET ${offset ?? 0}'
+        : '';
     final rows = await _db.rawQuery(
       'SELECT i.*, s.read, s.read_at, s.read_device, s.starred, '
       's.starred_at, s.starred_device $_from $where '
@@ -468,16 +491,16 @@ CREATE TABLE pending_ops (
 
   /// Applies ops from other files in one transaction: each is normalized and
   /// applied only when it beats the current stamp. Nothing is journaled.
-  /// [localDevice] is accepted for symmetry; own ops are applied like any
-  /// other (applying them again is idempotent, and after a reset they may be
-  /// the only copy of the state).
-  Future<void> applyRemoteOps(List<Op> ops, String localDevice) =>
+  /// Own ops are applied like any other, so there is no device parameter:
+  /// applying them again is idempotent, and after a reset they may be the
+  /// only copy of the state.
+  Future<void> applyRemoteOps(List<Op> ops) =>
       _db.transaction((txn) => _applyOps(txn, ops));
 
   /// Applies a snapshot as a diff: each stamp it holds competes with the
   /// stored one under the same win rule. Items it does not mention are left
   /// alone. Nothing is journaled.
-  Future<void> applySnapshot(StateSnapshot snap, String localDevice) {
+  Future<void> applySnapshot(StateSnapshot snap) {
     final ops = <Op>[];
     for (final e in snap.state.entries) {
       for (final (f, s) in [
@@ -497,7 +520,7 @@ CREATE TABLE pending_ops (
         }
       }
     }
-    return applyRemoteOps(ops, localDevice);
+    return applyRemoteOps(ops);
   }
 
   // ---- pending ops ----
@@ -520,14 +543,11 @@ CREATE TABLE pending_ops (
     ];
   }
 
+  /// Marks the ops as written out. They are deleted: the journal only holds
+  /// what is still to send, and state lives in `item_state`.
   Future<void> markOpsSent(List<int> ids) => _db.transaction((txn) async {
     for (final id in ids) {
-      await txn.update(
-        'pending_ops',
-        {'sent': 1},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      await txn.delete('pending_ops', where: 'id = ?', whereArgs: [id]);
     }
   });
 
@@ -577,22 +597,55 @@ CREATE TABLE pending_ops (
 
   Future<String?> dbId() => getSetting('db_id');
 
-  /// Wipes everything (items, state, digests, meta, synced files, settings
-  /// and unsent own ops), then records [newId]. Used when `manifest.db_id`
-  /// changes: old item ids no longer mean anything.
+  static const _dataTables = [
+    'items',
+    'item_topics',
+    'item_state',
+    'digests',
+    'meta',
+    'synced_files',
+    'pending_ops',
+  ];
+
+  /// Wipes the synced data (not settings, so the device id and credentials
+  /// survive), then records [newId]. Used when `manifest.db_id` changes: old
+  /// item ids no longer mean anything.
   Future<void> resetForDbId(String newId) => _db.transaction((txn) async {
-    for (final t in [
-      'items',
-      'item_topics',
-      'item_state',
-      'digests',
-      'meta',
-      'synced_files',
-      'pending_ops',
-      'settings',
-    ]) {
-      await txn.delete(t);
-    }
-    await txn.insert('settings', {'key': 'db_id', 'value': newId});
+    await _wipeData(txn);
+    await txn.insert('settings', {
+      'key': 'db_id',
+      'value': newId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   });
+
+  /// Deletes the local copy of items, digests, state, meta, synced-file
+  /// records and unsent ops. Settings (including `db_id` and the device id)
+  /// are kept.
+  Future<void> clearLocalCopy() => _db.transaction(_wipeData);
+
+  Future<void> _wipeData(DatabaseExecutor x) async {
+    for (final t in _dataTables) {
+      await x.delete(t);
+    }
+  }
+
+  /// This install's id, a UUID v4 made once and kept in settings. It is used
+  /// in `ops-<device>-...` file names, so it must stay ASCII.
+  Future<String> deviceId() async {
+    final cur = await getSetting('device_id');
+    if (cur != null) return cur;
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    final h = [for (final x in b) x.toRadixString(16).padLeft(2, '0')].join();
+    final id =
+        '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-'
+        '${h.substring(16, 20)}-${h.substring(20)}';
+    await _db.insert('settings', {
+      'key': 'device_id',
+      'value': id,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    return (await getSetting('device_id'))!;
+  }
 }

@@ -73,7 +73,7 @@ void main() {
     final before = await s.pendingOps();
     await s.applyRemoteOps([
       op(1, Field.read, false, '2026-10-10T12:00:05Z', 'mac'),
-    ], 'phone');
+    ]);
     final row = (await s.items()).firstWhere((i) => i.record.id == 1);
     expect(row.isRead, true);
     expect(row.read!.device, 'phone');
@@ -81,15 +81,13 @@ void main() {
     // A winning op with an offset timestamp is normalized and applied.
     await s.applyRemoteOps([
       op(1, Field.read, false, '2026-10-10T21:00:30+09:00', 'mac'),
-    ], 'phone');
+    ]);
     final r2 = (await s.items()).firstWhere((i) => i.record.id == 1);
     expect(r2.isRead, false);
     expect(r2.read!.at, '2026-10-10T12:00:30.000Z');
     expect((await s.pendingOps()).length, before.length);
     // Unparsable ops are ignored.
-    await s.applyRemoteOps([
-      op(1, Field.read, true, 'garbage', 'mac'),
-    ], 'phone');
+    await s.applyRemoteOps([op(1, Field.read, true, 'garbage', 'mac')]);
     expect((await s.items()).firstWhere((i) => i.record.id == 1).isRead, false);
   });
 
@@ -121,7 +119,7 @@ void main() {
           ),
         },
       );
-      await s.applySnapshot(snap, 'phone');
+      await s.applySnapshot(snap);
       final rows = {for (final i in await s.items()) i.record.id: i};
       expect(rows[1]!.isStarred, true);
       expect(rows[3]!.isRead, true);
@@ -131,7 +129,7 @@ void main() {
     },
   );
 
-  test('db_id reset wipes everything including pending ops', () async {
+  test('db_id reset wipes data but keeps settings', () async {
     await seed();
     await s.setRead(1, true, 'phone', now: t(1));
     await s.putSyncedFile('day-2026-10-10.json.gz', 'abc', 'day');
@@ -141,10 +139,142 @@ void main() {
     expect(await s.pendingOps(), isEmpty);
     expect(await s.items(), isEmpty);
     expect(await s.syncedFile('day-2026-10-10.json.gz'), isNull);
-    expect(await s.getSetting('k'), isNull);
+    expect(await s.getSetting('k'), 'v');
     // Old state does not come back for a reused item id.
     await s.upsertDay(DayFile(date: '2026-10-10', items: [item(1)]));
     expect((await s.items()).single.isRead, false);
+    await s.resetForDbId('newer-id');
+    expect(await s.dbId(), 'newer-id');
+  });
+
+  test('clearLocalCopy wipes data but keeps settings and db_id', () async {
+    await seed();
+    await s.setRead(1, true, 'phone', now: t(1));
+    await s.resetForDbId('x');
+    await s.upsertDay(DayFile(date: '2026-10-10', items: [item(1)]));
+    await s.setSetting('k', 'v');
+    await s.clearLocalCopy();
+    expect(await s.items(), isEmpty);
+    expect(await s.pendingOps(), isEmpty);
+    expect(await s.getSetting('k'), 'v');
+    expect(await s.dbId(), 'x');
+  });
+
+  test('deviceId is a stable UUID v4 that survives resets', () async {
+    final id = await s.deviceId();
+    expect(
+      id,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
+    expect(await s.deviceId(), id);
+    await s.resetForDbId('a');
+    expect(await s.deviceId(), id);
+    await s.clearLocalCopy();
+    expect(await s.deviceId(), id);
+  });
+
+  test('search escapes % and _', () async {
+    await s.upsertDay(
+      DayFile(
+        date: '2026-10-10',
+        items: [
+          item(1, title: '100% sure'),
+          item(2, title: 'a_b'),
+          item(3, title: 'axb and 100 plain'),
+        ],
+      ),
+    );
+    Future<List<int>> ids(String q) async => [
+      for (final i in await s.items(filter: ItemFilter(search: q))) i.record.id,
+    ];
+    expect(await ids('%'), [1]);
+    expect(await ids('_'), [2]);
+    expect(await ids('a_b'), [2]);
+  });
+
+  test('an item moving between days leaves no stale copy', () async {
+    await s.upsertDay(
+      DayFile(
+        date: '2026-10-09',
+        items: [
+          item(1, topics: [10]),
+        ],
+      ),
+    );
+    await s.upsertDay(
+      DayFile(
+        date: '2026-10-10',
+        items: [
+          item(1, topics: [11]),
+        ],
+      ),
+    );
+    var all = await s.items();
+    expect(all, hasLength(1));
+    expect(all.single.date, '2026-10-10');
+    expect(all.single.record.topicIds, [11]);
+    // The old day file arriving again without the item changes nothing.
+    await s.upsertDay(DayFile(date: '2026-10-09', items: []));
+    all = await s.items();
+    expect(all, hasLength(1));
+    expect(all.single.date, '2026-10-10');
+  });
+
+  test('snapshot ties on at resolve by device; at is normalized', () async {
+    await seed();
+    await s.applyRemoteOps([
+      op(1, Field.read, true, '2026-10-10T12:00:10.000Z', 'b'),
+    ]);
+    StateSnapshot snap(String at, String dev, bool v) => StateSnapshot(
+      covers: [],
+      state: {
+        1: ItemState(
+          read: Stamp(value: v, at: at, device: dev),
+        ),
+      },
+    );
+    Future<StoredItem> one() async =>
+        (await s.items()).firstWhere((i) => i.record.id == 1);
+    // Smaller device loses the tie.
+    await s.applySnapshot(snap('2026-10-10T12:00:10.000Z', 'a', false));
+    expect((await one()).isRead, true);
+    expect((await one()).read!.device, 'b');
+    // Larger device wins the tie.
+    await s.applySnapshot(snap('2026-10-10T12:00:10.000Z', 'c', false));
+    expect((await one()).isRead, false);
+    expect((await one()).read!.device, 'c');
+    // A non-normalized at is normalized before comparing and storing.
+    await s.applySnapshot(snap('2026-10-10T21:00:30+09:00', 'a', true));
+    expect((await one()).isRead, true);
+    expect((await one()).read!.at, '2026-10-10T12:00:30.000Z');
+  });
+
+  test('offset works without limit', () async {
+    await s.upsertDay(
+      DayFile(
+        date: '2026-10-10',
+        items: [
+          item(1, fetchedAt: '2026-10-10T00:00:01Z'),
+          item(2, fetchedAt: '2026-10-10T00:00:02Z'),
+          item(3, fetchedAt: '2026-10-10T00:00:03Z'),
+        ],
+      ),
+    );
+    final r = await s.items(offset: 1);
+    expect([for (final i in r) i.record.id], [2, 1]);
+  });
+
+  test('markAllRead journals each of several items', () async {
+    await seed();
+    final n = await s.markAllRead(const ItemFilter(), 'phone', now: t(5));
+    expect(n, 3);
+    final ops = await s.pendingOps();
+    expect(ops.map((o) => o.itemId).toSet(), {1, 2, 3});
+    expect(ops.every((o) => o.field == Field.read && o.value), isTrue);
   });
 
   test('upsertDay replaces the date but keeps read and star state', () async {
