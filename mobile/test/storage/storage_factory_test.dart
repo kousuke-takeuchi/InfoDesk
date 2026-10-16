@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -76,31 +75,22 @@ void main() {
   group('NAS', () {
     setUp(() => settings.setBackend(Backend.nas));
 
-    test('a launch start in flight is awaited before deciding', () async {
+    test('Tailscale failures are TailnetNotReady, others are not', () async {
       await fillNas();
-      node.saved = true;
-      node.upGate = Completer<TailscaleStatus>();
-      unawaited(tailnet.startOnLaunch(nas: true));
-      final built = factory.build();
-      await pumpEventQueue();
-      node.upGate!.complete(st(NodeState.running));
-      expect(await built, isA<NasStore>());
-    });
-
-    test('a start that stays Starting gives up after the bound', () async {
-      await fillNas();
-      node.saved = true;
-      node.upGate = Completer<TailscaleStatus>();
-      final quick = StorageFactory(
-        settings: settings,
-        google: GoogleAccount(port),
-        tailnet: tailnet,
-        nasPort: () => port2,
-        tailnetWait: const Duration(milliseconds: 20),
+      await expectLater(factory.build(), throwsA(isA<TailnetNotReady>()));
+      node.next = st(NodeState.running);
+      await tailnet.start();
+      await settings.clearNas();
+      await expectLater(
+        factory.build(),
+        throwsA(
+          isA<StorageError>().having(
+            (e) => e is TailnetNotReady,
+            'TailnetNotReady',
+            isFalse,
+          ),
+        ),
       );
-      unawaited(tailnet.start());
-      await expectLater(quick.build(), throwsA(isA<StorageError>()));
-      expect(tailnet.state.value, isA<TailnetStarting>());
     });
 
     test('stopped without saved state asks to log in to Tailscale', () async {

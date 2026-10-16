@@ -8,6 +8,8 @@ import 'package:infodesk_mobile/storage/drive_store.dart';
 import 'package:infodesk_mobile/storage/storage_factory.dart';
 import 'package:infodesk_mobile/storage/tailnet_port.dart';
 import 'package:infodesk_mobile/sync/engine.dart';
+import 'package:infodesk_mobile/storage/nas_store.dart'
+    show nasTailscaleLoginMessage;
 import 'package:tailscale/tailscale.dart';
 
 import '../auth/tailnet_service_test.dart' show FakeNode, st;
@@ -46,6 +48,7 @@ void main() {
     late FakeSettings settings;
     late BuildingEngine engine;
     late AppController c;
+    late FakeStore store;
 
     AppController build(Duration wait) {
       node = FakeNode()
@@ -59,14 +62,14 @@ void main() {
           user: 'kou',
           password: 'pw',
         );
-      final store = FakeStore()..settingsMap['onboarded'] = 'true';
+      store = FakeStore(items: [FakeStore.item(rec(1))])
+        ..settingsMap['onboarded'] = 'true';
       final google = FakeGoogle();
       final storage = StorageFactory(
         settings: settings,
         google: google,
         tailnet: tailnet,
         nasPort: _Port.new,
-        tailnetWait: wait,
       );
       engine = BuildingEngine(storage);
       return c = AppController(
@@ -78,8 +81,27 @@ void main() {
         tailnet: tailnet,
         openArticle: (_) async => true,
         openExternal: (_) async => true,
+        tailnetWait: wait,
       );
     }
+
+    test('a mark applies at once while Tailscale is starting', () async {
+      build(const Duration(seconds: 30));
+      unawaited(c.start());
+      await pumpEventQueue();
+      expect(c.syncing, isFalse, reason: 'the wait holds no lock');
+      var done = false;
+      unawaited(c.setRead(1, true).then((_) => done = true));
+      await pumpEventQueue();
+      expect(done, isTrue);
+      expect((await store.items()).single.isRead, isTrue);
+      node.upGate!.complete(st(NodeState.running));
+      await pumpEventQueue();
+      while (c.syncing) {
+        await pumpEventQueue();
+      }
+      expect(engine.built, 1);
+    });
 
     test('the open-time pass waits for a slow start and succeeds', () async {
       build(const Duration(seconds: 30));
@@ -128,6 +150,59 @@ void main() {
       tailnet.state.value = TailnetRunning(tailnetHostname, null);
       await pumpEventQueue();
       expect(engine.runs, 1);
+    });
+  });
+
+  group('Tailscale retry', () {
+    test('a Tailscale failure while already Running syncs again', () async {
+      final h = Harness();
+      h.settings.current = Backend.nas;
+      await h.controller.init();
+      // Tailscale came up while the pass was failing.
+      h.tailnet.state.value = TailnetRunning(tailnetHostname, null);
+      h.engine
+        ..failWith = const TailnetNotReady(nasTailscaleLoginMessage)
+        ..failOnce = true;
+      await h.controller.sync();
+      await pumpEventQueue();
+      expect(h.engine.runs, 2);
+      expect(h.controller.syncError, isNull);
+    });
+
+    test(
+      'a NAS error that is not Tailscale does not retry on Running',
+      () async {
+        final h = Harness();
+        h.settings.current = Backend.nas;
+        await h.controller.init();
+        h.engine.failWith = const StorageError(
+          StorageErrorKind.badCredentials,
+          'NAS のユーザー名かパスワードが違います',
+        );
+        await h.controller.sync();
+        h.tailnet.state.value = TailnetRunning(tailnetHostname, null);
+        await pumpEventQueue();
+        expect(h.engine.runs, 1);
+      },
+    );
+  });
+
+  group('Google restore', () {
+    test('choosing Google while the restore runs waits for it', () async {
+      final h = Harness();
+      h.settings.current = Backend.nas;
+      h.google
+        ..email = null
+        ..restoreEmail = 'you@gmail.com';
+      final hold = Completer<void>();
+      h.google.restoreHold = hold.future;
+      await h.controller.init();
+      final switching = h.controller.setBackend(Backend.gdrive);
+      await pumpEventQueue();
+      hold.complete();
+      await switching;
+      await pumpEventQueue();
+      expect(h.engine.runs, 1);
     });
   });
 

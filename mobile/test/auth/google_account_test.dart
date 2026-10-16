@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,9 @@ import 'package:infodesk_mobile/storage/google_drive_store.dart';
 
 class FakePort implements GoogleAuthPort {
   String? restored;
+
+  /// When set, restore waits for it.
+  Future<void>? restoreHold;
   String? email = 'me@example.com';
   Object? signInError;
   http.Client? clientValue;
@@ -20,6 +24,7 @@ class FakePort implements GoogleAuthPort {
 
   @override
   Future<String?> restore() async {
+    await restoreHold;
     final e = restoreError;
     if (e != null) throw e;
     return restored;
@@ -52,6 +57,12 @@ class FakeGs implements GoogleSignIn {
   final lightweight = <Object?>[];
   int attempts = 0;
 
+  /// When set, each lightweight attempt waits for it.
+  Future<void>? gate;
+
+  @override
+  Future<void> signOut() async {}
+
   @override
   Future<void> initialize({
     String? clientId,
@@ -65,6 +76,7 @@ class FakeGs implements GoogleSignIn {
     bool reportAllExceptions = false,
   }) async {
     attempts++;
+    await gate;
     final r = lightweight.isEmpty ? null : lightweight.removeAt(0);
     if (r is GoogleSignInAccount?) return r;
     throw r;
@@ -255,6 +267,24 @@ void main() {
       expect(a.currentEmail, 'a@b.c');
     });
 
+    test('client() turns a raw AppAuth network error into a retry', () async {
+      final gs = FakeGs()
+        ..lightweight.add(
+          PlatformException(code: 'org.openid.appauth.general: -5'),
+        );
+      final p = GoogleSignInPort(gs);
+      await expectLater(
+        p.client(),
+        throwsA(
+          isA<StorageError>().having(
+            (x) => x.kind,
+            'kind',
+            StorageErrorKind.retryable,
+          ),
+        ),
+      );
+    });
+
     test('offline during client() is a retry, not a re-login', () async {
       final gs = FakeGs()..lightweight.addAll([offline, offline]);
       final a = GoogleAccount(GoogleSignInPort(gs));
@@ -267,6 +297,80 @@ void main() {
               .having((x) => x.message, 'message', networkMessage),
         ),
       );
+    });
+  });
+
+  test('raw AppAuth and URL errors from iOS are retryable', () async {
+    for (final code in [
+      'org.openid.appauth.general: -5',
+      'NSURLErrorDomain: -1009',
+    ]) {
+      port.clientError = PlatformException(code: code);
+      await expectLater(
+        account.driveStore(),
+        throwsA(
+          isA<StorageError>()
+              .having((x) => x.kind, 'kind', StorageErrorKind.retryable)
+              .having((x) => x.message, 'message', networkMessage),
+        ),
+        reason: code,
+      );
+    }
+  });
+
+  test('a rejected refresh token (invalid_grant) asks to sign in', () async {
+    port.clientError = PlatformException(
+      code: 'org.openid.appauth.oauth_token: -10',
+    );
+    await expectLater(
+      account.driveStore(),
+      throwsA(
+        isA<StorageError>().having(
+          (x) => x.kind,
+          'kind',
+          StorageErrorKind.authExpired,
+        ),
+      ),
+    );
+  });
+
+  group('late restore', () {
+    test('a restore finishing after a sign-in is ignored', () async {
+      final hold = Completer<void>();
+      port
+        ..restoreHold = hold.future
+        ..restored = null;
+      final r = account.restore();
+      expect(await account.signIn(), 'me@example.com');
+      hold.complete();
+      await r;
+      expect(account.currentEmail, 'me@example.com');
+    });
+
+    test('a restore finishing after a sign-out is ignored', () async {
+      final hold = Completer<void>();
+      port
+        ..restoreHold = hold.future
+        ..restored = 'old@example.com';
+      final r = account.restore();
+      await account.signOut();
+      hold.complete();
+      await r;
+      expect(account.currentEmail, isNull);
+    });
+
+    test('the port drops a restore that ends after a sign-out', () async {
+      final gate = Completer<void>();
+      final gs = FakeGs()
+        ..lightweight.add(FakeAccount('old@b.c'))
+        ..gate = gate.future;
+      final p = GoogleSignInPort(gs);
+      final r = p.restore();
+      await pumpEventQueue();
+      await p.signOut();
+      gate.complete();
+      await r;
+      expect(p.currentEmail, isNull);
     });
   });
 

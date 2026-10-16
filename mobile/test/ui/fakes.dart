@@ -189,6 +189,9 @@ class FakeEngine implements SyncEngine {
   int runs = 0;
   Future<void>? hold;
   Object? failWith;
+
+  /// Fail only the next run with [failWith].
+  bool failOnce = false;
   SyncReport report = SyncReport();
 
   @override
@@ -196,6 +199,7 @@ class FakeEngine implements SyncEngine {
     runs++;
     await hold;
     final e = failWith;
+    if (failOnce) failWith = null;
     if (e != null) throw e;
     return report;
   }
@@ -269,10 +273,14 @@ class FakeGoogle implements GoogleAccount {
   Future<void>? restoreHold;
   int restores = 0;
 
+  /// The email a held restore finds, if any.
+  String? restoreEmail;
+
   @override
   Future<void> restore() async {
     restores++;
     await restoreHold;
+    if (restoreEmail != null) email = restoreEmail;
   }
 
   @override
@@ -321,6 +329,8 @@ class FakeTailnet implements TailnetService {
   Future<void> forget() async => calls.add('forget');
   @override
   Future<bool> hasSavedState() async => false;
+  @override
+  Future<void> settle(Duration limit) async {}
 
   @override
   dynamic noSuchMethod(Invocation i) =>

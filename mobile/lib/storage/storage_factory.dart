@@ -10,17 +10,20 @@ const nasCheckOk = '読み取れました';
 
 /// Builds the [DriveStore] for the chosen backend. Failures are
 /// [StorageError]s with Japanese text.
+/// The NAS cannot be reached because Tailscale is not Running. A pass that
+/// fails with it is run again once Tailscale comes up.
+class TailnetNotReady extends StorageError {
+  const TailnetNotReady(String message)
+    : super(StorageErrorKind.other, message);
+}
+
 class StorageFactory {
   StorageFactory({
     required this.settings,
     required this.google,
     required this.tailnet,
     TailnetPort Function()? nasPort,
-    this.tailnetWait = const Duration(seconds: 30),
   }) : _nasPort = nasPort ?? tailnet.port;
-
-  /// How long a pass waits for a Tailscale start already under way.
-  final Duration tailnetWait;
 
   final AppSettings settings;
   final GoogleAccount google;
@@ -32,26 +35,20 @@ class StorageFactory {
     Backend.nas => await buildNas(),
   };
 
-  /// Needs Tailscale Running and a complete URL, user and password. A start
-  /// already under way is waited for, up to [tailnetWait].
+  /// Needs Tailscale Running and a complete URL, user and password. Never
+  /// waits: it runs under the storage lock. The controller waits for a
+  /// Tailscale start before taking the lock. Tailscale failures are
+  /// [TailnetNotReady].
   Future<NasStore> buildNas() async {
-    // At launch the pass often starts while Tailscale is still coming up.
-    await tailnet.settle(tailnetWait);
     switch (tailnet.state.value) {
       case TailnetRunning():
         break;
       case TailnetNeedsApproval():
-        throw const StorageError(
-          StorageErrorKind.other,
-          tailnetApprovalMessage,
-        );
+        throw const TailnetNotReady(tailnetApprovalMessage);
       case TailnetStopped() when await tailnet.hasSavedState():
-        throw const StorageError(StorageErrorKind.other, tailnetStoppedMessage);
+        throw const TailnetNotReady(tailnetStoppedMessage);
       default:
-        throw const StorageError(
-          StorageErrorKind.other,
-          nasTailscaleLoginMessage,
-        );
+        throw const TailnetNotReady(nasTailscaleLoginMessage);
     }
     final nas = await settings.nas();
     if (!nas.complete) {

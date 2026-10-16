@@ -31,7 +31,13 @@ class AppController extends ChangeNotifier {
     required this.openExternal,
     DateTime Function()? clock,
     this.version = appVersion,
+    this.tailnetWait = const Duration(seconds: 30),
   }) : now = clock ?? DateTime.now;
+
+  /// How long a NAS pass waits for a Tailscale start already under way.
+  /// The wait happens before the pass takes the storage lock, so local
+  /// marks never wait for it.
+  final Duration tailnetWait;
 
   final LocalStore store;
   final SyncEngine engine;
@@ -72,6 +78,9 @@ class AppController extends ChangeNotifier {
   Future<void>? _syncing;
   Future<void> _tail = Future.value();
 
+  /// The background Google restore started by [init].
+  Future<void> _restoring = Future.value();
+
   String? get googleEmail => google.currentEmail;
 
   /// Loads the saved state. Does not sync.
@@ -79,8 +88,9 @@ class AppController extends ChangeNotifier {
     try {
       // The quiet Google sign-in may take long or fail offline; the first
       // screen never waits for it. A pass that needs it tries again itself.
-      unawaited(
-        google.restore().then((_) => notifyListeners(), onError: (_) {}),
+      _restoring = google.restore().then(
+        (_) => notifyListeners(),
+        onError: (_) {},
       );
       if (!_listening) {
         _listening = true;
@@ -154,10 +164,23 @@ class AppController extends ChangeNotifier {
     final cur = _syncing;
     if (cur != null) return cur;
     late final Future<void> f;
-    f = _exclusive(_pass).whenComplete(() {
+    f = _waitForTailnet().then((_) => _exclusive(_pass)).whenComplete(() {
       if (identical(_syncing, f)) _syncing = null;
+      // Tailscale came up while that pass was failing for want of it.
+      _onTailnet();
     });
     return _syncing = f;
+  }
+
+  /// For the NAS, waits (at most [tailnetWait]) for a Tailscale start under
+  /// way. Outside the storage lock, so marks apply at once meanwhile.
+  Future<void> _waitForTailnet() async {
+    if (backend != Backend.nas) return;
+    try {
+      await tailnet.settle(tailnetWait);
+    } on Object {
+      // The pass reports the state as it is.
+    }
   }
 
   /// The last pass failed because Tailscale was not Running.
@@ -172,7 +195,7 @@ class AppController extends ChangeNotifier {
 
   /// Once Tailscale is Running, a pass that failed for want of it runs again.
   void _onTailnet() {
-    if (tailnet.state.value is! TailnetRunning) return;
+    if (tailnet.state.value is! TailnetRunning || _syncing != null) return;
     if (!_blockedByTailnet || !onboarded || backend != Backend.nas) return;
     _blockedByTailnet = false;
     unawaited(sync());
@@ -194,8 +217,7 @@ class AppController extends ChangeNotifier {
     } on StorageError catch (e) {
       syncError = e.message;
       authExpired = e.kind == StorageErrorKind.authExpired;
-      _blockedByTailnet =
-          backend == Backend.nas && tailnet.state.value is! TailnetRunning;
+      _blockedByTailnet = e is TailnetNotReady;
     } catch (e) {
       syncError = describeError(e);
     } finally {
@@ -223,6 +245,8 @@ class AppController extends ChangeNotifier {
 
   /// Waits for a running pass, then switches the storage.
   Future<void> setBackend(Backend b) => _action(() async {
+    // The email decides below whether to sync; a late restore may bring it.
+    if (b == Backend.gdrive) await _restoring;
     final changed = await _exclusive(() => settings.setBackend(b));
     backend = b;
     nasCheckText = null;

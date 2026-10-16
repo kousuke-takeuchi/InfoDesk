@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -68,6 +69,10 @@ class GoogleSignInPort implements GoogleAuthPort {
 
   Future<GoogleSignInAccount?>? _restoring;
 
+  /// Bumped by every sign-in and sign-out, so a quiet sign-in that started
+  /// before one never overwrites its result.
+  int _generation = 0;
+
   Future<GoogleSignInAccount?> _lightweight() async {
     await _ready();
     return _gs.attemptLightweightAuthentication();
@@ -75,9 +80,11 @@ class GoogleSignInPort implements GoogleAuthPort {
 
   @override
   Future<String?> restore() async {
+    final gen = _generation;
     final f = _restoring ??= _lightweight();
     try {
       final a = await f;
+      if (gen != _generation) return _account?.email;
       _account = a;
       return a?.email;
     } finally {
@@ -87,6 +94,8 @@ class GoogleSignInPort implements GoogleAuthPort {
 
   @override
   Future<String> signIn() async {
+    _generation++;
+    _restoring = null;
     await _ready();
     final stale = _token;
     if (stale != null) {
@@ -103,10 +112,23 @@ class GoogleSignInPort implements GoogleAuthPort {
 
   /// Without an account (the launch restore failed, e.g. offline, or has
   /// not finished) the quiet sign-in is tried again; its errors propagate.
+  /// A network failure is thrown as a [StorageErrorKind.retryable] error.
   @override
   Future<http.Client?> client() async {
+    try {
+      return await _client();
+    } on Object catch (e) {
+      if (isNetworkFailure(e)) {
+        throw const StorageError(StorageErrorKind.retryable, networkMessage);
+      }
+      rethrow;
+    }
+  }
+
+  Future<http.Client?> _client() async {
     var a = _account;
     if (a == null) {
+      final gen = _generation;
       final pending = _restoring;
       if (pending != null) {
         try {
@@ -116,6 +138,7 @@ class GoogleSignInPort implements GoogleAuthPort {
         }
       }
       a ??= await _lightweight();
+      if (gen != _generation) a = _account;
       _account = a;
     }
     if (a == null) return null;
@@ -129,6 +152,8 @@ class GoogleSignInPort implements GoogleAuthPort {
 
   @override
   Future<void> signOut() async {
+    _generation++;
+    _restoring = null;
     await _ready();
     await _gs.signOut();
     _account = null;
@@ -142,19 +167,27 @@ class GoogleAccount {
   final GoogleAuthPort _port;
   String? _email;
 
+  /// Bumped by every sign-in and sign-out; a restore that started before
+  /// one of them is ignored when it ends.
+  int _generation = 0;
+
   String? get currentEmail => _email;
 
   Future<void> restore() async {
+    final gen = _generation;
+    String? email;
     try {
-      _email = await _port.restore();
+      email = await _port.restore();
     } on Object {
       // Nothing to show or log: the user just signs in again.
-      _email = null;
+      email = null;
     }
+    if (gen == _generation) _email = email;
   }
 
   /// The email, or null when the user dismissed the sign-in.
   Future<String?> signIn() async {
+    _generation++;
     try {
       return _email = await _port.signIn();
     } on GoogleSignInException catch (e) {
@@ -164,6 +197,7 @@ class GoogleAccount {
   }
 
   Future<void> signOut() async {
+    _generation++;
     await _port.signOut();
     _email = null;
   }
@@ -192,10 +226,16 @@ class GoogleAccount {
 }
 
 /// True for failures that say nothing about the login itself. On iOS a
-/// network error from the Google SDK arrives as `unknownError` (its
-/// NSURLErrorDomain code maps to `GoogleSignInErrorCode.unknown`).
+/// network error from the Google SDK arrives as `unknownError`, or raw: GIDSignIn
+/// passes AppAuth's errors through, and google_sign_in_ios 6.3.7 turns any
+/// error outside `kGIDSignInErrorDomain` into a `PlatformException` whose code
+/// is `<domain>: <code>` (offline: `org.openid.appauth.general: -5`). AppAuth's
+/// `org.openid.appauth.oauth_token` (a rejected refresh token) is not one.
 bool isNetworkFailure(Object e) => switch (e) {
   GoogleSignInException(code: GoogleSignInExceptionCode.unknownError) => true,
+  PlatformException(:final code) =>
+    code.startsWith('org.openid.appauth.general') ||
+        code.startsWith('NSURLErrorDomain'),
   SocketException() || http.ClientException() || TimeoutException() => true,
   _ => false,
 };
