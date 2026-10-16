@@ -214,6 +214,8 @@ class AppController extends ChangeNotifier {
       await store.setSetting(_kLastSync, lastSyncAt!.toUtc().toIso8601String());
       await _loadSyncInfo();
       revision++;
+    } on SyncCancelled {
+      // Stopped for a storage switch; the new storage syncs next.
     } on StorageError catch (e) {
       syncError = e.message;
       authExpired = e.kind == StorageErrorKind.authExpired;
@@ -247,6 +249,8 @@ class AppController extends ChangeNotifier {
   Future<void> setBackend(Backend b) => _action(() async {
     // The email decides below whether to sync; a late restore may bring it.
     if (b == Backend.gdrive) await _restoring;
+    // A first sync can take minutes; stop it rather than wait behind it.
+    if (b != backend) engine.cancel();
     final changed = await _exclusive(() => settings.setBackend(b));
     backend = b;
     nasCheckText = null;

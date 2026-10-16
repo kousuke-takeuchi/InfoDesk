@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -188,6 +189,28 @@ void main() {
     expect(await store.digests('day', '2026-10-10'), isNotNull);
     expect(await store.meta(), isNotNull);
     expect(await store.dbId(), 'db1');
+  });
+
+  test('cancel stops a pass at its next download and the next pass resumes', () async {
+    publish();
+    final slow = _GatedDrive(mem);
+    final e = SyncEngine(store, slow);
+    final pass = e.runOnce(now: now);
+    await slow.firstDownload.future;
+    e.cancel();
+    slow.gate.complete();
+    await expectLater(pass, throwsA(isA<SyncCancelled>()));
+    expect(slow.downloads, lessThan(6));
+    final r = await e.runOnce(now: now);
+    expect(r.warnings, isEmpty);
+    expect((await store.items()).length, 3);
+  });
+
+  test('cancel with no pass running does not stop the next one', () async {
+    publish();
+    engine.cancel();
+    final r = await engine.runOnce(now: now);
+    expect(r.downloaded, 5);
   });
 
   test('a second pass with no changes downloads nothing', () async {
@@ -530,4 +553,26 @@ class _ThrowingDayStore implements LocalStore {
   }) => s.putSyncedFile(name, sha256, kind, imported: imported);
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+/// Holds every download after the first until [gate] completes.
+class _GatedDrive implements DriveStore {
+  _GatedDrive(this.inner);
+  final MemoryDrive inner;
+  final firstDownload = Completer<void>();
+  final gate = Completer<void>();
+  int downloads = 0;
+  @override
+  Future<List<RemoteFile>> list() => inner.list();
+  @override
+  Future<List<int>> download(RemoteFile f) async {
+    downloads++;
+    if (!firstDownload.isCompleted) firstDownload.complete();
+    await gate.future;
+    return inner.download(f);
+  }
+
+  @override
+  Future<RemoteFile> create(String name, List<int> bytes, String mime) =>
+      inner.create(name, bytes, mime);
 }

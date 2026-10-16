@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:infodesk_mobile/app/controller.dart';
 import 'package:infodesk_mobile/auth/google_account.dart';
@@ -194,10 +195,27 @@ class FakeEngine implements SyncEngine {
   bool failOnce = false;
   SyncReport report = SyncReport();
 
+  int cancels = 0;
+  Completer<void>? _cancelled;
+
+  @override
+  void cancel() {
+    cancels++;
+    _cancelled?.complete();
+    _cancelled = null;
+  }
+
   @override
   Future<SyncReport> runOnce({DateTime? now}) async {
     runs++;
-    await hold;
+    final c = _cancelled = Completer<void>();
+    final h = hold;
+    if (h != null) {
+      var stopped = false;
+      await Future.any([h, c.future.then((_) => stopped = true)]);
+      if (stopped) throw const SyncCancelled();
+    }
+    if (identical(_cancelled, c)) _cancelled = null;
     final e = failWith;
     if (failOnce) failWith = null;
     if (e != null) throw e;

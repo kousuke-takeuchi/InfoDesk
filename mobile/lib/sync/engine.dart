@@ -30,6 +30,12 @@ class SyncReport {
 /// One sync pass on the phone: reads what the Mac published, applies other
 /// devices' ops, and writes this device's own ops. Nothing is recorded as
 /// done until it has been applied, so a failed pass is simply run again.
+/// Thrown by a pass that [SyncEngine.cancel] stopped. Not an error: what the
+/// pass imported stays recorded and the next pass picks up the rest.
+class SyncCancelled implements Exception {
+  const SyncCancelled();
+}
+
 class SyncEngine {
   SyncEngine(LocalStore store, DriveStore drive)
     : this.lazy(store, () async => drive);
@@ -42,11 +48,23 @@ class SyncEngine {
   final Future<DriveStore> Function() _driveFor;
   late DriveStore _drive;
   Future<SyncReport>? _running;
+  bool _cancel = false;
+
+  /// Stops the running pass at its next step (a storage switch must not wait
+  /// for a long first sync). Does nothing when no pass runs.
+  void cancel() {
+    if (_running != null) _cancel = true;
+  }
+
+  void _check() {
+    if (_cancel) throw const SyncCancelled();
+  }
 
   /// A call while a pass is running returns that pass's future.
   Future<SyncReport> runOnce({DateTime? now}) {
     final cur = _running;
     if (cur != null) return cur;
+    _cancel = false;
     final f = _pass(now ?? DateTime.now()).whenComplete(() => _running = null);
     _running = f;
     return f;
@@ -55,6 +73,7 @@ class SyncEngine {
   Future<SyncReport> _pass(DateTime now) async {
     final report = SyncReport();
     _drive = await _driveFor();
+    _check();
     final byName = <String, RemoteFile>{};
     for (final f in await _drive.list()) {
       if (parseFileName(f.name) != null) byName[f.name] = f;
@@ -109,7 +128,9 @@ class SyncEngine {
       final kind = parseFileName(name)!.kind;
       final rec = await _store.syncedFile(name);
       if (rec != null && rec.imported && rec.sha256 == e.value.sha256) continue;
+      _check();
       final bytes = await _drive.download(byName[name]!);
+      _check();
       if (sha256.convert(bytes).toString() != e.value.sha256) {
         report.warnings.add('$name のハッシュが一致しないため取り込みませんでした');
         continue;
@@ -162,7 +183,9 @@ class SyncEngine {
     for (final f in others) {
       final rec = await _store.syncedFile(f.name);
       if (rec != null && rec.imported) continue;
+      _check();
       final bytes = await _drive.download(f);
+      _check();
       final sha = sha256.convert(bytes).toString();
       List<Op>? ops;
       try {
@@ -184,6 +207,7 @@ class SyncEngine {
     }
 
     // This device's own ops, last. Marked sent only after the create.
+    _check();
     final pending = await _store.pendingOps();
     if (pending.isNotEmpty) {
       final mine = [for (final p in pending) p.op];

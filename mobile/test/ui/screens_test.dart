@@ -503,7 +503,7 @@ void main() {
   });
 
   group('controller', () {
-    test('setBackend waits for a running pass', () async {
+    test('setBackend stops a running pass instead of waiting for it', () async {
       final h = Harness();
       final gate = Completer<void>();
       h.engine.hold = gate.future;
@@ -512,11 +512,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       final switched = h.controller.setBackend(Backend.nas);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(h.settings.calls, isEmpty);
-      gate.complete();
+      expect(h.engine.cancels, 1);
+      expect(h.settings.calls, ['setBackend:nas']);
       await sync;
       await switched;
-      expect(h.settings.calls, ['setBackend:nas']);
+      expect(h.controller.backend, Backend.nas);
+      expect(h.controller.syncError, isNull);
     });
 
     test('a sync during a pass joins it', () async {
