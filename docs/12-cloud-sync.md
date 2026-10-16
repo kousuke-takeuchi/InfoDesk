@@ -101,7 +101,7 @@ Retention:
 - The first sync, and the first sync after you turn "同期する" on again, always writes `state-snapshot.json.gz`. It carries the read and starred marks you set before, including marks set before sync existed or while sync was off. While sync is off, the Mac keeps each mark's time but does not record change batches to send.
 - The phone keeps its local copy until you delete it from its settings.
 
-If you reset the Mac database, its article ids change. On its next sync the Mac sees the old database id in `manifest.json`, deletes all change batches and the old `state-snapshot.json.gz` without applying them (their article ids point at other articles), and publishes the new database. Marks made on the phone that the Mac had not yet imported are lost. The new database id in `manifest.json` tells the phone to discard its copy and fetch again.
+If you reset the Mac database, its article ids change. On its next sync the Mac sees the old database id in `manifest.json`, deletes all change batches and the old `state-snapshot.json.gz` without applying them (their article ids point at other articles), and publishes the new database. Right after deleting them, before it rebuilds the files, the Mac writes a small `manifest.json` with the new database id, so the phone learns of the reset early. Every change batch carries the database id of the `manifest.json` its writer saw, and a batch written for another database is skipped by the Mac and the phone and never applied to the wrong articles. Marks the phone made against the old database therefore do not reach the new one; mark them again. The new database id in `manifest.json` tells the phone to discard its copy and fetch again.
 
 ## 6. Troubleshooting
 

@@ -56,6 +56,13 @@ If you choose NAS storage (see [NAS Setup](13-nas-setup.md)):
 - The NAS password is stored in the macOS Keychain (service `jp.infodesk.app.nas`), not in the database. The database keeps only whether a password is set.
 - Sync data goes to the NAS over HTTP with Basic authentication, inside the WireGuard tunnel.
 
+On the phone ([Mobile App](14-mobile-app.md)):
+
+- Google sign-in is held by Google's iOS sign-in library in the iOS Keychain. "ログアウト" on the phone signs out of the app (`signOut`); it does not revoke the access at Google. To revoke it, remove InfoDesk under "Third-party apps" in your Google account.
+- The NAS password is stored in the iOS Keychain, not in the app database.
+- The Tailscale state (the node key) stays on the phone, in the `tailnet` folder of the app support directory, and is excluded from device backups. If it cannot be excluded, Tailscale is not started.
+- Tailscale log upload is disabled: the in-app node starts with Tailscale's "no logs, no support" option.
+
 ## Page fetch guard (SSRF)
 
 Chat and the CLI can fetch URLs that come from article text, which the model may follow. A page that tells the agent to fetch an internal address must not work. `crates/core/src/page.rs` therefore applies these rules to `fetch_page`, `infodesk page` and the `og:image` fetch:

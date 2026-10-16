@@ -56,6 +56,13 @@ Claude は CLI 経由で使うので、InfoDesk は Claude の認証情報を保
 - NAS のパスワードは DB ではなく macOS のキーチェーン (サービス `jp.infodesk.app.nas`) に保存します。DB が持つのは、パスワードを設定したかどうかだけです。
 - 同期のデータは、WireGuard のトンネルの中で、Basic 認証の HTTP で NAS へ送られます。
 
+スマホでは ([モバイルアプリ](14-mobile-app.ja.md)を参照):
+
+- Google のログインは、Google の iOS 用ログインライブラリが iOS のキーチェーンに保持します。スマホの「ログアウト」はアプリからのログアウト (`signOut`) で、Google 側のアクセスは取り消しません。取り消すには、Google アカウントの「サードパーティのアプリ」から InfoDesk を削除します。
+- NAS のパスワードは、アプリの DB ではなく iOS のキーチェーンに保存します。
+- Tailscale の状態 (端末の鍵) はスマホの中、アプリのサポートフォルダの `tailnet` に置き、端末のバックアップから除外します。除外できなかったときは Tailscale を起動しません。
+- Tailscale のログのアップロードはオフです。アプリ内の端末は Tailscale の「ログも支援もなし」の設定で起動します。
+
 ## ページ取得の保護 (SSRF)
 
 チャットと CLI は、記事の文章に書かれた URL を取得できます。モデルがその URL をたどることがあります。内部のアドレスを取得させる文面が通ってはいけません。そのため `crates/core/src/page.rs` は、`fetch_page`、`infodesk page`、`og:image` の取得に次の規則を適用します。

@@ -1,6 +1,6 @@
 # InfoDesk mobile
 
-Flutter app (iOS and Android) that reads the InfoDesk sync folder written by the
+Flutter app (iOS; Android is not supported yet, see below) that reads the InfoDesk sync folder written by the
 Mac app. Bundle id / applicationId: `jp.infodesk.mobile`. iOS deployment
 target: 15.0 (the lowest that Xcode 27 accepts for the simulator; the plugins
 ask for 13.0 at most).
@@ -21,8 +21,18 @@ arch -arm64 /bin/bash -c 'export PATH=/opt/homebrew/bin:$HOME/develop/flutter/bi
 
 ## Google OAuth client (iOS)
 
-The iOS client id is not committed. Generate `ios/Flutter/Secrets.xcconfig`
-(git-ignored) from the plist downloaded from Google Cloud Console:
+The iOS client id is not committed. Create it in Google Cloud Console:
+
+1. Open the same Cloud project as the Mac app's desktop OAuth client. Both
+   clients must be in one project, or the phone sees a different
+   `drive.appdata` folder from the Mac.
+2. APIs & Services, Credentials, Create credentials, OAuth client ID.
+   Application type "iOS", bundle id `jp.infodesk.mobile`.
+3. Download the client's plist.
+
+The app asks for the scopes `drive.appdata`, `openid` and `email`.
+
+Generate `ios/Flutter/Secrets.xcconfig` (git-ignored) from that plist:
 
 ```sh
 tool/ios_oauth_from_plist.sh ~/Downloads/client_<id>.apps.googleusercontent.com.plist
@@ -36,6 +46,12 @@ needs it.
 
 The Google sign-in itself cannot be tested without a real client id; the
 automated tests use fakes for Google, Tailscale and the NAS.
+
+## Android
+
+Not supported yet. There are no backup rules that keep the Tailscale state out
+of Android backups, and `minSdk` is not set for the plugins. Only iOS is built
+and tested.
 
 ## Test and analyze
 

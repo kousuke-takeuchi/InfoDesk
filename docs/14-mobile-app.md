@@ -49,7 +49,7 @@ On first launch the app asks where the Mac syncs to. This must be the same stora
 
 ![First launch on the iOS simulator](images/mobile-first-launch.png)
 
-- **Google ドライブ.** Press "Google でログイン" and sign in with the same Google account as on the Mac. The app uses only the hidden app-only area of Drive (scope `drive.appdata`). You enter no password in InfoDesk.
+- **Google ドライブ.** Press "Google でログイン" and sign in with the same Google account as on the Mac. The app reaches only the hidden app-only area of Drive (scope `drive.appdata`), and also asks for `openid` and `email` to show your address. You enter no password in InfoDesk.
 - **NAS (WebDAV).** The phone reaches the NAS through a Tailscale node inside the app. No Tailscale app and no system VPN is needed. Choose "NAS (WebDAV)", then:
   1. Press "Tailscale にログイン". The browser opens a Tailscale page; sign in with the same account as the NAS and allow the device. The device appears as `infodesk-mobile` in the Tailscale admin console. If your tailnet uses device approval, approve it there.
   2. Enter the NAS URL (`http://<NAS name>:5005/infodesk/`), the user name and the password.
@@ -82,7 +82,7 @@ The app only reads the files the Mac wrote (`manifest.json`, `meta.json.gz`, `da
 
 - Tailscale log upload is switched off: the in-app node is started with Tailscale's "no logs, no support" option, so it does not send logs to Tailscale.
 - The NAS password is kept in the iOS Keychain (the secure storage on Android), not in the app database. The URL and user name are in the app database.
-- Google sign-in goes through Google's own sign-in screen, so you type no Google password into InfoDesk, and the app asks only for the `drive.appdata` scope.
+- Google sign-in goes through Google's own sign-in screen, so you type no Google password into InfoDesk, and the app asks only for the scopes `drive.appdata` (its hidden Drive area), `openid` and `email` (to show your address).
 - The Tailscale state (the device key) is saved in the `tailnet` folder under the app support directory and is excluded from device backups. If the exclusion cannot be set, the app does not start Tailscale and shows 「Tailscale の状態をバックアップから除外できません」.
 - Sync data goes only to Google Drive, or to your NAS inside your tailnet. See [Privacy and Security](09-privacy-and-security.md).
 
@@ -117,6 +117,8 @@ The app shows these messages next to the sync controls, under the storage settin
 | 「記事を開けませんでした」 | The article page could not be opened in the browser. |
 | 「処理に失敗しました。もう一度お試しください」 | An unexpected failure. Try again. |
 
+If the Mac wrote the sync folder in a newer format, the sync stops before reading or writing anything and shows 「同期データの形式が新しくなっています。アプリを更新してください」 (update the app).
+
 The sync can also show these warnings. They do not stop the sync: 「manifest.json を読めませんでした」, 「<file> のハッシュが一致しないため取り込みませんでした」, 「<file> を読めませんでした」.
 
 ## 9. Developer build
@@ -127,7 +129,8 @@ The full commands and the reasons are in [`mobile/README.md`](../mobile/README.m
 - Run Flutter and Xcode as arm64. If the shell runs under Rosetta, wrap the commands with `arch -arm64`.
 - Go 1.26 or newer must be on `PATH`: the `tailscale` package builds its native library with Go on the first build.
 - `ios/Flutter/Debug.xcconfig` and `Release.xcconfig` pin `ARCHS[sdk=iphonesimulator*] = arm64`, because the `lipo` in Xcode 27 rejects the `-verify_arch arm64 x86_64` check that flutter_tools runs. The cost is no x86_64 simulator.
-- The iOS Google client id is not committed. Generate the git-ignored `ios/Flutter/Secrets.xcconfig` from the plist downloaded from Google Cloud Console: `mobile/tool/ios_oauth_from_plist.sh <plist>`.
+- The iOS Google client id is not committed. In Google Cloud Console, in the same Cloud project as the Mac's desktop OAuth client (so both see the same `drive.appdata` folder), create an OAuth client of type "iOS" with bundle id `jp.infodesk.mobile`. Download its plist, then generate the git-ignored `ios/Flutter/Secrets.xcconfig` with `mobile/tool/ios_oauth_from_plist.sh <plist>`.
+- Android is not supported yet: there are no backup rules for the Tailscale state and the minimum SDK is not set for it. Only the iOS app is built and tested.
 - Simulator: `flutter build ios --simulator --debug`, then install and launch `jp.infodesk.mobile` with `xcrun simctl`.
 - A real device needs a signing team.
 

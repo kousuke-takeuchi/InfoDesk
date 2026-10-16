@@ -49,7 +49,7 @@ InfoDesk のモバイルアプリ (Flutter、`mobile/`) は、Mac のアプリ�
 
 ![iOS シミュレーターでの初回の起動](images/mobile-first-launch.png)
 
-- **Google ドライブ。** 「Google でログイン」を押し、Mac と同じ Google アカウントでログインします。使うのは Drive のアプリ専用の隠れた領域だけです (スコープ `drive.appdata`)。InfoDesk にパスワードは入力しません。
+- **Google ドライブ。** 「Google でログイン」を押し、Mac と同じ Google アカウントでログインします。Drive で触れるのはアプリ専用の隠れた領域だけです (スコープ `drive.appdata`)。アドレスを表示するために `openid` と `email` も求めます。InfoDesk にパスワードは入力しません。
 - **NAS (WebDAV)。** スマホは、アプリの中の Tailscale の端末を通して NAS につながります。Tailscale のアプリもシステムの VPN も要りません。「NAS (WebDAV)」を選び、次の順に進めます。
   1. 「Tailscale にログイン」を押します。ブラウザで Tailscale のページが開くので、NAS と同じアカウントでログインして端末を許可します。端末は Tailscale の管理画面に `infodesk-mobile` として現れます。tailnet で端末の承認がオンなら、管理画面で承認します。
   2. NAS の URL (`http://<NAS の名前>:5005/infodesk/`)、ユーザー名、パスワードを入れます。
@@ -82,7 +82,7 @@ InfoDesk のモバイルアプリ (Flutter、`mobile/`) は、Mac のアプリ�
 
 - Tailscale のログのアップロードはオフです。アプリ内の端末は Tailscale の「ログも支援もなし」の設定で起動するので、Tailscale へログを送りません。
 - NAS のパスワードは、アプリの DB ではなく、iOS のキーチェーン (Android ではセキュアストレージ) に保存します。URL とユーザー名はアプリの DB にあります。
-- Google のログインは Google 自身の画面で行うので、Google のパスワードを InfoDesk には入力しません。求める権限は `drive.appdata` だけです。
+- Google のログインは Google 自身の画面で行うので、Google のパスワードを InfoDesk には入力しません。求める権限は `drive.appdata` (Drive の隠れた領域)、`openid` と `email` (アドレスの表示) です。
 - Tailscale の状態 (端末の鍵) は、アプリのサポートフォルダの `tailnet` に保存し、端末のバックアップから除外します。除外できなかったときは Tailscale を起動せず、「Tailscale の状態をバックアップから除外できません」と出します。
 - 同期のデータは、Google ドライブか、tailnet の中の NAS にだけ送ります。[プライバシーとセキュリティ](09-privacy-and-security.ja.md)を参照してください。
 
@@ -117,6 +117,8 @@ InfoDesk のモバイルアプリ (Flutter、`mobile/`) は、Mac のアプリ�
 | 「記事を開けませんでした」 | 記事のページをブラウザで開けませんでした。 |
 | 「処理に失敗しました。もう一度お試しください」 | 想定外の失敗です。もう一度試します。 |
 
+Mac が新しい形式で同期のフォルダを書いたときは、何も読み書きせずに同期をやめ、「同期データの形式が新しくなっています。アプリを更新してください」と出します。
+
 同期は次の警告も出します。同期は止まりません。「manifest.json を読めませんでした」、「<ファイル> のハッシュが一致しないため取り込みませんでした」、「<ファイル> を読めませんでした」。
 
 ## 9. 開発者向けのビルド
@@ -127,7 +129,8 @@ InfoDesk のモバイルアプリ (Flutter、`mobile/`) は、Mac のアプリ�
 - Flutter と Xcode は arm64 で動かします。シェルが Rosetta で動くときは、コマンドを `arch -arm64` で包みます。
 - Go 1.26 以降を `PATH` に置きます。`tailscale` パッケージが、最初のビルドで Go を使ってネイティブのライブラリを作るためです。
 - `ios/Flutter/Debug.xcconfig` と `Release.xcconfig` で `ARCHS[sdk=iphonesimulator*] = arm64` に固定しています。Xcode 27 の `lipo` が、flutter_tools の `-verify_arch arm64 x86_64` の検査を拒むためです。代わりに x86_64 のシミュレーターは使えません。
-- iOS の Google のクライアント ID はコミットしません。Google Cloud Console からダウンロードした plist から、git 管理外の `ios/Flutter/Secrets.xcconfig` を作ります。`mobile/tool/ios_oauth_from_plist.sh <plist>`。
+- iOS の Google のクライアント ID はコミットしません。Google Cloud Console で、Mac のデスクトップ用 OAuth クライアントと同じ Cloud プロジェクトに (同じ `drive.appdata` の領域を見るため)、種類「iOS」、バンドル ID `jp.infodesk.mobile` の OAuth クライアントを作ります。その plist をダウンロードし、`mobile/tool/ios_oauth_from_plist.sh <plist>` で git 管理外の `ios/Flutter/Secrets.xcconfig` を作ります。
+- Android にはまだ対応していません。Tailscale の状態のバックアップ規則がなく、最小 SDK もそれに合わせていません。ビルドとテストは iOS だけです。
 - シミュレーター: `flutter build ios --simulator --debug` のあと、`xcrun simctl` で `jp.infodesk.mobile` を入れて起動します。
 - 実機には署名のチームが必要です。
 
