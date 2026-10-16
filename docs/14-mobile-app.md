@@ -132,7 +132,7 @@ The full commands and the reasons are in [`mobile/README.md`](../mobile/README.m
 - The iOS Google client id is not committed. In Google Cloud Console, in the same Cloud project as the Mac's desktop OAuth client (so both see the same `drive.appdata` folder), create an OAuth client of type "iOS" with bundle id `jp.infodesk.mobile`. Download its plist, then generate the git-ignored `ios/Flutter/Secrets.xcconfig` with `mobile/tool/ios_oauth_from_plist.sh <plist>`.
 - Android is not supported yet: there are no backup rules for the Tailscale state and the minimum SDK is not set for it. Only the iOS app is built and tested.
 - Simulator: `flutter build ios --simulator --debug`, then install and launch `jp.infodesk.mobile` with `xcrun simctl`.
-- A real device needs a signing team.
+- A real device needs a signing team. Put `DEVELOPMENT_TEAM = <team id>` in the git-ignored `ios/Flutter/Signing.xcconfig`, build with `flutter build ios --release`, and install with `xcrun devicectl device install app`. See `mobile/README.md`.
 
 ## 10. Manual check before you rely on it
 

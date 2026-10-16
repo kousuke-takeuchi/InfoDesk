@@ -132,7 +132,7 @@ Mac が新しい形式で同期のフォルダを書いたときは、何も読�
 - iOS の Google のクライアント ID はコミットしません。Google Cloud Console で、Mac のデスクトップ用 OAuth クライアントと同じ Cloud プロジェクトに (同じ `drive.appdata` の領域を見るため)、種類「iOS」、バンドル ID `jp.infodesk.mobile` の OAuth クライアントを作ります。その plist をダウンロードし、`mobile/tool/ios_oauth_from_plist.sh <plist>` で git 管理外の `ios/Flutter/Secrets.xcconfig` を作ります。
 - Android にはまだ対応していません。Tailscale の状態のバックアップ規則がなく、最小 SDK もそれに合わせていません。ビルドとテストは iOS だけです。
 - シミュレーター: `flutter build ios --simulator --debug` のあと、`xcrun simctl` で `jp.infodesk.mobile` を入れて起動します。
-- 実機には署名のチームが必要です。
+- 実機には署名のチームが必要です。git 管理外の `ios/Flutter/Signing.xcconfig` に `DEVELOPMENT_TEAM = <チーム ID>` を書き、`flutter build ios --release` でビルドし、`xcrun devicectl device install app` で入れます。手順は `mobile/README.md` にあります。
 
 ## 10. 使う前の手動の確認
 

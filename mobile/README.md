@@ -75,7 +75,23 @@ tailscale); later builds are faster.
 
 ### Real device
 
-A real device needs a signing team.
+A real device needs a signing team. The team id is not committed: put it in
+the git-ignored `ios/Flutter/Signing.xcconfig`, which the Debug and Release
+xcconfig files include when it exists:
+
+```
+DEVELOPMENT_TEAM = <your team id>
+```
+
+Then build a release app, install it and launch it (the iPhone needs Developer
+Mode on and must trust this Mac):
+
+```sh
+arch -arm64 flutter build ios --release
+xcrun devicectl list devices
+xcrun devicectl device install app --device <udid> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <udid> jp.infodesk.mobile
+```
 
 For how to use the app, see [docs/14-mobile-app.md](../docs/14-mobile-app.md).
 
