@@ -171,9 +171,9 @@ class SyncNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
-    final needsLogin =
-        c.backend == Backend.gdrive &&
-        (c.authExpired || (c.googleEmail == null && c.syncError != null));
+    // Only a pass that found no usable login asks for one: a network error
+    // with no email yet (an offline launch) is retried, not a lost login.
+    final needsLogin = c.backend == Backend.gdrive && c.authExpired;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

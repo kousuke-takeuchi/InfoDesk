@@ -187,9 +187,42 @@ class TailnetService {
 
   /// On app launch: only for the NAS backend, and only when an earlier run
   /// left a Tailscale identity. Never opens the login URL.
-  Future<void> startOnLaunch({required bool nas}) async {
-    if (!nas || !await _node.hasSavedState()) return;
+  Future<void> startOnLaunch({required bool nas}) {
+    if (!nas) return Future.value();
+    return _launching ??= _launch().whenComplete(() => _launching = null);
+  }
+
+  Future<void>? _launching;
+
+  Future<void> _launch() async {
+    if (!await _node.hasSavedState()) return;
     await start();
+  }
+
+  /// True while a start (or the launch check before one) is under way.
+  bool get startInFlight => _launching != null || _starting != null;
+
+  /// Waits, at most [limit], while a start is in flight or the state is
+  /// [TailnetStarting]. Returns at once otherwise. Never throws.
+  Future<void> settle(Duration limit) async {
+    bool busy() => startInFlight || state.value is TailnetStarting;
+    if (!busy()) return;
+    final done = Completer<void>();
+    void check() {
+      if (!busy() && !done.isCompleted) done.complete();
+    }
+
+    state.addListener(check);
+    for (final f in [_launching, _starting]) {
+      f?.then((_) => check(), onError: (_) => check());
+    }
+    try {
+      await done.future.timeout(limit);
+    } on TimeoutException {
+      // The caller decides from the state as it is.
+    } finally {
+      state.removeListener(check);
+    }
   }
 
   /// Non-interactive. If a login is needed the state becomes NeedsLogin; the

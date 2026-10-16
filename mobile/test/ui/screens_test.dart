@@ -40,11 +40,11 @@ Future<void> tab(WidgetTester tester, String key) async {
 
 DigestFile digestFile({String body = ''}) => DigestFile(
   period: 'day',
-  periodStart: dateString(DateTime.now()),
+  periodStart: dateString(fakeNow),
   stats: jsonDecode(
     jsonEncode({
       'period': 'day',
-      'period_start': dateString(DateTime.now()),
+      'period_start': dateString(fakeNow),
       'total': 156,
       'categories': [
         {'category': 'arxiv', 'count': 42, 'daily': <int>[]},
@@ -96,7 +96,7 @@ void main() {
             topics: [TopicMeta(id: 1, name: '認知症')],
             sources: [],
           );
-          final start = dateString(DateTime.now());
+          final start = dateString(fakeNow);
           h.store.digestFiles['day|$start'] = digestFile(
             body: '見出し: 認知症の新薬が国内で適用拡大へ\n- 要点その一\n- 要点その二',
           );
@@ -692,6 +692,21 @@ void main() {
       expect(h.google.signIns, 1);
     });
 
+    testWidgets('an offline launch shows the network error, not a login', (
+      tester,
+    ) async {
+      final h = await pumpApp(tester, items: sample());
+      h.google.email = null;
+      h.engine.failWith = const StorageError(
+        StorageErrorKind.retryable,
+        networkMessage,
+      );
+      await h.controller.sync();
+      await tab(tester, 'feed');
+      expect(find.text(networkMessage), findsOneWidget);
+      expect(find.text('Google でログイン'), findsNothing);
+    });
+
     testWidgets('a broken card image sends the item back to the links', (
       tester,
     ) async {
@@ -703,7 +718,7 @@ void main() {
           ),
         ],
         setup: (h) {
-          h.store.digestFiles['day|${dateString(DateTime.now())}'] = digestFile(
+          h.store.digestFiles['day|${dateString(fakeNow)}'] = digestFile(
             body: '- 要点',
           );
         },

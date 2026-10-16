@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -38,6 +41,70 @@ class FakePort implements GoogleAuthPort {
 
   @override
   Future<void> signOut() async => signOuts++;
+
+  @override
+  String? get currentEmail => email;
+}
+
+/// Stands in for `GoogleSignIn.instance`. [lightweight] answers each
+/// attemptLightweightAuthentication in turn: an account, null, or an error.
+class FakeGs implements GoogleSignIn {
+  final lightweight = <Object?>[];
+  int attempts = 0;
+
+  @override
+  Future<void> initialize({
+    String? clientId,
+    String? serverClientId,
+    String? nonce,
+    String? hostedDomain,
+  }) async {}
+
+  @override
+  Future<GoogleSignInAccount?>? attemptLightweightAuthentication({
+    bool reportAllExceptions = false,
+  }) async {
+    attempts++;
+    final r = lightweight.isEmpty ? null : lightweight.removeAt(0);
+    if (r is GoogleSignInAccount?) return r;
+    throw r;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw UnimplementedError('${i.memberName}');
+}
+
+class FakeAuthz implements GoogleSignInAuthorizationClient {
+  Object? error;
+  bool granted = true;
+
+  @override
+  Future<GoogleSignInClientAuthorization?> authorizationForScopes(
+    List<String> scopes,
+  ) async {
+    final e = error;
+    if (e != null) throw e;
+    return granted
+        ? const GoogleSignInClientAuthorization(accessToken: 'tok')
+        : null;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw UnimplementedError('${i.memberName}');
+}
+
+class FakeAccount implements GoogleSignInAccount {
+  FakeAccount(this.email);
+  @override
+  final String email;
+  @override
+  final FakeAuthz authorizationClient = FakeAuthz();
+
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw UnimplementedError('${i.memberName}');
 }
 
 void main() {
@@ -152,6 +219,88 @@ void main() {
           (x) => x.kind,
           'kind',
           StorageErrorKind.other,
+        ),
+      ),
+    );
+  });
+
+  group('GoogleSignInPort', () {
+    const offline = GoogleSignInException(
+      code: GoogleSignInExceptionCode.unknownError,
+      description: 'The Internet connection appears to be offline.',
+    );
+
+    test('client() signs in quietly again after an offline restore', () async {
+      final gs = FakeGs()..lightweight.addAll([offline, FakeAccount('a@b.c')]);
+      final p = GoogleSignInPort(gs);
+      await expectLater(p.restore(), throwsA(offline));
+      expect(await p.client(), isNotNull);
+      expect(gs.attempts, 2);
+      expect(p.currentEmail, 'a@b.c');
+    });
+
+    test('client() is null when no session is kept', () async {
+      final gs = FakeGs()..lightweight.addAll([null, null]);
+      final p = GoogleSignInPort(gs);
+      expect(await p.restore(), isNull);
+      expect(await p.client(), isNull);
+    });
+
+    test('an offline launch keeps the account after a later pass', () async {
+      final gs = FakeGs()..lightweight.addAll([offline, FakeAccount('a@b.c')]);
+      final a = GoogleAccount(GoogleSignInPort(gs));
+      await a.restore();
+      expect(a.currentEmail, isNull);
+      expect(await a.driveStore(), isA<GoogleDriveStore>());
+      expect(a.currentEmail, 'a@b.c');
+    });
+
+    test('offline during client() is a retry, not a re-login', () async {
+      final gs = FakeGs()..lightweight.addAll([offline, offline]);
+      final a = GoogleAccount(GoogleSignInPort(gs));
+      await a.restore();
+      await expectLater(
+        a.driveStore(),
+        throwsA(
+          isA<StorageError>()
+              .having((x) => x.kind, 'kind', StorageErrorKind.retryable)
+              .having((x) => x.message, 'message', networkMessage),
+        ),
+      );
+    });
+  });
+
+  test('network failures in client() are retryable', () async {
+    for (final e in <Object>[
+      const GoogleSignInException(code: GoogleSignInExceptionCode.unknownError),
+      const SocketException('offline'),
+      http.ClientException('offline'),
+      TimeoutException('slow'),
+    ]) {
+      port.clientError = e;
+      await expectLater(
+        account.driveStore(),
+        throwsA(
+          isA<StorageError>()
+              .having((x) => x.kind, 'kind', StorageErrorKind.retryable)
+              .having((x) => x.message, 'message', networkMessage),
+        ),
+        reason: '$e',
+      );
+    }
+  });
+
+  test('a user mismatch still asks for a new sign-in', () async {
+    port.clientError = const GoogleSignInException(
+      code: GoogleSignInExceptionCode.userMismatch,
+    );
+    await expectLater(
+      account.driveStore(),
+      throwsA(
+        isA<StorageError>().having(
+          (x) => x.kind,
+          'kind',
+          StorageErrorKind.authExpired,
         ),
       ),
     );

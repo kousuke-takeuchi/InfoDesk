@@ -8,6 +8,10 @@ import 'package:infodesk_mobile/storage/storage_factory.dart';
 import 'package:infodesk_mobile/sync/engine.dart';
 import 'package:infodesk_mobile/sync/format.dart';
 
+/// The fixed "now" of every UI test: the harness clock and the dates of
+/// fake items and digests. Never the wall clock, so tests pass on any day.
+final fakeNow = DateTime(2026, 10, 15, 9, 41);
+
 ItemRecord rec(
   int id, {
   String title = 'title',
@@ -29,7 +33,7 @@ ItemRecord rec(
   category: category,
   score: null,
   publishedAt: null,
-  fetchedAt: DateTime.now().toUtc().toIso8601String(),
+  fetchedAt: fakeNow.toUtc().toIso8601String(),
   topicIds: topics,
 );
 
@@ -45,7 +49,7 @@ class FakeStore implements LocalStore {
   int clearCalls = 0;
 
   static String _day() {
-    final n = DateTime.now();
+    final n = fakeNow;
     return '${n.year.toString().padLeft(4, '0')}-'
         '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
@@ -261,8 +265,15 @@ class FakeGoogle implements GoogleAccount {
   @override
   String? get currentEmail => email;
 
+  /// When set, restore does not finish until this completes.
+  Future<void>? restoreHold;
+  int restores = 0;
+
   @override
-  Future<void> restore() async {}
+  Future<void> restore() async {
+    restores++;
+    await restoreHold;
+  }
 
   @override
   Future<String?> signIn() async {
@@ -363,6 +374,6 @@ class Harness {
   final tailnet = FakeTailnet();
   final opened = <Uri>[];
   final external = <Uri>[];
-  DateTime clockNow = DateTime(2026, 10, 15, 9, 41);
+  DateTime clockNow = fakeNow;
   late final AppController controller;
 }

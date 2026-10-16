@@ -77,7 +77,15 @@ class AppController extends ChangeNotifier {
   /// Loads the saved state. Does not sync.
   Future<void> init() async {
     try {
-      await google.restore();
+      // The quiet Google sign-in may take long or fail offline; the first
+      // screen never waits for it. A pass that needs it tries again itself.
+      unawaited(
+        google.restore().then((_) => notifyListeners(), onError: (_) {}),
+      );
+      if (!_listening) {
+        _listening = true;
+        tailnet.state.addListener(_onTailnet);
+      }
       backend = await settings.backend();
       onboarded = await store.getSetting(_kOnboarded) == 'true';
       await _loadSyncInfo();
@@ -152,7 +160,26 @@ class AppController extends ChangeNotifier {
     return _syncing = f;
   }
 
+  /// The last pass failed because Tailscale was not Running.
+  bool _blockedByTailnet = false;
+  bool _listening = false;
+
+  @override
+  void dispose() {
+    if (_listening) tailnet.state.removeListener(_onTailnet);
+    super.dispose();
+  }
+
+  /// Once Tailscale is Running, a pass that failed for want of it runs again.
+  void _onTailnet() {
+    if (tailnet.state.value is! TailnetRunning) return;
+    if (!_blockedByTailnet || !onboarded || backend != Backend.nas) return;
+    _blockedByTailnet = false;
+    unawaited(sync());
+  }
+
   Future<void> _pass() async {
+    _blockedByTailnet = false;
     syncing = true;
     notifyListeners();
     try {
@@ -167,6 +194,8 @@ class AppController extends ChangeNotifier {
     } on StorageError catch (e) {
       syncError = e.message;
       authExpired = e.kind == StorageErrorKind.authExpired;
+      _blockedByTailnet =
+          backend == Backend.nas && tailnet.state.value is! TailnetRunning;
     } catch (e) {
       syncError = describeError(e);
     } finally {

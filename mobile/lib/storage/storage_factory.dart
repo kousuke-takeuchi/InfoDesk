@@ -16,7 +16,11 @@ class StorageFactory {
     required this.google,
     required this.tailnet,
     TailnetPort Function()? nasPort,
+    this.tailnetWait = const Duration(seconds: 30),
   }) : _nasPort = nasPort ?? tailnet.port;
+
+  /// How long a pass waits for a Tailscale start already under way.
+  final Duration tailnetWait;
 
   final AppSettings settings;
   final GoogleAccount google;
@@ -28,8 +32,11 @@ class StorageFactory {
     Backend.nas => await buildNas(),
   };
 
-  /// Needs Tailscale Running and a complete URL, user and password.
+  /// Needs Tailscale Running and a complete URL, user and password. A start
+  /// already under way is waited for, up to [tailnetWait].
   Future<NasStore> buildNas() async {
+    // At launch the pass often starts while Tailscale is still coming up.
+    await tailnet.settle(tailnetWait);
     switch (tailnet.state.value) {
       case TailnetRunning():
         break;

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -42,6 +45,9 @@ abstract class GoogleAuthPort {
   Future<http.Client?> client();
 
   Future<void> signOut();
+
+  /// The email of the session [client] uses, when known.
+  String? get currentEmail;
 }
 
 /// The real thing, over google_sign_in 7 (`GoogleSignIn.instance`). On iOS the
@@ -58,11 +64,25 @@ class GoogleSignInPort implements GoogleAuthPort {
   Future<void> _ready() => _init.ready();
 
   @override
-  Future<String?> restore() async {
+  String? get currentEmail => _account?.email;
+
+  Future<GoogleSignInAccount?>? _restoring;
+
+  Future<GoogleSignInAccount?> _lightweight() async {
     await _ready();
-    final a = await _gs.attemptLightweightAuthentication();
-    _account = a;
-    return a?.email;
+    return _gs.attemptLightweightAuthentication();
+  }
+
+  @override
+  Future<String?> restore() async {
+    final f = _restoring ??= _lightweight();
+    try {
+      final a = await f;
+      _account = a;
+      return a?.email;
+    } finally {
+      if (identical(_restoring, f)) _restoring = null;
+    }
   }
 
   @override
@@ -81,9 +101,23 @@ class GoogleSignInPort implements GoogleAuthPort {
     return a.email;
   }
 
+  /// Without an account (the launch restore failed, e.g. offline, or has
+  /// not finished) the quiet sign-in is tried again; its errors propagate.
   @override
   Future<http.Client?> client() async {
-    final a = _account;
+    var a = _account;
+    if (a == null) {
+      final pending = _restoring;
+      if (pending != null) {
+        try {
+          a = await pending;
+        } on Object {
+          // Tried again below.
+        }
+      }
+      a ??= await _lightweight();
+      _account = a;
+    }
     if (a == null) return null;
     final authz = await a.authorizationClient.authorizationForScopes(
       googleScopes,
@@ -135,16 +169,33 @@ class GoogleAccount {
   }
 
   /// Throws an [StorageErrorKind.authExpired] error when the user has to sign
-  /// in again.
+  /// in again (no usable authorization, another user, no saved session), and
+  /// a [StorageErrorKind.retryable] one when the network failed: an offline
+  /// launch must not look like a lost login.
   Future<GoogleDriveStore> driveStore() async {
     try {
       final c = await _port.client();
-      if (c != null) return GoogleDriveStore.withClient(c);
+      if (c != null) {
+        _email = _port.currentEmail ?? _email;
+        return GoogleDriveStore.withClient(c);
+      }
     } on StorageError {
       rethrow;
-    } on Object {
-      // A GoogleSignInException or anything else raw: sign in again.
+    } on Object catch (e) {
+      if (isNetworkFailure(e)) {
+        throw const StorageError(StorageErrorKind.retryable, networkMessage);
+      }
+      // Any other GoogleSignInException or raw error: sign in again.
     }
     throw const StorageError(StorageErrorKind.authExpired, reauthMessage);
   }
 }
+
+/// True for failures that say nothing about the login itself. On iOS a
+/// network error from the Google SDK arrives as `unknownError` (its
+/// NSURLErrorDomain code maps to `GoogleSignInErrorCode.unknown`).
+bool isNetworkFailure(Object e) => switch (e) {
+  GoogleSignInException(code: GoogleSignInExceptionCode.unknownError) => true,
+  SocketException() || http.ClientException() || TimeoutException() => true,
+  _ => false,
+};
