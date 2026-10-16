@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,7 @@ class Mac {
   final MemoryDrive drive;
   final files = <String, List<int>>{};
   String dbId = 'db1';
+  int schema = 1;
 
   void put(String name, List<int> bytes) {
     files[name] = bytes;
@@ -82,10 +84,16 @@ class Mac {
     gzipJson(StateSnapshot(covers: [], state: state).toJson()),
   );
 
-  void ops(String device, String stamp, List<Op> ops) => put(
-    'ops-$device-${stamp}Z-0001.json',
-    utf8.encode(jsonEncode(OpsFile(device: device, ops: ops).toJson())),
-  );
+  String ops(String device, String stamp, List<Op> ops, {String? dbId}) {
+    final name = 'ops-$device-${stamp}Z-0001.json';
+    put(
+      name,
+      utf8.encode(
+        jsonEncode(OpsFile(device: device, dbId: dbId, ops: ops).toJson()),
+      ),
+    );
+    return name;
+  }
 
   /// Writes the manifest last, over every data file.
   void manifest({Map<String, String>? overrideSha}) {
@@ -100,7 +108,7 @@ class Mac {
       );
     }
     final m = Manifest(
-      schema: 1,
+      schema: schema,
       dbId: dbId,
       writtenAt: '2026-10-10T00:00:00Z',
       writer: 'mac',
@@ -312,6 +320,85 @@ void main() {
     final r2 = await engine.runOnce(now: now);
     expect(r2.warnings, isEmpty);
     expect(drive.downloads, ['manifest.json']);
+  });
+
+  test('phone ops files carry the manifest db_id', () async {
+    publish();
+    await engine.runOnce(now: now);
+    await store.setStarred(2, true, await store.deviceId(), now: now);
+    await engine.runOnce(now: now);
+    final body = jsonDecode(
+      utf8.decode(
+        await mem.download(
+          (await mem.list()).firstWhere((f) => f.name == opsFiles().single),
+        ),
+      ),
+    );
+    expect(body['db_id'], 'db1');
+  });
+
+  test('ops files of another database are skipped but recorded', () async {
+    publish();
+    final stale = mac.ops('other', '20261010T020000000', [
+      op(2, Field.starred, true, '2026-10-10T02:00:00.000Z', 'other'),
+    ], dbId: 'db0');
+    mac.ops('tablet', '20261010T020001000', [
+      op(3, Field.starred, true, '2026-10-10T02:00:01.000Z', 'tablet'),
+    ], dbId: 'db1');
+    final r = await engine.runOnce(now: now);
+    expect(r.appliedOps, 1);
+    expect((await row(2)).isStarred, isFalse);
+    expect((await row(3)).isStarred, isTrue);
+    expect((await store.syncedFile(stale))?.imported, isTrue);
+    drive.downloads.clear();
+    await engine.runOnce(now: now);
+    expect(drive.downloads, ['manifest.json']);
+  });
+
+  test(
+    'marks kept across a storage switch stay visible after a pass',
+    () async {
+      publish();
+      await engine.runOnce(now: now);
+      await store.setStarred(2, true, await store.deviceId(), now: now);
+      await store.clearForNewStorage();
+      final r = await engine.runOnce(now: now);
+      expect(r.uploadedOps, 1);
+      expect((await row(2)).isStarred, isTrue);
+      expect(await store.pendingOps(), isEmpty);
+    },
+  );
+
+  test('a manifest of a newer schema stops the pass with a warning', () async {
+    publish();
+    mac.schema = 2;
+    mac.manifest();
+    await store.setStarred(2, true, 'dev', now: now);
+    final r = await engine.runOnce(now: now);
+    expect(r.warnings.single, contains('アプリを更新してください'));
+    expect(r.downloaded, 0);
+    expect(r.uploadedOps, 0);
+    expect(await store.items(), isEmpty);
+    expect(opsFiles(), isEmpty);
+    expect(await store.pendingOps(), hasLength(1));
+  });
+
+  test('unsent ops survive a reopen and go out on the next open', () async {
+    final dir = await Directory.systemTemp.createTemp('infodesk');
+    addTearDown(() => dir.delete(recursive: true));
+    final path = '${dir.path}/infodesk.db';
+    publish();
+    var s = await LocalStore.open(path, factory: databaseFactoryFfi);
+    await SyncEngine(s, drive).runOnce(now: now);
+    await s.setStarred(2, true, await s.deviceId(), now: now);
+    await s.close();
+    s = await LocalStore.open(path, factory: databaseFactoryFfi);
+    addTearDown(s.close);
+    expect(await s.pendingOps(), hasLength(1));
+    final r = await SyncEngine(s, drive).runOnce(now: now);
+    expect(r.uploadedOps, 1);
+    expect(opsFiles(), hasLength(1));
+    expect(await s.pendingOps(), isEmpty);
   });
 
   test('a db_id change resets and drops unsent ops', () async {

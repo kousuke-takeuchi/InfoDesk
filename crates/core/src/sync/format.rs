@@ -113,6 +113,11 @@ pub struct Op {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct OpsFile {
     pub device: String,
+    /// The `db_id` of the manifest the writer saw. A reader whose database
+    /// differs skips the file: its item ids name other articles. Absent in
+    /// files written before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub db_id: Option<String>,
     pub ops: Vec<Op>,
 }
 
@@ -352,6 +357,7 @@ mod tests {
     fn gzip_is_deterministic_and_round_trips() {
         let f = OpsFile {
             device: "d".into(),
+            db_id: None,
             ops: vec![],
         };
         let a = gzip_json(&f).unwrap();
@@ -564,6 +570,22 @@ mod tests {
         assert_eq!(f.ops[0].field, Field::Read);
         assert!(f.ops[0].value);
         assert_eq!(f.ops[1].at, "2026-10-13T00:00:01.456Z");
+    }
+
+    #[test]
+    fn ops_file_db_id_is_optional_and_shared_with_dart() {
+        // Written by hand, read by the Dart side too (format_test.dart).
+        let f: OpsFile = serde_json::from_str(&fixture("ops_with_db_id.json")).unwrap();
+        assert_eq!(f.db_id.as_deref(), Some("db-old"));
+        assert_eq!(f.device, "phone-1");
+        assert_eq!(f.ops.len(), 2);
+        let back: serde_json::Value = serde_json::to_value(&f).unwrap();
+        assert_eq!(back["db_id"], "db-old");
+        // An older file has no db_id; writing it back adds none.
+        let old: OpsFile = serde_json::from_str(r#"{"device":"d","ops":[]}"#).unwrap();
+        assert_eq!(old.db_id, None);
+        let v = serde_json::to_value(&old).unwrap();
+        assert!(v.get("db_id").is_none(), "{v}");
     }
 
     /// Regenerates snapshot.json.gz. Run with `-- --ignored regenerate`.

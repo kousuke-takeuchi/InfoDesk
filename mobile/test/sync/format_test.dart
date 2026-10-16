@@ -160,6 +160,19 @@ void main() {
     expect(gunzipJson(bytes), fixture('snapshot.json'));
   });
 
+  test('ops file db_id: shared fixture, optional, omitted when absent', () {
+    final f = OpsFile.fromJson(
+      fixture('ops_with_db_id.json') as Map<String, dynamic>,
+    );
+    expect(f.dbId, 'db-old');
+    expect(f.device, 'phone-1');
+    expect(f.ops.length, 2);
+    expect(f.toJson()['db_id'], 'db-old');
+    final old = OpsFile.fromJson({'device': 'd', 'ops': []});
+    expect(old.dbId, isNull);
+    expect(old.toJson().containsKey('db_id'), isFalse);
+  });
+
   test('writes the gzip fixture the Rust side decodes', () {
     final f = OpsFile(
       device: 'dart-dev',

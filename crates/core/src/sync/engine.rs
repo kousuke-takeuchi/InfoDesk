@@ -446,6 +446,21 @@ impl Pass<'_> {
         Ok((bytes, parsed))
     }
 
+    /// False for an ops file written against another database (its `db_id`
+    /// is set and differs): its item ids name other articles, so it is
+    /// recorded but never applied. Files without a `db_id` predate the field.
+    fn same_database(&mut self, name: &str, file: &OpsFile, input: &SyncInput) -> bool {
+        match &file.db_id {
+            Some(id) if *id != input.db_id => {
+                self.report.warnings.push(format!(
+                    "skipped ops file {name} written for another database ({id})"
+                ));
+                false
+            }
+            _ => true,
+        }
+    }
+
     fn ops_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .remote
@@ -475,7 +490,7 @@ impl Pass<'_> {
             let sha = sha256_hex(&bytes);
             let mut imported = 0;
             let mut applied = 0;
-            if let Some(file) = parsed {
+            if let Some(file) = parsed.filter(|f| self.same_database(&name, f, input)) {
                 let ops: Vec<Op> = file.ops.iter().filter_map(normalize_op).collect();
                 imported = ops.len();
                 applied = locked(self.store, |s| s.apply_remote_ops(&ops, &input.device_id))?;
@@ -506,6 +521,7 @@ impl Pass<'_> {
             let name = ops_file_name(&input.device_id, input.now, (i + 1) as u32);
             let file = OpsFile {
                 device: input.device_id.clone(),
+                db_id: Some(input.db_id.clone()),
                 ops: part.iter().map(|(_, op)| op.clone()).collect(),
             };
             let bytes = st(serde_json::to_vec(&file).map_err(Into::into))?;
@@ -634,6 +650,11 @@ impl Pass<'_> {
             }
             let (_, parsed) = self.download_ops(name).await?;
             let Some(file) = parsed else { continue };
+            // Covered (and so deleted) but not applied.
+            if !self.same_database(name, &file, input) {
+                covers.push(name.clone());
+                continue;
+            }
             for op in file.ops.iter().filter_map(normalize_op) {
                 apply_op(&mut state, &op);
             }
@@ -772,6 +793,9 @@ pub async fn run_sync(
         .filter(|id| *id != input.db_id)
     {
         pass.reset_for_new_database(&old_db).await?;
+        // Publish the new db_id at once, before the long rebuild, so phones
+        // stop tagging their ops with the old one as soon as possible.
+        pass.write_manifest(input).await?;
     }
     pass.import_remote_ops(input).await?;
     pass.upload_local_ops(input).await?;
@@ -847,9 +871,20 @@ mod tests {
     }
 
     fn put_ops(drive: &MemoryDrive, device: &str, stamp: &str, ops: Vec<Op>) -> String {
+        put_ops_for(drive, device, stamp, None, ops)
+    }
+
+    fn put_ops_for(
+        drive: &MemoryDrive,
+        device: &str,
+        stamp: &str,
+        db_id: Option<&str>,
+        ops: Vec<Op>,
+    ) -> String {
         let name = ops_file_name(device, at(stamp), 1);
         let file = OpsFile {
             device: device.into(),
+            db_id: db_id.map(str::to_string),
             ops,
         };
         drive.put(&name, serde_json::to_vec(&file).unwrap());
@@ -981,6 +1016,11 @@ mod tests {
             serde_json::from_slice(&read_file(&drive, &ops_files[0]).await.unwrap()).unwrap();
         assert_eq!(file.ops.len(), 1);
         assert_eq!(file.ops[0].device, "mac");
+        assert_eq!(
+            file.db_id.as_deref(),
+            Some("db1"),
+            "tagged with this database"
+        );
         let second = run_sync(&m, &drive, &input("2026-10-13T12:05:00Z", false))
             .await
             .unwrap();
@@ -1835,6 +1875,145 @@ mod tests {
             "{names:?}"
         );
         assert!(names.iter().any(|n| n.starts_with("meta")), "{names:?}");
+    }
+
+    #[tokio::test]
+    async fn ops_files_of_another_database_are_skipped_but_recorded() {
+        let m = setup();
+        let a = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let b = add_item(&m, "https://a/2", "2026-10-13T01:00:00Z");
+        let drive = MemoryDrive::new();
+        let stale = put_ops_for(
+            &drive,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            Some("old-db"),
+            vec![op(
+                a,
+                Field::Read,
+                true,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        put_ops_for(
+            &drive,
+            "tablet",
+            "2026-10-13T11:00:01.000Z",
+            Some("db1"),
+            vec![op(
+                b,
+                Field::Read,
+                true,
+                "2026-10-13T11:00:01.000Z",
+                "tablet",
+            )],
+        );
+        // No snapshot yet, so this pass also compacts: the stale file must
+        // not reach the snapshot either.
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!(report.imported_ops, 1);
+        assert!(!m.lock().unwrap().get_item(a).unwrap().unwrap().read);
+        assert!(m.lock().unwrap().get_item(b).unwrap().unwrap().read);
+        let snap = snapshot_of(&drive).await;
+        assert!(
+            snap.state.get(&a).and_then(|s| s.read.as_ref()).is_none(),
+            "{:?}",
+            snap.state
+        );
+        assert!(snap.state[&b].read.as_ref().unwrap().value);
+        // Recorded as imported, so it is never downloaded again.
+        let row = m.lock().unwrap().sync_file(&stale).unwrap();
+        assert!(row.is_none_or(|r| r.kind == "in"));
+        let again = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!(again.imported_ops, 0);
+    }
+
+    #[tokio::test]
+    async fn ops_files_of_another_database_are_recorded_without_compaction() {
+        let m = setup();
+        let a = add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = Recording::default();
+        put_empty_snapshot(&drive.inner);
+        let stale = put_ops_for(
+            &drive.inner,
+            "phone",
+            "2026-10-13T11:00:00.000Z",
+            Some("old-db"),
+            vec![op(
+                a,
+                Field::Read,
+                true,
+                "2026-10-13T11:00:00.000Z",
+                "phone",
+            )],
+        );
+        let report = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert_eq!((report.imported_ops, report.applied_ops), (0, 0));
+        assert!(!m.lock().unwrap().get_item(a).unwrap().unwrap().read);
+        let row = m.lock().unwrap().sync_file(&stale).unwrap().unwrap();
+        assert_eq!(row.kind, "in");
+        drive.take();
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(!drive.take().contains(&stale), "not downloaded again");
+    }
+
+    /// Fails the first create of anything but the manifest.
+    struct FailFirstData {
+        inner: MemoryDrive,
+        failed: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl DriveStore for FailFirstData {
+        async fn list(&self) -> Result<Vec<RemoteFile>, DriveError> {
+            self.inner.list().await
+        }
+        async fn download(&self, id: &str) -> Result<Vec<u8>, DriveError> {
+            self.inner.download(id).await
+        }
+        async fn create(
+            &self,
+            name: &str,
+            bytes: Vec<u8>,
+            mime: &str,
+        ) -> Result<RemoteFile, DriveError> {
+            if name != MANIFEST && !self.failed.swap(true, Ordering::SeqCst) {
+                return Err(DriveError::Retryable("boom".into()));
+            }
+            self.inner.create(name, bytes, mime).await
+        }
+        async fn update(
+            &self,
+            id: &str,
+            bytes: Vec<u8>,
+            mime: &str,
+        ) -> Result<RemoteFile, DriveError> {
+            self.inner.update(id, bytes, mime).await
+        }
+        async fn delete(&self, id: &str) -> Result<(), DriveError> {
+            self.inner.delete(id).await
+        }
+    }
+
+    #[tokio::test]
+    async fn a_reset_publishes_the_new_database_id_before_the_rebuild() {
+        let m = setup();
+        add_item(&m, "https://a/1", "2026-10-13T01:00:00Z");
+        let drive = FailFirstData {
+            inner: MemoryDrive::new(),
+            failed: std::sync::atomic::AtomicBool::new(false),
+        };
+        put_manifest(&drive.inner, "old-db");
+        drive.inner.put("day-2026-01-01.json.gz", b"old".to_vec());
+        assert!(run_sync(&m, &drive, &input(NOW, false)).await.is_err());
+        let manifest = manifest_of(&drive.inner).await;
+        assert_eq!(manifest.db_id, "db1", "phones stop tagging ops with old-db");
+        assert!(manifest.files.is_empty(), "{:?}", manifest.files);
+        // The next pass finishes the rebuild normally.
+        run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        let manifest = manifest_of(&drive.inner).await;
+        assert!(manifest.files.contains_key("meta.json.gz"));
     }
 
     /// Files a person or the OS left in a NAS folder, and the leftovers of a check.

@@ -78,6 +78,12 @@ class SyncEngine {
       return report;
     }
 
+    // A newer format may mean anything; touch nothing until the app knows it.
+    if (manifest.schema != 1) {
+      report.warnings.add('同期データの形式が新しくなっています。アプリを更新してください');
+      return report;
+    }
+
     await _store.setSetting('manifest.written_at', manifest.writtenAt);
     await _store.setSetting('manifest.writer', manifest.writer);
     if (manifest.dbId != await _store.dbId()) {
@@ -160,9 +166,13 @@ class SyncEngine {
       final sha = sha256.convert(bytes).toString();
       List<Op>? ops;
       try {
-        ops = OpsFile.fromJson(
+        final file = OpsFile.fromJson(
           jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
-        ).ops;
+        );
+        // Written against another database: its item ids name other
+        // articles. Recorded below, never applied.
+        final other = file.dbId != null && file.dbId != manifest.dbId;
+        ops = other ? null : file.ops;
       } catch (_) {
         report.warnings.add('${f.name} を読めませんでした');
       }
@@ -176,7 +186,11 @@ class SyncEngine {
     // This device's own ops, last. Marked sent only after the create.
     final pending = await _store.pendingOps();
     if (pending.isNotEmpty) {
-      final file = OpsFile(device: me, ops: [for (final p in pending) p.op]);
+      final mine = [for (final p in pending) p.op];
+      // A storage switch wipes item_state but keeps these; put them back so
+      // the marks stay visible (idempotent when they are already there).
+      await _store.applyRemoteOps(mine);
+      final file = OpsFile(device: me, dbId: manifest.dbId, ops: mine);
       final name = opsFileName(me, now, 1);
       final body = utf8.encode(jsonEncode(file.toJson()));
       await _drive.create(name, body, 'application/json');

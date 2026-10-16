@@ -317,17 +317,23 @@ class Op {
 }
 
 class OpsFile {
-  OpsFile({required this.device, required this.ops});
+  OpsFile({required this.device, this.dbId, required this.ops});
   final String device;
+
+  /// The `db_id` of the manifest the writer saw. A reader on another
+  /// database skips the file. Absent in files written before the field.
+  final String? dbId;
   final List<Op> ops;
   factory OpsFile.fromJson(Map<String, dynamic> j) => OpsFile(
     device: _get(j, 'device'),
+    dbId: j['db_id'] as String?,
     ops: [
       for (final o in j['ops'] as List) Op.fromJson(o as Map<String, dynamic>),
     ],
   );
   Map<String, dynamic> toJson() => {
     'device': device,
+    if (dbId != null) 'db_id': dbId,
     'ops': [for (final o in ops) o.toJson()],
   };
 }

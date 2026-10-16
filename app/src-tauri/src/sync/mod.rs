@@ -1097,6 +1097,7 @@ mod tests {
             .unwrap();
         let file = OpsFile {
             device: "phone".into(),
+            db_id: None,
             ops: vec![Op {
                 item_id: id,
                 field: Field::Starred,

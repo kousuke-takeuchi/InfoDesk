@@ -1,0 +1,8 @@
+{
+  "device": "phone-1",
+  "db_id": "db-old",
+  "ops": [
+    {"item_id": 1, "field": "read", "value": true, "at": "2026-10-13T00:00:01.000Z", "device": "phone-1"},
+    {"item_id": 2, "field": "starred", "value": true, "at": "2026-10-13T00:00:02.000Z", "device": "phone-1"}
+  ]
+}
