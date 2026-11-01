@@ -12,6 +12,7 @@ mod sync;
 mod topics;
 
 pub use digests::NewDigest;
+pub use reader::{DayImport, DigestImport};
 pub use redate::{RedateCount, RedateRange};
 pub use sync::SyncFileRow;
 
