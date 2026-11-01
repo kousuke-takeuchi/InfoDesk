@@ -89,6 +89,7 @@ Read in order. Files are numbered.
 | 12 | [Cloud Sync](docs/12-cloud-sync.md) | Copy articles and digests to your Google Drive, and the Google setup for builders |
 | 13 | [NAS Setup](docs/13-nas-setup.md) | Sync to a Synology NAS over Tailscale: setup steps, device approval and troubleshooting |
 | 14 | [Mobile App](docs/14-mobile-app.md) | Read the digest, feed and articles on your phone, with read and starred marks synced both ways; the developer build |
+| 15 | [Home Server](docs/15-home-server.md) | Run InfoDesk headless on the home k3s cluster with an Argo CronWorkflow, syncing to the NAS |
 
 Each page has a Japanese twin (`*.ja.md`). Developer documentation lives in [`docs/internal/`](docs/internal/README.md) and is written in Japanese. The design spec and implementation plans are under [`docs/superpowers/`](docs/superpowers/).
 

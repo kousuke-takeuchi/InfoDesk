@@ -1,0 +1,11 @@
+.git
+target
+**/node_modules
+app/dist
+app/src-tauri/target
+app/src-tauri/google-oauth.json
+mobile
+design
+design.pen
+docs
+**/*.env

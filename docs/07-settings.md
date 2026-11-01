@@ -44,14 +44,17 @@ All settings are stored in the app database as text. Defaults are written on fir
 
 | Key | Default | Meaning |
 |---|---|---|
-| `llm.items_provider` | `ollama` | Provider for article summaries. `ollama` or `claude`. |
-| `llm.digest_provider` | `ollama` | Provider for day, week and month digests. `ollama` or `claude`. |
+| `llm.items_provider` | `ollama` | Provider for article summaries. `ollama`, `claude` or `claude_api`. |
+| `llm.digest_provider` | `ollama` | Provider for day, week and month digests. `ollama`, `claude` or `claude_api`. |
 | `llm.chat_provider` | `ollama` | Default provider for chat. `ollama` or `claude`. The chat panel can switch per panel. |
 | `ollama.base_url` | `http://localhost:11434` | Ollama server URL. |
 | `ollama.model` | `gemma4:26b` | Ollama model name. |
 | `ollama.web_search_api_key` | empty | ollama.com API key. Enables web search in chat when the provider is Ollama. |
 | `claude.bin` | `claude` | Command or absolute path of the Claude CLI. |
 | `claude.model` | `sonnet` | Claude model passed to the CLI as `--model`: `sonnet`, `opus`, `fable` or a full model name. Used for summaries, digests and chat. Empty means the CLI default for summaries and `sonnet` for chat. Only letters, digits and `. _ : - [ ]` are allowed, and it cannot start with `-`. |
+| `claude_api.model` | `claude-sonnet-5-5` | Model for the Claude API provider (`claude_api`). |
+| `claude_api.items_effort` | `low` | Effort for article summaries with `claude_api`: `low`, `medium`, `high`, `xhigh`, `max` or empty. |
+| `claude_api.digest_effort` | empty | Effort for digests with `claude_api`. Empty means the API default. |
 | `node.bin` | `node` | Command or absolute path of Node (22 or newer) for the chat agent. |
 | `summary.top_n` | `20` | How many top articles per category get an article summary after each collection. Not shown in Settings. Must be a number. |
 | `schedule.collect_interval_minutes` | `180` | Minutes between collections. Values outside 1 to 10080 are clamped. An invalid value falls back to 180. |
@@ -60,11 +63,15 @@ All settings are stored in the app database as text. Defaults are written on fir
 | `schedule.weekly_day` | `mon` | Day of the weekly digest: `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun`. |
 | `schedule.weekly_time` | `07:30` | Time (HH:MM) of the weekly digest. |
 | `schedule.monthly_time` | `08:00` | Time (HH:MM) of the monthly digest, on the 1st of the month. |
+| `schedule.attempts` | empty | Written by `infodesk tick`: JSON that records when each scheduled job was last tried, so the 15-minute retry works across separate runs. Not shown in Settings. Do not edit. |
+| `schedule.last_retry_at` | empty | Written by `infodesk tick`: when pending digests were last retried. Not shown in Settings. Do not edit. |
 | `app.launch_at_login` | `false` | Start InfoDesk at login, in the menu bar without opening a window. |
 | `app.stay_resident` | `true` | Keep running in the menu bar when the main window is closed. |
 | `sync.enabled` | `false` | Sync to the chosen storage (Google Drive or NAS) after collections and digests. Needs a Google sign-in, or a Tailscale login and NAS address. See [Cloud Sync](12-cloud-sync.md). |
 
 An invalid time or weekday value is ignored and the default is used.
+
+`claude_api` calls the Claude API with the key in the environment variable `ANTHROPIC_API_KEY`. It is for the headless server (see [Home Server](15-home-server.md)) and is not offered in the Mac app's LLM tab.
 
 The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
 

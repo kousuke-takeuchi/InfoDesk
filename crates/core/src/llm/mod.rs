@@ -1,4 +1,5 @@
 pub mod claude;
+pub mod claude_api;
 pub mod ollama;
 
 use async_trait::async_trait;
@@ -29,8 +30,10 @@ pub fn clean_output(raw: &str) -> Result<String> {
 }
 
 /// 設定から、用途に対応するプロバイダーを作る。
-/// 設定キー: `llm.items_provider` / `llm.digest_provider` (`ollama` または `claude`)、
-/// `ollama.base_url`、`ollama.model`、`claude.bin`、`claude.model`。
+/// 設定キー: `llm.items_provider` / `llm.digest_provider` (`ollama`、`claude`、`claude_api`)、
+/// `ollama.base_url`、`ollama.model`、`claude.bin`、`claude.model`、
+/// `claude_api.model`、`claude_api.items_effort`、`claude_api.digest_effort`。
+/// `claude_api` の API キーは環境変数 `ANTHROPIC_API_KEY` から読む。
 pub fn provider_from_settings(store: &Store, role: LlmRole) -> Result<Box<dyn LlmProvider>> {
     let key = match role {
         LlmRole::Items => "llm.items_provider",
@@ -45,6 +48,11 @@ pub fn provider_from_settings(store: &Store, role: LlmRole) -> Result<Box<dyn Ll
             claude::ClaudeProvider::new(store.get_setting_or("claude.bin", "claude")?)
                 .with_model(&store.get_setting_or("claude.model", "")?),
         )),
+        "claude_api" => Ok(Box::new(claude_api::from_settings(
+            store,
+            role,
+            std::env::var(claude_api::API_KEY_ENV).ok(),
+        )?)),
         other => Err(Error::Invalid(format!("{key}: unknown provider '{other}'"))),
     }
 }
@@ -133,6 +141,14 @@ mod tests {
             "claude"
         );
 
+        store
+            .set_setting("llm.items_provider", "claude_api")
+            .unwrap();
+        // 環境変数 ANTHROPIC_API_KEY の有無で結果が変わる。どちらでも正しい形か確かめる。
+        match provider_from_settings(&store, LlmRole::Items) {
+            Ok(p) => assert_eq!(p.name(), "claude_api:claude-sonnet-5-5"),
+            Err(e) => assert!(matches!(e, Error::Invalid(m) if m.contains("ANTHROPIC_API_KEY"))),
+        }
         store.set_setting("llm.items_provider", "gpt").unwrap();
         assert!(matches!(
             provider_from_settings(&store, LlmRole::Items),

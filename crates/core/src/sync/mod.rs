@@ -2,4 +2,6 @@ pub mod drive;
 pub mod engine;
 pub mod format;
 pub mod google;
+pub mod headless;
+pub mod nas;
 pub mod webdav;

@@ -44,14 +44,17 @@
 
 | キー | 既定値 | 内容 |
 |---|---|---|
-| `llm.items_provider` | `ollama` | 記事要約のプロバイダー。`ollama` または `claude`。 |
-| `llm.digest_provider` | `ollama` | 日次、週次、月次の要約のプロバイダー。`ollama` または `claude`。 |
+| `llm.items_provider` | `ollama` | 記事要約のプロバイダー。`ollama`、`claude`、`claude_api` のどれか。 |
+| `llm.digest_provider` | `ollama` | 日次、週次、月次の要約のプロバイダー。`ollama`、`claude`、`claude_api` のどれか。 |
 | `llm.chat_provider` | `ollama` | チャットの既定のプロバイダー。`ollama` または `claude`。チャットパネルでパネルごとに切り替えられます。 |
 | `ollama.base_url` | `http://localhost:11434` | Ollama サーバーの URL。 |
 | `ollama.model` | `gemma4:26b` | Ollama のモデル名。 |
 | `ollama.web_search_api_key` | 空 | ollama.com の API キー。プロバイダーが Ollama のとき、チャットの Web 検索を有効にします。 |
 | `claude.bin` | `claude` | Claude CLI のコマンドまたは絶対パス。 |
 | `claude.model` | `sonnet` | CLI に `--model` として渡す Claude のモデル。`sonnet`、`opus`、`fable` または完全なモデル名。要約、期間要約、チャットで使います。空のときは、要約では CLI の既定、チャットでは `sonnet` です。使える文字は英数字と `. _ : - [ ]` で、先頭に `-` は使えません。 |
+| `claude_api.model` | `claude-sonnet-5-5` | Claude API のプロバイダー (`claude_api`) のモデル。 |
+| `claude_api.items_effort` | `low` | `claude_api` で記事要約に使う effort。`low`、`medium`、`high`、`xhigh`、`max`、または空。 |
+| `claude_api.digest_effort` | 空 | `claude_api` でダイジェストに使う effort。空は API の既定です。 |
 | `node.bin` | `node` | チャットのエージェント用の Node (22 以上) のコマンドまたは絶対パス。 |
 | `summary.top_n` | `20` | 収集のたびに記事要約を付ける、カテゴリーごとの上位の件数。設定画面には出ません。数値が必要です。 |
 | `schedule.collect_interval_minutes` | `180` | 収集の間隔 (分)。1〜10080の範囲外は丸めます。不正な値は180になります。 |
@@ -60,11 +63,15 @@
 | `schedule.weekly_day` | `mon` | 週次要約の曜日。`mon`、`tue`、`wed`、`thu`、`fri`、`sat`、`sun`。 |
 | `schedule.weekly_time` | `07:30` | 週次要約の時刻 (HH:MM)。 |
 | `schedule.monthly_time` | `08:00` | 月次要約の時刻 (HH:MM)。毎月1日。 |
+| `schedule.attempts` | 空 | `infodesk tick` が書く。予定の処理ごとに最後に試した時刻を覚える JSON。実行が別々でも 15 分の再試行が働くようにするためのものです。設定画面には出ません。編集しないでください。 |
+| `schedule.last_retry_at` | 空 | `infodesk tick` が書く。未生成のダイジェストを最後にやり直した時刻。設定画面には出ません。編集しないでください。 |
 | `app.launch_at_login` | `false` | ログイン時に InfoDesk を起動する。ウィンドウは開かず、メニューバーに常駐します。 |
 | `app.stay_resident` | `true` | メインウィンドウを閉じても、メニューバーで動き続ける。 |
 | `sync.enabled` | `false` | 収集とダイジェストのあと、選んだ保存先 (Google ドライブか NAS) へ同期する。Google へのログイン、または Tailscale のログインと NAS のアドレスが要る。[クラウド同期](12-cloud-sync.ja.md)を参照。 |
 
 不正な時刻や曜日の値は無視され、既定値が使われます。
+
+`claude_api` は、環境変数 `ANTHROPIC_API_KEY` のキーで Claude API を呼びます。画面なしのサーバー用で ([自宅サーバー](15-home-server.ja.md)を参照)、Mac のアプリの LLM タブには出ません。
 
 スケジューラーは、実行済みの記録として `schedule.last_collect_at`、`schedule.last_daily_for`、`schedule.last_weekly_for`、`schedule.last_monthly_for` も持ちます。編集しないでください。
 
