@@ -86,7 +86,7 @@ Syncs once to the NAS now. It works only when the storage is the NAS. When sync 
 infodesk tick
 ```
 
-Checks the schedule once and runs what is due: collection, article summaries, day, week and month digests, and sync to the NAS, by the same rules as the Mac app. It prints one line per step (`collect: ...`, `summaries: ...`, `digest daily <date>: ...`, `sync: ...`), or `tick: nothing due`. A step that fails prints its error in the line and the command still exits 0. It exits with 1 only when the database cannot be read. It is made for the k3s CronWorkflow that runs it every 5 minutes; see [Home Server](15-home-server.md).
+Checks the schedule once and runs what is due: collection, article summaries, day, week and month digests, and sync to the NAS, by the same rules as the Mac app. It prints one line per step (`collect: ...`, `summaries: ...`, `digest daily <date>: ...`, `sync: ...`) as soon as the step ends, or `tick: nothing due`. While it summarizes articles it also prints `summaries: <n> so far` after every 20 summaries. A step that fails prints its error in the line, for example `summaries: error ANTHROPIC_API_KEY is not set` or `digest daily <date>: error ANTHROPIC_API_KEY is not set`, and the command still exits 0. It exits with 1 only when the database cannot be read. It is made for the k3s CronWorkflow that runs it every 5 minutes; see [Home Server](15-home-server.md).
 
 ### digest
 

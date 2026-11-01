@@ -86,7 +86,7 @@ NAS へ今すぐ 1 回同期します。保存先が NAS のときだけ使え�
 infodesk tick
 ```
 
-予定を 1 回だけ確かめて、時刻が来たものを実行します。収集、記事要約、日次・週次・月次のダイジェスト、NAS への同期を、Mac のアプリと同じ決まりで行います。手順ごとに 1 行 (`collect: ...`、`summaries: ...`、`digest daily <日付>: ...`、`sync: ...`)、何もなければ `tick: nothing due` と出ます。失敗した手順はその行にエラーが出て、コマンドの終了コードは 0 のままです。終了コード 1 になるのは、DB を読めないときだけです。5 分ごとに実行する k3s の CronWorkflow のためのコマンドです。[自宅サーバー](15-home-server.ja.md)を参照。
+予定を 1 回だけ確かめて、時刻が来たものを実行します。収集、記事要約、日次・週次・月次のダイジェスト、NAS への同期を、Mac のアプリと同じ決まりで行います。手順ごとに、その手順が終わったときに 1 行 (`collect: ...`、`summaries: ...`、`digest daily <日付>: ...`、`sync: ...`)、何もなければ `tick: nothing due` と出ます。記事の要約中は、20 件ごとに `summaries: <件数> so far` も出ます。失敗した手順はその行にエラーが出て (たとえば `summaries: error ANTHROPIC_API_KEY is not set` や `digest daily <日付>: error ANTHROPIC_API_KEY is not set`)、コマンドの終了コードは 0 のままです。終了コード 1 になるのは、DB を読めないときだけです。5 分ごとに実行する k3s の CronWorkflow のためのコマンドです。[自宅サーバー](15-home-server.ja.md)を参照。
 
 ### digest
 

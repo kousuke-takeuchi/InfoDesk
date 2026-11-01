@@ -36,12 +36,15 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
    kubectl apply -f deploy/k8s/namespace.yaml -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml
    ```
 
-4. Secret を作ります。値は自分で入力します。ファイルにも git にも書きません (`deploy/secret.example.yaml` を参照)。
+4. Secret を作ります。値は、聞かれたところで 1 つずつ入力します。画面には出ず、シェルの履歴にも git のファイルにも残りません。値を持つのはクラスターの Secret だけです (`deploy/secret.example.yaml` を参照)。
 
    ```sh
+   read -rsp 'ANTHROPIC_API_KEY: ' ANTHROPIC_API_KEY && echo
+   read -rsp 'INFODESK_NAS_PASSWORD: ' INFODESK_NAS_PASSWORD && echo
    kubectl -n infodesk create secret generic infodesk-env \
-     --from-literal=ANTHROPIC_API_KEY='<Claude Console のキー>' \
-     --from-literal=INFODESK_NAS_PASSWORD='<WebDAV ユーザーの DSM のパスワード>'
+     --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+     --from-literal=INFODESK_NAS_PASSWORD="$INFODESK_NAS_PASSWORD"
+   unset ANTHROPIC_API_KEY INFODESK_NAS_PASSWORD
    ```
 
 5. Mac で、設定の「同期する」と「ログイン時に起動」をオフにして、InfoDesk を終了します。そのあと、DB の整合したコピーを作り、Windows のユーザーのホームフォルダーへ送ります。
@@ -77,14 +80,23 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
    $cli config set sync.enabled true
    ```
 
-8. 同期を 1 回行って NAS への接続を確かめ、シェル用の Pod を消します。
+8. 保存先が NAS であることを確かめ、同期を 1 回行って NAS への接続を確かめてから、シェル用の Pod を消します。
+
+   ```sh
+   $cli config get sync.backend
+   ```
+
+   `nas` と出るはずです。ほかの値が出たときは、ここで止めます。シェル用の Pod を消し (`kubectl -n infodesk delete pod infodesk-shell`)、Mac アプリの同期タブで「保存先」を NAS に切り替えてから (保存先を切り替えると、アプリが古い同期の記録を消します。`config set sync.backend` では消えません)、手順 5 からやり直します。CLI で `sync.backend` を書き換えないでください。
 
    ```sh
    $cli sync
-   kubectl -n infodesk delete pod infodesk-shell
    ```
 
-   うまくいくと、`ok  取り込み` で始まり件数が続く 1 行が出ます。`同期は無効です (...)` と出たときは、`sync.enabled` と `sync.backend` を確かめて、もう一度実行します。
+   うまくいくと、`ok  取り込み` で始まり件数が続く 1 行が出ます。`同期は無効です (...)` と出たときは、`sync.enabled` と `sync.backend` を確かめて、もう一度実行します。同期がうまくいったら、シェル用の Pod を消します。
+
+   ```sh
+   kubectl -n infodesk delete pod infodesk-shell
+   ```
 9. WorkflowTemplate を適用し、手で 1 回実行します。その実行が終わるまで待って、ログを読みます。
 
    ```sh
@@ -152,8 +164,25 @@ NAS の URL は LAN の IP アドレスで書きます: `http://192.168.0.151:50
 |---|---|
 | `sync: error NAS の URL は LAN の IP アドレスで書いてください (例: http://192.168.0.151:5005/infodesk/)` | `sync.nas.url` を IP アドレスの形にします。 |
 | `sync: error NAS の URL、ユーザー名、パスワードを入力してください` | Secret に `INFODESK_NAS_PASSWORD` があるか、`sync.nas.user` が入っているかを確かめます。 |
-| `sync: error ネットワークに接続できません…` | NAS がスリープしているか、アドレスが変わっています。 |
-| `summaries: error ANTHROPIC_API_KEY is not set` | Secret を作り直します。次の実行から読み込みます。 |
-| `claude_api 401 ... the API key was rejected` | Claude Console で新しいキーを作り、Secret を作り直します。 |
-| `claude_api 429` または `529` | 一時的なものです。ダイジェストは未生成のまま残り、15 分ごとにやり直します。 |
+| `sync: error ネットワークに接続できません。次の同期で再試行します。` | NAS がスリープしているか、アドレスが変わっています。 |
+| `summaries: error ANTHROPIC_API_KEY is not set`、`digest daily <日付>: error ANTHROPIC_API_KEY is not set` | Secret に API キーがありません。Secret を作り直します (`kubectl -n infodesk delete secret infodesk-env` のあと、下のコマンド)。 |
+| `summaries: 0 ok, error llm: claude_api 401 Unauthorized: the API key was rejected`、`digest daily <日付>: done, pending: ["llm: claude_api 401 Unauthorized: the API key was rejected"]` | Claude Console で新しいキーを作り、Secret を作り直します (`kubectl -n infodesk delete secret infodesk-env` のあと、下のコマンド)。 |
+| `... error llm: claude_api 429 Too Many Requests: ...` または `... claude_api 529 <unknown status code>: ...` | 一時的なものです。ダイジェストは未生成のまま残り、15 分ごとにやり直します。 |
 | 実行が `Pending` のまま | PVC は NUC のノードに結び付いています。そのノードが Ready か確かめます。 |
+
+### Secret を作り直す
+
+Secret はその場では書き換えません。消してから、手順 4 と同じコマンドで作り直します。
+
+```sh
+kubectl -n infodesk delete secret infodesk-env
+read -rsp 'ANTHROPIC_API_KEY: ' ANTHROPIC_API_KEY && echo
+read -rsp 'INFODESK_NAS_PASSWORD: ' INFODESK_NAS_PASSWORD && echo
+kubectl -n infodesk create secret generic infodesk-env \
+  --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+  --from-literal=INFODESK_NAS_PASSWORD="$INFODESK_NAS_PASSWORD"
+unset ANTHROPIC_API_KEY INFODESK_NAS_PASSWORD
+```
+
+次の実行から新しい値を読み込みます。
+

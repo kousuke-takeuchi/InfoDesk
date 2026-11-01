@@ -36,12 +36,15 @@ Apply the files one by one as below. Do not run `kubectl apply -f deploy/k8s/` o
    kubectl apply -f deploy/k8s/namespace.yaml -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml
    ```
 
-4. Create the Secret. Type the values yourself; they are never written to a file or to git (see `deploy/secret.example.yaml`):
+4. Create the Secret. Type each value at its prompt; it is not shown on the screen and does not go into the shell history or any file in git. Only the Secret in the cluster keeps it (see `deploy/secret.example.yaml`):
 
    ```sh
+   read -rsp 'ANTHROPIC_API_KEY: ' ANTHROPIC_API_KEY && echo
+   read -rsp 'INFODESK_NAS_PASSWORD: ' INFODESK_NAS_PASSWORD && echo
    kubectl -n infodesk create secret generic infodesk-env \
-     --from-literal=ANTHROPIC_API_KEY='<key from the Claude Console>' \
-     --from-literal=INFODESK_NAS_PASSWORD='<DSM password of the WebDAV user>'
+     --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+     --from-literal=INFODESK_NAS_PASSWORD="$INFODESK_NAS_PASSWORD"
+   unset ANTHROPIC_API_KEY INFODESK_NAS_PASSWORD
    ```
 
 5. On the Mac, in Settings, turn off 同期する and ログイン時に起動, then quit InfoDesk. Make a consistent copy of the database and send it to the Windows user's home folder:
@@ -77,14 +80,23 @@ Apply the files one by one as below. Do not run `kubectl apply -f deploy/k8s/` o
    $cli config set sync.enabled true
    ```
 
-8. Run one sync to check the NAS connection, then remove the shell pod:
+8. Check that the storage is the NAS, run one sync to check the NAS connection, then remove the shell pod:
+
+   ```sh
+   $cli config get sync.backend
+   ```
+
+   It must print `nas`. If it prints anything else, stop here: remove the shell pod (`kubectl -n infodesk delete pod infodesk-shell`), switch 保存先 to NAS in the Mac app's Sync tab (the app clears the old sync records when the storage changes; `config set sync.backend` does not), and start again from step 5. Do not set `sync.backend` with the CLI.
 
    ```sh
    $cli sync
-   kubectl -n infodesk delete pod infodesk-shell
    ```
 
-   A good sync prints one line that starts with `ok  取り込み` and then the counts. If it prints `同期は無効です (...)`, check `sync.enabled` and `sync.backend` and run it again.
+   A good sync prints one line that starts with `ok  取り込み` and then the counts. If it prints `同期は無効です (...)`, check `sync.enabled` and `sync.backend` and run it again. When the sync is good, remove the shell pod:
+
+   ```sh
+   kubectl -n infodesk delete pod infodesk-shell
+   ```
 9. Apply the WorkflowTemplate and run it once by hand. Wait until that run finishes and read its log:
 
    ```sh
@@ -152,8 +164,25 @@ The `tick` command writes one line per step to the log. It exits 0 unless the da
 |---|---|
 | `sync: error NAS の URL は LAN の IP アドレスで書いてください (例: http://192.168.0.151:5005/infodesk/)` | Set `sync.nas.url` to the IP form. |
 | `sync: error NAS の URL、ユーザー名、パスワードを入力してください` | Check that the Secret has `INFODESK_NAS_PASSWORD` and that `sync.nas.user` is set. |
-| `sync: error ネットワークに接続できません…` | The NAS is asleep or its address changed. |
-| `summaries: error ANTHROPIC_API_KEY is not set` | Recreate the Secret. The next run reads it. |
-| `claude_api 401 ... the API key was rejected` | Create a new key in the Claude Console and recreate the Secret. |
-| `claude_api 429` or `529` | Temporary. Digests stay pending and are retried every 15 minutes. |
+| `sync: error ネットワークに接続できません。次の同期で再試行します。` | The NAS is asleep or its address changed. |
+| `summaries: error ANTHROPIC_API_KEY is not set`, `digest daily <date>: error ANTHROPIC_API_KEY is not set` | The Secret has no API key. Recreate the Secret (`kubectl -n infodesk delete secret infodesk-env`, then the commands below). |
+| `summaries: 0 ok, error llm: claude_api 401 Unauthorized: the API key was rejected`, `digest daily <date>: done, pending: ["llm: claude_api 401 Unauthorized: the API key was rejected"]` | Create a new key in the Claude Console and recreate the Secret (`kubectl -n infodesk delete secret infodesk-env`, then the commands below). |
+| `... error llm: claude_api 429 Too Many Requests: ...` or `... claude_api 529 <unknown status code>: ...` | Temporary. Digests stay pending and are retried every 15 minutes. |
 | A run stays `Pending` | The PVC is bound to the NUC node. Check that the node is Ready. |
+
+### Recreating the Secret
+
+A Secret is not changed in place. Delete it, then create it again with the same commands as in step 4:
+
+```sh
+kubectl -n infodesk delete secret infodesk-env
+read -rsp 'ANTHROPIC_API_KEY: ' ANTHROPIC_API_KEY && echo
+read -rsp 'INFODESK_NAS_PASSWORD: ' INFODESK_NAS_PASSWORD && echo
+kubectl -n infodesk create secret generic infodesk-env \
+  --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+  --from-literal=INFODESK_NAS_PASSWORD="$INFODESK_NAS_PASSWORD"
+unset ANTHROPIC_API_KEY INFODESK_NAS_PASSWORD
+```
+
+The next run reads the new values.
+
