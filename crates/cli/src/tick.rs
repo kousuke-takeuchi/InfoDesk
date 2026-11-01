@@ -24,6 +24,11 @@ pub type LlmFactory = Box<dyn Fn(&Store, LlmRole) -> Result<Box<dyn LlmProvider>
 const SETTING_ATTEMPTS: &str = "schedule.attempts";
 const SETTING_LAST_RETRY_AT: &str = "schedule.last_retry_at";
 
+/// ログの1行を受け取る。本番は標準出力にすぐ出す (Pod が途中で止められても Argo に残る)。
+pub type Sink = Box<dyn Fn(&str) + Send + Sync>;
+
+const SUMMARY_PROGRESS_EVERY: usize = 20;
+
 pub struct Runner {
     pub(crate) store: Mutex<Store>,
     http: reqwest::Client,
@@ -31,6 +36,28 @@ pub struct Runner {
     llm: LlmFactory,
     make_drive: Box<MakeDrive>,
     pub(crate) env: HeadlessEnv,
+    sink: Sink,
+}
+
+/// 1回の評価のログ。行は出来た順にすぐ `sink` へ渡し、`run` の戻り値用にも貯める。
+struct Log<'a> {
+    lines: Vec<String>,
+    sink: &'a Sink,
+}
+
+impl Log<'_> {
+    fn push(&mut self, line: String) {
+        (self.sink)(&line);
+        self.lines.push(line);
+    }
+}
+
+/// ログに出すエラーの文。Invalid は Display の接頭辞 (`invalid value: `) なしで出す (`run_from` と同じ)。
+fn reason(e: &infodesk_core::Error) -> String {
+    match e {
+        infodesk_core::Error::Invalid(reason) => reason.clone(),
+        e => e.to_string(),
+    }
 }
 
 fn all_scopes() -> Vec<DigestScope> {
@@ -89,7 +116,14 @@ impl Runner {
             llm,
             make_drive,
             env,
+            sink: Box::new(|_| {}),
         })
+    }
+
+    /// ログの各行を出来た順に受け取る先を決める。既定は何もしない。
+    pub fn with_sink(mut self, sink: Sink) -> Self {
+        self.sink = sink;
+        self
     }
 
     fn lock(&self) -> MutexGuard<'_, Store> {
@@ -121,9 +155,13 @@ impl Runner {
         let _ = self.lock().set_setting(SETTING_ATTEMPTS, &json);
     }
 
-    /// 1回の評価。実行したことをログの行として順に返す。DB を読めないときだけ `Err`。
+    /// 1回の評価。実行したことをログの行として順に返す (各行は出来たときに `sink` にも渡す)。
+    /// DB を読めないときだけ `Err`。
     pub async fn run(&self, now: DateTime<FixedOffset>) -> Result<Vec<String>> {
-        let mut log = Vec::new();
+        let mut log = Log {
+            lines: Vec::new(),
+            sink: &self.sink,
+        };
         let now_utc = now.with_timezone(&Utc);
         let mut attempts = self.load_attempts()?;
         attempts.retain(|_, at| now_utc - *at < RECENT_ATTEMPT);
@@ -153,20 +191,15 @@ impl Runner {
                 self.sync(now_utc, &mut log).await;
             }
         }
-        Ok(log)
+        Ok(log.lines)
     }
 
     /// 収集と記事要約。記録まで進んだら真 (同期する)。
-    async fn collect(
-        &self,
-        now: DateTime<Utc>,
-        cfg: &ScheduleConfig,
-        log: &mut Vec<String>,
-    ) -> bool {
+    async fn collect(&self, now: DateTime<Utc>, cfg: &ScheduleConfig, log: &mut Log<'_>) -> bool {
         let sources = match self.lock().list_sources() {
             Ok(s) => s,
             Err(e) => {
-                log.push(format!("collect: error {e}"));
+                log.push(format!("collect: error {}", reason(&e)));
                 return false;
             }
         };
@@ -182,7 +215,7 @@ impl Runner {
         let reports = match apply_outcomes(&self.lock(), &outcomes, &now) {
             Ok(r) => r,
             Err(e) => {
-                log.push(format!("collect: error {e}"));
+                log.push(format!("collect: error {}", reason(&e)));
                 return false;
             }
         };
@@ -204,7 +237,7 @@ impl Runner {
             .lock()
             .set_setting("schedule.last_collect_at", &now.to_rfc3339())
         {
-            log.push(format!("collect: error {e}"));
+            log.push(format!("collect: error {}", reason(&e)));
             return false;
         }
         log.push(format!(
@@ -215,7 +248,7 @@ impl Runner {
     }
 
     /// 今日取得した記事の上位に要約を付ける。最初の失敗で止める (アプリと同じ)。
-    async fn item_summaries(&self, now: DateTime<Utc>, log: &mut Vec<String>) {
+    async fn item_summaries(&self, now: DateTime<Utc>, log: &mut Log<'_>) {
         let today = now.with_timezone(&self.tz).date_naive();
         let (since, _) = utc_range(Period::Day, period_start(Period::Day, today), self.tz);
         let limit: u32 = self
@@ -225,7 +258,7 @@ impl Runner {
         let llm = match (self.llm)(&self.lock(), LlmRole::Items) {
             Ok(l) => l,
             Err(e) => {
-                log.push(format!("summaries: error {e}"));
+                log.push(format!("summaries: error {}", reason(&e)));
                 return;
             }
         };
@@ -234,20 +267,26 @@ impl Runner {
             let jobs = match plan_item_summaries(&self.lock(), category, &since, limit) {
                 Ok(j) => j,
                 Err(e) => {
-                    error = Some(e.to_string());
+                    error = Some(reason(&e));
                     break;
                 }
             };
             for job in jobs {
                 let output = llm.complete(&job.system, &job.prompt).await;
                 match finish_item_summary(&self.lock(), job.item_id, output) {
-                    Ok(Ok(())) => ok += 1,
+                    Ok(Ok(())) => {
+                        ok += 1;
+                        // 要約は1件ずつ時間がかかるので、途中経過も出す。
+                        if ok % SUMMARY_PROGRESS_EVERY == 0 {
+                            log.push(format!("summaries: {ok} so far"));
+                        }
+                    }
                     Ok(Err(message)) => {
                         error = Some(message);
                         break 'categories;
                     }
                     Err(e) => {
-                        error = Some(e.to_string());
+                        error = Some(reason(&e));
                         break 'categories;
                     }
                 }
@@ -287,7 +326,7 @@ impl Runner {
     }
 
     /// 日次・週次・月次のジョブ。アプリの `run_job` と同じ規則。何か生成したら真。
-    async fn digest_job(&self, job: &Job, today: NaiveDate, log: &mut Vec<String>) -> bool {
+    async fn digest_job(&self, job: &Job, today: NaiveDate, log: &mut Log<'_>) -> bool {
         let label = label(job);
         let mut plan = job_plan(job, today).into_iter();
         let Some((period, start, force)) = plan.next() else {
@@ -296,7 +335,7 @@ impl Runner {
         let outcomes = match self.digests(period, start, &all_scopes(), force).await {
             Ok(o) => o,
             Err(e) => {
-                log.push(format!("digest {label}: error {e}"));
+                log.push(format!("digest {label}: error {}", reason(&e)));
                 return false;
             }
         };
@@ -325,11 +364,11 @@ impl Runner {
     }
 
     /// 保留中の要約を再試行する。保留があれば真。
-    async fn retry_pending(&self, log: &mut Vec<String>) -> bool {
+    async fn retry_pending(&self, log: &mut Log<'_>) -> bool {
         let pending = match self.lock().pending_digests() {
             Ok(p) => p,
             Err(e) => {
-                log.push(format!("retry: error {e}"));
+                log.push(format!("retry: error {}", reason(&e)));
                 return false;
             }
         };
@@ -359,7 +398,7 @@ impl Runner {
         true
     }
 
-    async fn sync(&self, now: DateTime<Utc>, log: &mut Vec<String>) {
+    async fn sync(&self, now: DateTime<Utc>, log: &mut Log<'_>) {
         let got = headless::sync_nas(&self.store, &self.env, &*self.make_drive, now).await;
         log.push(match got {
             Ok(SyncOutcome::Disabled) => "sync: off".to_string(),
@@ -375,7 +414,7 @@ impl Runner {
     }
 }
 
-/// 1回評価して、ログを標準出力に出す。
+/// 1回評価して、ログを1行ずつ出来たときに標準出力に出す。
 pub async fn tick(store: Store, tz: FixedOffset) -> Result<()> {
     let make_drive: Box<MakeDrive> = Box::new(headless::webdav);
     let runner = Runner::new(
@@ -384,13 +423,11 @@ pub async fn tick(store: Store, tz: FixedOffset) -> Result<()> {
         Box::new(provider_from_settings),
         make_drive,
         HeadlessEnv::from_env(tz),
-    )?;
+    )?
+    .with_sink(Box::new(|line: &str| println!("{line}")));
     let lines = runner.run(Local::now().with_timezone(&tz)).await?;
     if lines.is_empty() {
         println!("tick: nothing due");
-    }
-    for line in lines {
-        println!("{line}");
     }
     Ok(())
 }
@@ -588,12 +625,80 @@ mod tests {
         let r = runner(llm);
         let log = r.run(at(8, 0)).await.unwrap();
         assert!(has(&log, "collect:"), "{log:?}");
+        // Invalid の接頭辞 (`invalid value: `) は出さない。
         assert!(
             log.iter()
-                .any(|l| l.contains("ANTHROPIC_API_KEY is not set")),
+                .any(|l| l == "summaries: error ANTHROPIC_API_KEY is not set"),
             "{log:?}"
         );
+        assert!(
+            log.iter()
+                .any(|l| l == "digest daily 2026-11-01: error ANTHROPIC_API_KEY is not set"),
+            "{log:?}"
+        );
+        assert!(log.iter().all(|l| !l.contains("invalid value:")), "{log:?}");
         assert!(setting(&r, "schedule.last_collect_at").is_some());
+    }
+
+    #[tokio::test]
+    async fn each_line_reaches_the_sink_as_it_happens() {
+        // Pod が途中で止められても Argo にそこまでのログが残るよう、行は出来た順にすぐ出す。
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let collect_seen_first = Arc::new(Mutex::new(None));
+        let (seen_in_llm, flag) = (seen.clone(), collect_seen_first.clone());
+        let llm: LlmFactory = Box::new(move |_, role| {
+            if role == LlmRole::Items {
+                let got = seen_in_llm
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|l| l.starts_with("collect:"));
+                flag.lock().unwrap().get_or_insert(got);
+            }
+            Ok(Box::new(Reply(Ok("要約".into()))) as Box<dyn LlmProvider>)
+        });
+        let sink_lines = seen.clone();
+        let r = runner(llm).with_sink(Box::new(move |line: &str| {
+            sink_lines.lock().unwrap().push(line.to_string());
+        }));
+        let log = r.run(at(8, 0)).await.unwrap();
+        assert_eq!(*collect_seen_first.lock().unwrap(), Some(true));
+        assert_eq!(*seen.lock().unwrap(), log);
+    }
+
+    #[tokio::test]
+    async fn item_summaries_report_progress_every_20() {
+        let r = runner(ok_llm());
+        {
+            let s = r.store.lock().unwrap();
+            s.set_setting("summary.top_n", "30").unwrap();
+            let source = s.list_sources().unwrap().remove(0);
+            let time = at(7, 0).with_timezone(&Utc);
+            let items = (0..25)
+                .map(|i| infodesk_core::model::NewItem {
+                    url: format!("https://example.com/today-{i}"),
+                    title: format!("記事 {i}"),
+                    excerpt: "本文".into(),
+                    author: None,
+                    published_at: Some(time),
+                    score: None,
+                    image_url: None,
+                })
+                .collect();
+            let outcome = infodesk_core::collector::FetchOutcome {
+                source,
+                result: Ok(items),
+            };
+            infodesk_core::collector::apply_outcomes(&s, &[outcome], &time).unwrap();
+        }
+        let log = r.run(at(8, 0)).await.unwrap();
+        let progress: Vec<&String> = log.iter().filter(|l| l.ends_with("so far")).collect();
+        assert_eq!(progress, ["summaries: 20 so far"], "{log:?}");
+        let pos = |want: &str| log.iter().position(|l| l == want);
+        assert!(
+            pos("summaries: 20 so far") < pos("summaries: 25 ok"),
+            "{log:?}"
+        );
     }
 
     #[tokio::test]

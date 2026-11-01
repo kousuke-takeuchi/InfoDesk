@@ -143,7 +143,13 @@ impl LlmProvider for ClaudeApiProvider {
             Some("max_tokens") => {
                 return Err(Error::Llm("claude_api: truncated (max_tokens)".to_string()));
             }
-            _ => {}
+            // 最後まで書き終えたときだけ成功とする。
+            Some("end_turn" | "stop_sequence") => {}
+            // 文脈の上限や pause_turn などで止まった途中の文は使わない。stop_reason がないのも同じ。
+            other => {
+                let reason = other.unwrap_or("none");
+                return Err(Error::Llm(format!("claude_api: stopped ({reason})")));
+            }
         }
         // thinking や fallback の区切りなど、text 以外のブロックは読まない。
         let text: String = value["content"]
@@ -240,6 +246,39 @@ mod tests {
                 .await
                 .unwrap_err();
             assert!(matches!(&err, Error::Llm(m) if m.contains(want)), "{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn only_end_turn_and_stop_sequence_are_success() {
+        let reply = |stop: Option<&str>| {
+            let mut body = json!({"content": [{"type": "text", "text": "partial"}]});
+            if let Some(stop) = stop {
+                body["stop_reason"] = json!(stop);
+            }
+            body
+        };
+        for (stop, want) in [
+            (
+                Some("model_context_window_exceeded"),
+                Err("claude_api: stopped (model_context_window_exceeded)"),
+            ),
+            (Some("pause_turn"), Err("claude_api: stopped (pause_turn)")),
+            (None, Err("claude_api: stopped (none)")),
+            (Some("end_turn"), Ok("partial")),
+            (Some("stop_sequence"), Ok("partial")),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(reply(stop)))
+                .mount(&server)
+                .await;
+            let got = provider(&server, "low").complete("s", "p").await;
+            match (got, want) {
+                (Ok(text), Ok(want)) => assert_eq!(text, want, "{stop:?}"),
+                (Err(Error::Llm(m)), Err(want)) => assert_eq!(m, want, "{stop:?}"),
+                (got, want) => panic!("{stop:?}: {got:?} vs {want:?}"),
+            }
         }
     }
 

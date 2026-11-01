@@ -223,6 +223,8 @@ async fn sync(store: Store) -> Result<()> {
     }
 }
 
+/// この端末のタイムゾーンのオフセット。プロセスの開始時に1回だけ取るので、途中で夏時間が
+/// 切り替わっても追わない。Asia/Tokyo (夏時間なし) ではこれで足りる。
 pub(crate) fn local_tz() -> FixedOffset {
     *Local::now().offset()
 }
