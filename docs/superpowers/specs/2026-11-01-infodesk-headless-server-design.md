@@ -37,6 +37,7 @@ Run InfoDesk on a home server (Ubuntu, no GUI) as the only writer. The server co
 | D6 | How the server reaches the NAS | The host's own Tailscale (`tailscaled`), not the in-app node | A server has a normal system service for this. No sidecar on Linux. |
 | D7 | Secrets on the server | An environment file read by systemd (`EnvironmentFile=`), mode 600 | No keyring on a headless host. The database is copied between machines and must not hold secrets. |
 | D8 | HTTP client for the Claude API | `reqwest` with raw HTTP, as the Ollama provider does | There is no official Anthropic SDK for Rust. |
+| D9 | Effort | `low` for article summaries, the API default for digests. Both are settings. | User choice. A short summary does not need deep thinking, and thinking tokens are billed as output. Digests keep the default because they combine many articles. |
 
 ## 3. Overview
 
@@ -80,9 +81,12 @@ content-type: application/json
   "max_tokens": 16000,
   "system": "<system>",
   "messages": [{"role": "user", "content": "<prompt>"}],
+  "output_config": {"effort": "<effort>"},
   "fallbacks": "default"
 }
 ```
+
+- `output_config` is sent only when the effort setting for the role is not empty. For article summaries the default is `low`; for digests the default is empty (the API default).
 
 - No `temperature`, `top_p`, `top_k` (rejected on `2026-10-21`) and no `thinking` field (Sonnet 5.5 runs adaptive thinking by default; `{"type": "disabled"}` is rejected).
 - `fallbacks: "default"` re-runs a request that a safety classifier declines on Anthropic's recommended model, server side. For `claude-sonnet-5-5` only the `"default"` form is accepted, and only on the Claude API.
@@ -96,8 +100,12 @@ Settings (new keys, seeded with defaults):
 | Key | Default | Meaning |
 |---|---|---|
 | `claude_api.model` | `claude-sonnet-5-5` | Model id. Same character rule as `claude.model`. |
+| `claude_api.items_effort` | `low` | Effort for article summaries: `low`, `medium`, `high`, `xhigh`, `max`, or empty for the API default. |
+| `claude_api.digest_effort` | empty | Effort for day, week and month digests. Same values. |
 
-`provider_from_settings` accepts a third value, `claude_api`, for `llm.items_provider` and `llm.digest_provider`. The key comes only from the environment variable `ANTHROPIC_API_KEY`. If it is missing or empty, creating the provider fails with `Error::Invalid("ANTHROPIC_API_KEY is not set")`.
+An effort value outside the list makes creating the provider fail with `Error::Invalid`, so a typo is reported at once instead of as an API 400 on every call.
+
+`provider_from_settings` accepts a third value, `claude_api`, for `llm.items_provider` and `llm.digest_provider`, and passes the effort key for the role (`LlmRole::Items` or `LlmRole::Digest`). The key comes only from the environment variable `ANTHROPIC_API_KEY`. If it is missing or empty, creating the provider fails with `Error::Invalid("ANTHROPIC_API_KEY is not set")`.
 
 The Mac app's LLM tab does not offer `claude_api` in this design (the Mac will not summarize after the move). The core code works there too if the key is set in the app's environment, so adding it to the app later is a UI change only.
 
@@ -152,7 +160,7 @@ This is the order the app uses today; the move to core keeps it.
 ## 7. Testing
 
 - Moved schedule and job tests run in `infodesk-core`. The app's remaining tests still pass.
-- `claude_api` provider against a local mock HTTP server (the Ollama provider's test pattern): request headers and body shape (no sampling fields, `fallbacks`, version header), text-block joining with `thinking` and `fallback` blocks present, `refusal`, `max_tokens`, 401 without the key in the message, missing `ANTHROPIC_API_KEY`, `Debug` redaction.
+- `claude_api` provider against a local mock HTTP server (the Ollama provider's test pattern): request headers and body shape (no sampling fields, `fallbacks`, version header, `output_config.effort` present for items at `low` and absent for digests by default, an invalid effort rejected), text-block joining with `thinking` and `fallback` blocks present, `refusal`, `max_tokens`, 401 without the key in the message, missing `ANTHROPIC_API_KEY`, `Debug` redaction.
 - Tailnet matcher: the app's existing cases, run against the pure function, plus parsing a recorded `tailscale status --json` fixture.
 - `sync_nas` against the existing WebDAV test server: sync off, wrong backend, missing password, host not in tailnet (nothing sent), a normal pass.
 - `serve` loop: one tick with a fake clock and a mock provider runs collect, summaries and sync in order; SIGTERM ends the loop.
@@ -173,8 +181,6 @@ This is the order the app uses today; the move to core keeps it.
 
 ## 9. Cost estimate (Claude API, for the user's decision)
 
-Assumption: about 140 article summaries a day (7 categories × `summary.top_n` 20), about 3,000 input tokens and 500 output tokens each including thinking, plus a few digests. At Sonnet 5.5 prices ($2 / $10 per 1M), that is about $0.84 input + $0.70 output, so about $1.5 a day, or roughly $45 a month. Thinking tokens are billed as output, so the real figure depends on how much the model thinks. Lowering `summary.top_n` lowers it in proportion.
+Assumption: about 140 article summaries a day (7 categories × `summary.top_n` 20), about 3,000 input tokens and 500 output tokens each including thinking, plus a few digests. At Sonnet 5.5 prices ($2 / $10 per 1M), that is about $0.84 input + $0.70 output, so about $1.5 a day, or roughly $45 a month. Thinking tokens are billed as output, so the real figure depends on how much the model thinks; `low` effort for article summaries (D9) keeps that part small. Lowering `summary.top_n` lowers the cost in proportion.
 
-## 10. Open question for review
-
-- Effort for article summaries. Sonnet 5.5 defaults to `high` effort, which can spend many thinking tokens on a short summary. Option: add `claude_api.effort` (empty = API default) and set `output_config.effort` to `low` for article summaries, keeping the default for digests. This is a quality-for-cost trade; the user decides. The design above leaves it out until decided.
+After the first week, check the real spend in the Claude Console and the quality of the summaries. If summaries are too thin, raise `claude_api.items_effort` to `medium`.
