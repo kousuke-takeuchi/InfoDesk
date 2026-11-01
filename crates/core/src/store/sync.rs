@@ -59,7 +59,7 @@ fn row_to_sync_file(r: &Row) -> rusqlite::Result<SyncFileRow> {
 }
 
 /// tz の日付 `d` の [始まり, 終わり) を UTC で返す。
-fn day_bounds(d: NaiveDate, tz: FixedOffset) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
+pub(super) fn day_bounds(d: NaiveDate, tz: FixedOffset) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
     let local = |d: NaiveDate| {
         tz.from_local_datetime(&d.and_hms_opt(0, 0, 0).expect("midnight"))
             .single()
