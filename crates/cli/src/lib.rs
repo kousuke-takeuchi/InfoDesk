@@ -1,4 +1,5 @@
 mod json;
+mod tick;
 
 use std::path::PathBuf;
 
@@ -74,6 +75,8 @@ enum Command {
     },
     /// NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
     Sync,
+    /// 予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
+    Tick,
     /// 保存済みの期間要約を表示する (生成はしない)
     Digests {
         /// day | week | month
@@ -559,6 +562,9 @@ async fn run(cli: Cli) -> Result<()> {
     if matches!(cli.command, Command::Sync) {
         return sync(store).await;
     }
+    if matches!(cli.command, Command::Tick) {
+        return tick::tick(store, local_tz()).await;
+    }
     match cli.command {
         Command::Collect => collect(&store).await,
         Command::Summarize => summarize(&store).await,
@@ -599,6 +605,7 @@ async fn run(cli: Cli) -> Result<()> {
             json,
         } => digests(&store, &period, date, category, topic, json),
         Command::Sync => unreachable!("handled before the match"),
+        Command::Tick => unreachable!("handled before the match"),
         Command::Page { .. } => unreachable!("handled before the store is opened"),
         Command::Source { command } => source(&store, command).await,
         Command::Topic { command: c } => topic(&store, c),
@@ -713,5 +720,6 @@ mod tests {
     #[test]
     fn sync_and_tick_are_commands() {
         assert!(matches!(parse(&["sync"]).unwrap().command, Command::Sync));
+        assert!(matches!(parse(&["tick"]).unwrap().command, Command::Tick));
     }
 }

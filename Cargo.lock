@@ -2091,9 +2091,11 @@ dependencies = [
 name = "infodesk"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "clap",
  "infodesk-core",
+ "reqwest",
  "serde_json",
  "tempfile",
  "tokio",
