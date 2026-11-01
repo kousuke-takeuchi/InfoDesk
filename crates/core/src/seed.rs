@@ -147,6 +147,7 @@ pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("app.launch_at_login", "false"),
     ("app.stay_resident", "true"),
     ("sync.enabled", "false"),
+    ("sync.mode", "writer"),
 ];
 
 const SEEDED_KEY: &str = "seeded";

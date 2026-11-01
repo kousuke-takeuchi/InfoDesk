@@ -2,6 +2,7 @@ mod chat;
 mod digests;
 mod items;
 mod migrate;
+mod reader;
 mod redate;
 mod schema;
 mod settings;
