@@ -1,12 +1,12 @@
-# InfoDesk Headless Server Implementation Plan
+# InfoDesk on the Home k3s Cluster Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Run InfoDesk on an Ubuntu home server with no GUI as the only writer: `infodesk serve` collects, summarizes (optionally through the Claude API), makes digests and syncs to the NAS on the same schedule as the Mac app.
+**Goal:** Run InfoDesk with no GUI on the user's home k3s cluster as the only writer: an Argo CronWorkflow runs `infodesk tick` every 5 minutes, which collects, summarizes (through the Claude API), makes digests and syncs to the NAS by the same schedule rules as the Mac app.
 
-**Architecture:** The pure schedule rules move from the Tauri crate to `infodesk-core::schedule` so the app and the server share them. A new LLM provider `claude_api` calls `POST /v1/messages` with `reqwest`. NAS rules (setting keys, messages, tailnet host check, URL rewrite) move to `infodesk-core::sync::nas`; a new `sync::headless` runs one NAS sync with the host's `tailscale` CLI and an API-free secrets source (environment). The CLI gains `sync` and `serve` and an OS-aware default database path. systemd runs `serve`.
+**Architecture:** The pure schedule rules move from the Tauri crate to `infodesk-core::schedule` so the app and the CLI share them. A new LLM provider `claude_api` calls `POST /v1/messages` with `reqwest`. Shared NAS setting keys and messages move to `infodesk-core::sync::nas`; a new `sync::headless` runs one NAS sync straight over the LAN (private IPv4 URLs only) with the password from the environment. The CLI gains `sync`, `tick` (one evaluation, state kept in the database) and an OS-aware default database path. A Dockerfile and `deploy/k8s/` manifests (WorkflowTemplate, CronWorkflow, PVC, RBAC) run it on the NUC node.
 
-**Tech Stack:** Rust 2024 workspace (`infodesk-core`, `infodesk` CLI, Tauri app), tokio, reqwest 0.13, rusqlite, wiremock (tests), systemd.
+**Tech Stack:** Rust 2024 workspace (`infodesk-core`, `infodesk` CLI, Tauri app), tokio, reqwest 0.13 (rustls), rusqlite, wiremock (tests); Docker (`rust:1.97-bookworm`, `debian:bookworm-slim`), k3s, Argo Workflows v4.0.6.
 
 **Spec:** `docs/superpowers/specs/2026-11-01-infodesk-headless-server-design.md`
 
@@ -16,18 +16,20 @@
 - Claude API request: `anthropic-version: 2026-10-21`, `anthropic-beta: server-side-fallback-2026-07-01`, body `fallbacks: "default"`, `max_tokens: 16000`, no `temperature` / `top_p` / `top_k`, no `thinking` field.
 - Default model `claude-sonnet-5-5`. Default effort: `claude_api.items_effort = low`, `claude_api.digest_effort = ""` (API default). Allowed effort values: `low`, `medium`, `high`, `xhigh`, `max`, empty.
 - The API key comes only from `ANTHROPIC_API_KEY`; the NAS password only from `INFODESK_NAS_PASSWORD`. Neither is stored in the database, printed, or included in a `Debug` output or an error message.
-- The server sends sync data only to a host that `tailscale status --json` lists as a peer, and connects to that peer's Tailscale IP (IPv4 first).
-- User-facing messages reuse the app's existing Japanese strings exactly (e.g. 「NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください」).
+- Sync data goes only to an `http://` URL whose host is a private IPv4 literal (10/8, 172.16/12, 192.168/16). The NAS is `http://192.168.0.151:5005/infodesk/`.
+- Every InfoDesk pod: namespace `infodesk`, `nodeSelector kubernetes.io/hostname: takeuchi-nuc11atkc2`, PVC `infodesk-data`, Secret `infodesk-env` via `envFrom`, `TZ=Asia/Tokyo`. Images `registry.umafolio.site/infodesk:<git short sha>`, never `latest`.
+- Nothing in git, the image or a manifest holds a real secret. Never print `/etc/rancher/k3s/registries.yaml` or Secret values.
+- User-facing messages reuse the app's existing Japanese strings exactly (e.g. 「NAS の URL、ユーザー名、パスワードを入力してください」).
 - Code comments and CLI help in Japanese, as in the surrounding code. Docs under `docs/` in English with a `.ja.md` twin; `docs/superpowers/` in English only.
 - Commits: Conventional Commits, no `Co-Authored-By` or any other AI attribution trailer.
 - Run from the worktree root `~/Documents/InfoDesk-wt-server`. Before each commit: `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings`.
 
 ## Review Focus
 
-1. **Copied Mac database on first `serve`.** The copied DB already has `schedule.last_*` keys and `sync.device_id`. Expected: the server continues from those (no backfill storm, no new device id). Pinned in Task 6 (`a_copied_database_continues_its_schedule`).
-2. **`ANTHROPIC_API_KEY` missing while `claude_api` is selected.** Expected: one clear log line per attempt (`ANTHROPIC_API_KEY is not set`), collection still runs, digests stay pending and are retried. Pinned in Task 2 (`missing_key_is_a_clear_error`) and Task 6 (`a_missing_provider_does_not_stop_collection`).
-3. **`tailscaled` not running or `tailscale` not installed.** Expected: sync fails with 「Tailscale が停止中です」 and nothing is sent. Pinned in Task 4 (`no_tailscale_status_sends_nothing`).
-4. **A LAN address or a non-tailnet name as the NAS URL.** Expected: refused with the not-in-tailnet message, nothing sent. Pinned in Task 4 (`a_host_outside_the_tailnet_sends_nothing`).
+1. **Copied Mac database on the first `tick`.** The copied DB already has `schedule.last_*` keys and `sync.device_id`. Expected: the cluster continues from those (no backfill storm, no new device id). Pinned in Task 5 (`a_copied_database_continues_its_schedule`).
+2. **`ANTHROPIC_API_KEY` missing while `claude_api` is selected.** Expected: one clear log line per attempt (`ANTHROPIC_API_KEY is not set`), collection still runs, digests stay pending and are retried. Pinned in Task 2 (`missing_key_is_a_clear_error`) and Task 5 (`a_missing_provider_does_not_stop_collection`).
+3. **The copied Mac settings still hold `http://takeuchi-nas:5005/infodesk/`.** Pods cannot resolve that name. Expected: refused with the LAN-URL message and nothing sent, until the runbook sets the IP form. Pinned in Task 3 (`a_name_from_the_mac_settings_sends_nothing`).
+4. **A public address, a name, `https://` or IPv6 as the NAS URL.** Expected: refused, nothing sent. Pinned in Task 3 (`names_public_addresses_https_and_ipv6_are_refused`).
 5. **The API answers 401, or the body mentions the key.** Expected: the error text never contains the key. Pinned in Task 2 (`rejected_key_is_not_echoed`).
 
 ---
@@ -36,19 +38,19 @@
 
 | File | Responsibility |
 |---|---|
-| `crates/core/src/schedule.rs` (new) | Pure schedule rules shared by app and server |
+| `crates/core/src/schedule.rs` (new) | Pure schedule rules shared by app and CLI |
 | `crates/core/src/llm/claude_api.rs` (new) | Claude API provider |
 | `crates/core/src/llm/mod.rs` | Provider selection gains `claude_api` |
 | `crates/core/src/seed.rs` | Default `claude_api.*` settings |
-| `crates/core/src/sync/nas.rs` (new) | NAS setting keys, messages, tailnet peer match, URL rewrite |
-| `crates/core/src/sync/headless.rs` (new) | One NAS sync without the app (host Tailscale, env secrets) |
-| `app/src-tauri/src/scheduler.rs` | Uses `infodesk_core::schedule`; keeps `run_loop`, `run_job` |
-| `app/src-tauri/src/jobs.rs` | Uses `all_failed_retry_base` |
-| `app/src-tauri/src/sync/mod.rs`, `app/src-tauri/src/tailnet.rs` | Re-export moved NAS items |
-| `crates/cli/src/lib.rs` | OS-aware default path, `sync`, `serve` commands |
-| `crates/cli/src/serve.rs` (new) | The server loop and its job flow |
-| `deploy/linux/infodesk.service`, `deploy/linux/infodesk.env.example` (new) | systemd unit and env template |
-| `docs/15-home-server.md`, `docs/15-home-server.ja.md` (new); `docs/07-settings*.md`, `docs/08-cli*.md`, `docs/14-mobile-app*.md`, `README*.md` | User docs |
+| `crates/core/src/sync/nas.rs` (new) | Shared NAS setting keys and messages, the LAN URL rule |
+| `crates/core/src/sync/headless.rs` (new) | One NAS sync without the app |
+| `app/src-tauri/src/scheduler.rs`, `app/src-tauri/src/jobs.rs` | Use `infodesk_core::schedule` |
+| `app/src-tauri/src/sync/mod.rs` | Re-exports the moved NAS keys and messages |
+| `crates/cli/src/lib.rs` | OS-aware default path, `sync` and `tick` commands |
+| `crates/cli/src/tick.rs` (new) | One evaluation of the schedule and its job flow |
+| `Dockerfile`, `.dockerignore` (new) | amd64 image of the CLI |
+| `deploy/k8s/*` (new) | Namespace, PVC, RBAC, WorkflowTemplate, CronWorkflow, manual run, shell pod, Secret example, build script |
+| `docs/15-home-server*.md` (new); `docs/07-settings*.md`, `docs/08-cli*.md`, `docs/14-mobile-app*.md`, `README*.md` | User docs |
 
 ---
 
@@ -611,137 +613,101 @@ git commit -m "feat(core): a Claude API provider that calls /v1/messages with an
 
 ---
 
-### Task 3: NAS rules in core
+### Task 3: NAS keys and headless NAS sync over the LAN
 
 **Files:**
-- Create: `crates/core/src/sync/nas.rs`
-- Modify: `crates/core/src/sync/mod.rs`, `app/src-tauri/src/sync/mod.rs:19-58,364-376`, `app/src-tauri/src/tailnet.rs:159-298`
+- Create: `crates/core/src/sync/nas.rs`, `crates/core/src/sync/headless.rs`
+- Modify: `crates/core/src/sync/mod.rs`, `app/src-tauri/src/sync/mod.rs:19-58`
 
 **Interfaces:**
-- Produces (`infodesk_core::sync::nas`): constants `SETTING_ENABLED`, `SETTING_DEVICE_NAME`, `SETTING_LAST_SYNC_AT`, `SETTING_LAST_COMPACTION_AT`, `SETTING_BACKEND`, `SETTING_NAS_URL`, `SETTING_NAS_USER`, `SETTING_RESET_PENDING`, `BACKEND_GDRIVE`, `BACKEND_NAS`, `NAS_URL_MESSAGE`, `NAS_HTTPS_MESSAGE`, `NAS_PREPARE_MESSAGE`, `TAILNET_STOPPED_MESSAGE`, `NAS_INCOMPLETE_MESSAGE`, `NAS_NOT_IN_TAILNET_MESSAGE`, `NETWORK_MESSAGE` (values copied verbatim from `app/src-tauri/src/sync/mod.rs`); `pub fn peer_addr_in_status(json: &str, host: &str) -> Option<IpAddr>`; `pub fn rewrite_nas_url(raw: &str, peer: impl Fn(&str) -> Option<IpAddr>) -> Result<String, &'static str>`.
+- Consumes: `schedule::ScheduleConfig` (Task 1), `engine::{run_sync, SyncInput, SyncReport, SyncError, compaction_due}`, `webdav::{WebDavConfig, WebDavStore}`, `drive::{DriveStore, DriveError, MemoryDrive}`, `Store::ensure_sync_ids`.
+- Produces (`infodesk_core::sync::nas`): constants `SETTING_ENABLED`, `SETTING_DEVICE_NAME`, `SETTING_LAST_SYNC_AT`, `SETTING_LAST_COMPACTION_AT`, `SETTING_BACKEND`, `SETTING_NAS_URL`, `SETTING_NAS_USER`, `SETTING_RESET_PENDING`, `BACKEND_GDRIVE`, `BACKEND_NAS`, `NAS_INCOMPLETE_MESSAGE`, `NAS_PREPARE_MESSAGE`, `NETWORK_MESSAGE` (values copied verbatim from `app/src-tauri/src/sync/mod.rs`), new `NAS_LAN_URL_MESSAGE`, `pub fn lan_nas_url(raw: &str) -> Result<String, &'static str>`.
+- Produces (`infodesk_core::sync::headless`): `pub const NAS_PASSWORD_ENV: &str = "INFODESK_NAS_PASSWORD"`; `pub const DEFAULT_SERVER_NAME: &str = "infodesk-server"`; `pub struct HeadlessEnv { pub nas_password: Option<String>, pub tz: FixedOffset }` + `HeadlessEnv::from_env(tz) -> Self`; `pub type MakeDrive = dyn Fn(WebDavConfig) -> Result<Arc<dyn DriveStore>, DriveError> + Send + Sync`; `pub fn webdav(cfg: WebDavConfig) -> Result<Arc<dyn DriveStore>, DriveError>`; `#[derive(Debug)] pub enum SyncOutcome { Disabled, Synced(SyncReport) }`; `pub async fn sync_nas(store: &Mutex<Store>, env: &HeadlessEnv, make_drive: &MakeDrive, now: DateTime<Utc>) -> Result<SyncOutcome, String>`.
 
-- [ ] **Step 1: Write the failing tests** (create `nas.rs` with the test module; add `pub mod nas;` to `crates/core/src/sync/mod.rs`)
+- [ ] **Step 1: Write the failing tests for the LAN rule** (create `nas.rs` with the test module; add `pub mod nas;` and `pub mod headless;` to `crates/core/src/sync/mod.rs`)
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const STATUS: &str = r#"{"BackendState":"Running","Peer":{
-  "nodekey:aa":{"HostName":"takeuchi-nas","DNSName":"takeuchi-nas.tail1234.ts.net.",
-    "TailscaleIPs":["100.100.1.5","fd7a:115c:a1e0::5"]},
-  "nodekey:bb":{"HostName":"phone","DNSName":"phone.tail1234.ts.net.",
-    "TailscaleIPs":["100.100.1.9"]}}}"#;
-
-    fn peer(host: &str) -> Option<IpAddr> {
-        peer_addr_in_status(STATUS, host)
+    #[test]
+    fn private_ipv4_urls_are_accepted_as_they_are() {
+        for raw in [
+            "http://192.168.0.151:5005/infodesk/",
+            "http://10.0.0.5:5005/x/",
+            "http://172.16.3.4:5005/x/",
+        ] {
+            assert_eq!(lan_nas_url(raw).unwrap(), raw, "{raw}");
+        }
     }
 
     #[test]
-    fn rewrites_the_host_to_the_peer_ip_and_keeps_port_and_path() {
-        assert_eq!(
-            rewrite_nas_url("http://takeuchi-nas:5005/infodesk/", peer).unwrap(),
-            "http://100.100.1.5:5005/infodesk/"
-        );
-    }
-
-    #[test]
-    fn https_bad_urls_and_outsiders_are_refused() {
-        assert_eq!(
-            rewrite_nas_url("https://takeuchi-nas:5006/infodesk/", peer),
-            Err(NAS_HTTPS_MESSAGE)
-        );
-        assert_eq!(rewrite_nas_url("not a url", peer), Err(NAS_URL_MESSAGE));
-        for raw in ["http://192.168.1.10:5005/x/", "http://nas.local:5005/x/"] {
-            assert_eq!(rewrite_nas_url(raw, peer), Err(NAS_NOT_IN_TAILNET_MESSAGE), "{raw}");
+    fn names_public_addresses_https_and_ipv6_are_refused() {
+        // Review Focus 4
+        for raw in [
+            "http://takeuchi-nas:5005/infodesk/",
+            "http://nas.example.com:5005/x/",
+            "http://8.8.8.8:5005/x/",
+            "http://172.32.0.1:5005/x/",
+            "https://192.168.0.151:5006/infodesk/",
+            "http://[fd00::5]:5005/x/",
+            "not a url",
+            "",
+        ] {
+            assert_eq!(lan_nas_url(raw), Err(NAS_LAN_URL_MESSAGE), "{raw:?}");
         }
     }
 }
 ```
-
-Move the three tests `a_peer_with_null_ips_does_not_hide_the_others`, `a_peer_is_found_by_name_or_tailscale_ip`, `hosts_outside_the_tailnet_are_refused` from `app/src-tauri/src/tailnet.rs` into this module (they use `peer_addr_in_status` and the fixture; use `STATUS` in place of `FAKE_STATUS`).
 
 - [ ] **Step 2: Run to see them fail**
 
 Run: `cargo test -p infodesk-core sync::nas`
 Expected: compile errors.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement `nas.rs`** (above the tests)
 
-At the top of `nas.rs`:
-- Copy the constants listed under Interfaces from `app/src-tauri/src/sync/mod.rs` with their doc comments (keep values byte for byte).
-- Move `null_as_default`, `PeersJson`, `PeerJson` (with its `impl`) and `peer_addr_in_status` from `app/src-tauri/src/tailnet.rs`, unchanged. Imports: `use std::net::IpAddr; use serde::Deserialize;`.
-- Add:
+Copy the constants listed under Interfaces from `app/src-tauri/src/sync/mod.rs`, with their doc comments, byte for byte. Then add:
 
 ```rust
-/// NAS の URL のホストを、tailnet の端末の Tailscale の IP に書き換える。ポートとパスはそのまま。
-/// `peer` はホスト名から端末の IP を探す。tailnet の外のホストには何も送らない。
-pub fn rewrite_nas_url(
-    raw: &str,
-    peer: impl Fn(&str) -> Option<IpAddr>,
-) -> Result<String, &'static str> {
-    let mut url = reqwest::Url::parse(raw).map_err(|_| NAS_URL_MESSAGE)?;
-    if url.scheme() == "https" {
-        return Err(NAS_HTTPS_MESSAGE);
+use std::net::Ipv4Addr;
+
+/// LAN の NAS の URL が使えないとき。名前は Pod から引けず、LAN の外に出るおそれもあるので IP に限る。
+pub const NAS_LAN_URL_MESSAGE: &str =
+    "NAS の URL は LAN の IP アドレスで書いてください (例: http://192.168.0.151:5005/infodesk/)";
+
+/// クラスターから LAN の NAS へ直接つなぐときの URL を確かめる。http で、ホストが
+/// プライベートな IPv4 (10/8、172.16/12、192.168/16) のときだけ通す。それ以外には何も送らない。
+pub fn lan_nas_url(raw: &str) -> Result<String, &'static str> {
+    let url = reqwest::Url::parse(raw.trim()).map_err(|_| NAS_LAN_URL_MESSAGE)?;
+    if url.scheme() != "http" {
+        return Err(NAS_LAN_URL_MESSAGE);
     }
-    let host = url.host_str().ok_or(NAS_NOT_IN_TAILNET_MESSAGE)?.to_string();
-    let ip = peer(&host).ok_or(NAS_NOT_IN_TAILNET_MESSAGE)?;
-    url.set_ip_host(ip).map_err(|_| NAS_NOT_IN_TAILNET_MESSAGE)?;
+    let ip: Ipv4Addr = url
+        .host_str()
+        .and_then(|h| h.parse().ok())
+        .ok_or(NAS_LAN_URL_MESSAGE)?;
+    if !ip.is_private() {
+        return Err(NAS_LAN_URL_MESSAGE);
+    }
     Ok(url.to_string())
 }
 ```
 
-- [ ] **Step 4: Point the app at core**
-
-In `app/src-tauri/src/sync/mod.rs`, replace the definitions of the moved constants with one re-export (keep the app-only constants such as `TAILNET_LOGIN_MESSAGE`, `TAILNET_APPROVAL_MESSAGE`, `NAS_CHECK_OK`, `FALLBACK_DEVICE_NAME`, `REAUTH_MESSAGE`, `SETTING_NAS_PASSWORD_SET`, `LEGACY_NAS_KEYS`):
+In `app/src-tauri/src/sync/mod.rs`, replace the definitions of the moved constants with one re-export and leave every app-only constant in place:
 
 ```rust
 pub use infodesk_core::sync::nas::{
-    BACKEND_GDRIVE, BACKEND_NAS, NAS_HTTPS_MESSAGE, NAS_INCOMPLETE_MESSAGE,
-    NAS_NOT_IN_TAILNET_MESSAGE, NAS_PREPARE_MESSAGE, NAS_URL_MESSAGE, NETWORK_MESSAGE,
+    BACKEND_GDRIVE, BACKEND_NAS, NAS_INCOMPLETE_MESSAGE, NAS_PREPARE_MESSAGE, NETWORK_MESSAGE,
     SETTING_BACKEND, SETTING_DEVICE_NAME, SETTING_ENABLED, SETTING_LAST_COMPACTION_AT,
     SETTING_LAST_SYNC_AT, SETTING_NAS_URL, SETTING_NAS_USER, SETTING_RESET_PENDING,
-    TAILNET_STOPPED_MESSAGE,
 };
 ```
 
-Replace the body of `url_in_tailnet` with:
+- [ ] **Step 4: Run** `cargo test -p infodesk-core sync::nas && cargo test -p infodesk-app` — Expected: PASS.
 
-```rust
-fn url_in_tailnet(tailnet: &dyn crate::tailnet::Tailnet, raw: &str) -> AppResult<String> {
-    infodesk_core::sync::nas::rewrite_nas_url(raw, |host| tailnet.peer_addr(host))
-        .map_err(|m| m.to_string().into())
-}
-```
-
-In `app/src-tauri/src/tailnet.rs`, delete the moved items and add `pub use infodesk_core::sync::nas::peer_addr_in_status;`. Keep `FAKE_STATUS` (used by `FakeTailnet`). If `null_as_default` is still used by other structs in `tailnet.rs` (e.g. the status struct at line ~167), keep a private copy there instead of deleting it. Drop the app's `url` dependency only if nothing else uses it (`grep -rn 'url::' app/src-tauri/src`).
-
-- [ ] **Step 5: Run tests**
-
-Run: `cargo test -p infodesk-core sync:: && cargo test -p infodesk-app`
-Expected: PASS, including the app's existing `url_in_tailnet` and NAS tests.
-
-- [ ] **Step 6: Commit**
-
-```bash
-cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
-git add crates/core/src/sync app/src-tauri/src/sync/mod.rs app/src-tauri/src/tailnet.rs app/src-tauri/Cargo.toml
-git commit -m "refactor: move the NAS keys, messages and tailnet host check to core"
-```
-
----
-
-### Task 4: Headless NAS sync
-
-**Files:**
-- Create: `crates/core/src/sync/headless.rs`
-- Modify: `crates/core/src/sync/mod.rs`
-
-**Interfaces:**
-- Consumes: `sync::nas::*` (Task 3), `schedule::ScheduleConfig` (Task 1), `engine::{run_sync, SyncInput, SyncReport, SyncError, compaction_due}`, `webdav::{WebDavConfig, WebDavStore}`, `drive::{DriveStore, DriveError, MemoryDrive}`, `Store::ensure_sync_ids`.
-- Produces: `pub const NAS_PASSWORD_ENV: &str = "INFODESK_NAS_PASSWORD"`; `pub const DEFAULT_SERVER_NAME: &str = "infodesk-server"`; `#[async_trait] pub trait PeerStatus: Send + Sync { async fn status_json(&self) -> Option<String>; }`; `pub struct TailscaleCli { pub bin: String }` (`Default` = `"tailscale"`); `pub struct HeadlessEnv { pub nas_password: Option<String>, pub tz: FixedOffset }` + `HeadlessEnv::from_env(tz) -> Self`; `pub type MakeDrive = dyn Fn(WebDavConfig) -> Result<Arc<dyn DriveStore>, DriveError> + Send + Sync`; `pub fn webdav(cfg: WebDavConfig) -> Result<Arc<dyn DriveStore>, DriveError>`; `pub enum SyncOutcome { Disabled, Synced(SyncReport) }`; `pub async fn sync_nas(store: &Mutex<Store>, env: &HeadlessEnv, peers: &dyn PeerStatus, make_drive: &MakeDrive, now: DateTime<Utc>) -> Result<SyncOutcome, String>`.
-
-- [ ] **Step 1: Write the failing tests** (create the file with the test module; add `pub mod headless;` to `sync/mod.rs`)
+- [ ] **Step 5: Write the failing tests for `sync_nas`** (test module in `headless.rs`)
 
 ```rust
 #[cfg(test)]
@@ -750,17 +716,7 @@ mod tests {
     use crate::sync::drive::MemoryDrive;
     use chrono::TimeZone;
 
-    const STATUS: &str = r#"{"BackendState":"Running","Peer":{
-  "nodekey:aa":{"HostName":"takeuchi-nas","DNSName":"takeuchi-nas.tail1234.ts.net.",
-    "TailscaleIPs":["100.100.1.5"]}}}"#;
-
-    struct Fixed(Option<&'static str>);
-    #[async_trait]
-    impl PeerStatus for Fixed {
-        async fn status_json(&self) -> Option<String> {
-            self.0.map(str::to_string)
-        }
-    }
+    const NAS: &str = "http://192.168.0.151:5005/infodesk/";
 
     fn jst() -> FixedOffset {
         FixedOffset::east_opt(9 * 3600).unwrap()
@@ -776,7 +732,7 @@ mod tests {
         s.set_setting(SETTING_ENABLED, "true").unwrap();
         s.set_setting(SETTING_BACKEND, BACKEND_NAS).unwrap();
         s.set_setting(SETTING_NAS_URL, url).unwrap();
-        s.set_setting(SETTING_NAS_USER, "kou").unwrap();
+        s.set_setting(SETTING_NAS_USER, "infodesk").unwrap();
         Mutex::new(s)
     }
 
@@ -797,58 +753,48 @@ mod tests {
 
     #[tokio::test]
     async fn off_or_google_does_nothing() {
-        let store = nas_store("http://takeuchi-nas:5005/infodesk/");
+        let store = nas_store(NAS);
         let (seen, make) = recording();
         store.lock().unwrap().set_setting(SETTING_ENABLED, "false").unwrap();
-        let got = sync_nas(&store, &env(Some("pw")), &Fixed(Some(STATUS)), &*make, now()).await;
+        let got = sync_nas(&store, &env(Some("pw")), &*make, now()).await;
         assert!(matches!(got, Ok(SyncOutcome::Disabled)));
         store.lock().unwrap().set_setting(SETTING_ENABLED, "true").unwrap();
         store.lock().unwrap().set_setting(SETTING_BACKEND, BACKEND_GDRIVE).unwrap();
-        let got = sync_nas(&store, &env(Some("pw")), &Fixed(Some(STATUS)), &*make, now()).await;
+        let got = sync_nas(&store, &env(Some("pw")), &*make, now()).await;
         assert!(matches!(got, Ok(SyncOutcome::Disabled)));
         assert!(seen.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
     async fn missing_password_is_incomplete() {
-        let store = nas_store("http://takeuchi-nas:5005/infodesk/");
+        let store = nas_store(NAS);
         let (seen, make) = recording();
         for pw in [None, Some("")] {
-            let got = sync_nas(&store, &env(pw), &Fixed(Some(STATUS)), &*make, now()).await;
+            let got = sync_nas(&store, &env(pw), &*make, now()).await;
             assert_eq!(got.err().as_deref(), Some(NAS_INCOMPLETE_MESSAGE));
         }
         assert!(seen.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
-    async fn no_tailscale_status_sends_nothing() {
-        // Review Focus 3
+    async fn a_name_from_the_mac_settings_sends_nothing() {
+        // Review Focus 3: the copied Mac settings hold http://takeuchi-nas:5005/infodesk/
         let store = nas_store("http://takeuchi-nas:5005/infodesk/");
         let (seen, make) = recording();
-        let got = sync_nas(&store, &env(Some("pw")), &Fixed(None), &*make, now()).await;
-        assert_eq!(got.err().as_deref(), Some(TAILNET_STOPPED_MESSAGE));
+        let got = sync_nas(&store, &env(Some("pw")), &*make, now()).await;
+        assert_eq!(got.err().as_deref(), Some(NAS_LAN_URL_MESSAGE));
         assert!(seen.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
-    async fn a_host_outside_the_tailnet_sends_nothing() {
-        // Review Focus 4
-        let store = nas_store("http://192.168.1.10:5005/infodesk/");
+    async fn a_normal_pass_connects_directly_and_records_the_time() {
+        let store = nas_store(NAS);
         let (seen, make) = recording();
-        let got = sync_nas(&store, &env(Some("pw")), &Fixed(Some(STATUS)), &*make, now()).await;
-        assert_eq!(got.err().as_deref(), Some(NAS_NOT_IN_TAILNET_MESSAGE));
-        assert!(seen.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn a_normal_pass_connects_to_the_peer_ip_and_records_the_time() {
-        let store = nas_store("http://takeuchi-nas:5005/infodesk/");
-        let (seen, make) = recording();
-        let got = sync_nas(&store, &env(Some("pw")), &Fixed(Some(STATUS)), &*make, now()).await;
+        let got = sync_nas(&store, &env(Some("pw")), &*make, now()).await;
         assert!(matches!(got, Ok(SyncOutcome::Synced(_))), "{got:?}");
         let cfg = seen.lock().unwrap()[0].clone();
-        assert_eq!(cfg.url, "http://100.100.1.5:5005/infodesk/");
-        assert_eq!(cfg.user, "kou");
+        assert_eq!(cfg.url, NAS);
+        assert_eq!(cfg.user, "infodesk");
         assert_eq!(cfg.password, "pw");
         assert!(cfg.proxy.is_none());
         let s = store.lock().unwrap();
@@ -864,23 +810,19 @@ mod tests {
 }
 ```
 
-`SyncOutcome` derives `Debug` for the `{got:?}` messages; `WebDavConfig` already derives `Clone`.
-
-- [ ] **Step 2: Run to see them fail**
+- [ ] **Step 6: Run to see them fail**
 
 Run: `cargo test -p infodesk-core sync::headless`
 Expected: compile errors.
 
-- [ ] **Step 3: Implement** (top of `headless.rs`)
+- [ ] **Step 7: Implement `headless.rs`** (above the tests)
 
 ```rust
-//! アプリなしで NAS へ1回同期する。自宅サーバーの `infodesk serve` と `infodesk sync` が使う。
-//! NAS へは OS の Tailscale を通す。パスワードは環境変数から読み、DB には置かない。
+//! アプリなしで NAS へ1回同期する。自宅の k3s で動く `infodesk tick` と `infodesk sync` が使う。
+//! NAS へは LAN で直接つなぐ。パスワードは環境変数から読み、DB には置かない。
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset, Utc};
 
 use super::drive::{DriveError, DriveStore};
@@ -893,38 +835,6 @@ use crate::store::Store;
 pub const NAS_PASSWORD_ENV: &str = "INFODESK_NAS_PASSWORD";
 /// `sync.device_name` が空のときの書き手の名前。
 pub const DEFAULT_SERVER_NAME: &str = "infodesk-server";
-const STATUS_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// tailnet の端末一覧 (`tailscale status --json` と同じ形の JSON)。取れなければ `None`。
-#[async_trait]
-pub trait PeerStatus: Send + Sync {
-    async fn status_json(&self) -> Option<String>;
-}
-
-/// OS の `tailscale` コマンドで端末一覧を取る。
-pub struct TailscaleCli {
-    pub bin: String,
-}
-
-impl Default for TailscaleCli {
-    fn default() -> Self {
-        Self { bin: "tailscale".to_string() }
-    }
-}
-
-#[async_trait]
-impl PeerStatus for TailscaleCli {
-    async fn status_json(&self) -> Option<String> {
-        let run = tokio::process::Command::new(&self.bin)
-            .args(["status", "--json"])
-            .kill_on_drop(true)
-            .output();
-        let out = tokio::time::timeout(STATUS_TIMEOUT, run).await.ok()?.ok()?;
-        out.status
-            .success()
-            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
-    }
-}
 
 pub struct HeadlessEnv {
     pub nas_password: Option<String>,
@@ -984,7 +894,7 @@ fn prepare(store: &Mutex<Store>) -> crate::Result<Option<Prepared>> {
     if text(SETTING_ENABLED)? != "true" || text(SETTING_BACKEND)? != BACKEND_NAS {
         return Ok(None);
     }
-    // 保存先の切り替えの予約。サーバーは保存先の控えを持たないので、消すだけでよい。
+    // 保存先の切り替えの予約。ここでは保存先の控えを持たないので、消すだけでよい。
     if text(SETTING_RESET_PENDING)? == "true" {
         s.set_setting(SETTING_RESET_PENDING, "false")?;
     }
@@ -1012,7 +922,6 @@ fn prepare(store: &Mutex<Store>) -> crate::Result<Option<Prepared>> {
 pub async fn sync_nas(
     store: &Mutex<Store>,
     env: &HeadlessEnv,
-    peers: &dyn PeerStatus,
     make_drive: &MakeDrive,
     now: DateTime<Utc>,
 ) -> Result<SyncOutcome, String> {
@@ -1023,12 +932,7 @@ pub async fn sync_nas(
     let (Some(password), false, false) = (password, p.url.is_empty(), p.user.is_empty()) else {
         return Err(NAS_INCOMPLETE_MESSAGE.to_string());
     };
-    let status = peers
-        .status_json()
-        .await
-        .ok_or_else(|| TAILNET_STOPPED_MESSAGE.to_string())?;
-    let url = rewrite_nas_url(&p.url, |host| peer_addr_in_status(&status, host))
-        .map_err(str::to_string)?;
+    let url = lan_nas_url(&p.url).map_err(str::to_string)?;
     let drive = make_drive(WebDavConfig { url, user: p.user, password, proxy: None })
         .map_err(|_| NAS_PREPARE_MESSAGE.to_string())?;
     let compact = p.last_compaction.is_none()
@@ -1057,29 +961,26 @@ pub async fn sync_nas(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 8: Run** `cargo test -p infodesk-core sync:: && cargo test -p infodesk-app` — Expected: PASS.
 
-Run: `cargo test -p infodesk-core sync::headless`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
-git add crates/core/src/sync
-git commit -m "feat(core): one NAS sync without the app, through the host's Tailscale"
+git add crates/core/src/sync app/src-tauri/src/sync/mod.rs
+git commit -m "feat(core): one NAS sync without the app, straight over the home LAN"
 ```
 
 ---
 
-### Task 5: CLI default path by OS and `infodesk sync`
+### Task 4: CLI default path by OS and `infodesk sync`
 
 **Files:**
 - Modify: `crates/cli/src/lib.rs:15-23,168-171,493-551`
 
 **Interfaces:**
-- Consumes: `sync::headless::{sync_nas, HeadlessEnv, TailscaleCli, SyncOutcome, webdav}` (Task 4).
-- Produces: `fn db_path_for(os: &str, home: Option<String>, xdg_data_home: Option<String>) -> Result<PathBuf>`; `Command::Sync`; `pub(crate) fn local_tz()` (already exists, make it `pub(crate)` for Task 6).
+- Consumes: `sync::headless::{sync_nas, HeadlessEnv, SyncOutcome, webdav}` (Task 3).
+- Produces: `fn db_path_for(os: &str, home: Option<String>, xdg_data_home: Option<String>) -> Result<PathBuf>`; `Command::Sync`; `local_tz()` becomes `pub(crate)` for Task 5.
 
 - [ ] **Step 1: Write failing tests** (append to `mod tests` in `lib.rs`)
 
@@ -1108,14 +1009,14 @@ git commit -m "feat(core): one NAS sync without the app, through the host's Tail
     }
 
     #[test]
-    fn sync_and_serve_are_commands() {
+    fn sync_and_tick_are_commands() {
         assert!(matches!(parse(&["sync"]).unwrap().command, Command::Sync));
     }
 ```
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `cargo test -p infodesk default_db_path_follows_the_os sync_and_serve_are_commands`
+Run: `cargo test -p infodesk default_db_path_follows_the_os`
 Expected: compile errors.
 
 - [ ] **Step 3: Implement**
@@ -1145,7 +1046,7 @@ fn db_path_for(os: &str, home: Option<String>, xdg_data_home: Option<String>) ->
 }
 ```
 
-Change the `--db` doc comment to: `/// DBファイルのパス。既定は macOS では ~/Library/Application Support/InfoDesk/infodesk.db、Linux では ~/.local/share/InfoDesk/infodesk.db`.
+Change the `--db` doc comment to: `/// DBファイルのパス。既定は macOS では ~/Library/Application Support/InfoDesk/infodesk.db、Linux では ~/.local/share/InfoDesk/infodesk.db`. Make `fn local_tz` `pub(crate)`.
 
 Add to `enum Command` after `Digests`:
 
@@ -1154,16 +1055,14 @@ Add to `enum Command` after `Digests`:
     Sync,
 ```
 
-Add the function:
+Add:
 
 ```rust
 async fn sync(store: Store) -> Result<()> {
-    use infodesk_core::sync::headless::{self, HeadlessEnv, SyncOutcome, TailscaleCli};
+    use infodesk_core::sync::headless::{self, HeadlessEnv, SyncOutcome};
     let store = std::sync::Mutex::new(store);
     let env = HeadlessEnv::from_env(local_tz());
-    match headless::sync_nas(&store, &env, &TailscaleCli::default(), &headless::webdav, Utc::now())
-        .await
-    {
+    match headless::sync_nas(&store, &env, &headless::webdav, Utc::now()).await {
         Ok(SyncOutcome::Disabled) => {
             println!("同期は無効です (sync.enabled = true と sync.backend = nas を確かめてください)");
             Ok(())
@@ -1197,10 +1096,7 @@ In `run`, after `seed::seed_defaults(&store)?;` and before the `match`:
 
 and add `Command::Sync => unreachable!("handled before the match"),` to the match.
 
-- [ ] **Step 4: Run tests**
-
-Run: `cargo test -p infodesk`
-Expected: PASS.
+- [ ] **Step 4: Run** `cargo test -p infodesk` — Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -1212,21 +1108,21 @@ git commit -m "feat(cli): a Linux default database path and a sync command for t
 
 ---
 
-### Task 6: `infodesk serve`
+### Task 5: `infodesk tick`
 
 **Files:**
-- Create: `crates/cli/src/serve.rs`
+- Create: `crates/cli/src/tick.rs`
 - Modify: `crates/cli/src/lib.rs`, `crates/cli/Cargo.toml`
 
 **Interfaces:**
-- Consumes: `schedule::*` (Task 1), `llm::{provider_from_settings, LlmProvider, LlmRole}`, `sync::headless::*` (Task 4), `collector::{http_client, fetch_all, apply_outcomes, images}`, `summarizer::{plan_item_summaries, finish_item_summary, plan_digest, finish_digest, DigestOutcome}`, `model::{Category, DigestScope}`, `period::{period_start, utc_range}`.
-- Produces: `pub type LlmFactory = Box<dyn Fn(&Store, LlmRole) -> infodesk_core::Result<Box<dyn LlmProvider>> + Send + Sync>`; `pub struct Server`; `Server::new(store, tz, llm, peers, make_drive, env) -> Result<Server>`; `pub async fn tick(&mut self, now: DateTime<FixedOffset>) -> Vec<String>` (log lines, in order); `pub async fn serve(store: Store, tz: FixedOffset) -> Result<()>`; `Command::Serve`.
+- Consumes: `schedule::*` (Task 1), `llm::{provider_from_settings, LlmProvider, LlmRole}`, `sync::headless::*` (Task 3), `collector::{http_client, fetch_all, apply_outcomes, images}`, `summarizer::{plan_item_summaries, finish_item_summary, plan_digest, finish_digest, DigestOutcome}`, `model::{Category, DigestScope, Period}`, `period::{period_start, utc_range}`.
+- Produces: `pub type LlmFactory = Box<dyn Fn(&Store, LlmRole) -> infodesk_core::Result<Box<dyn LlmProvider>> + Send + Sync>`; `pub struct Runner`; `Runner::new(store, tz, llm, make_drive, env) -> Result<Runner>`; `pub async fn run(&self, now: DateTime<FixedOffset>) -> Result<Vec<String>>` (log lines in order; `Err` only when the database cannot be read); `pub async fn tick(store: Store, tz: FixedOffset) -> Result<()>`; `Command::Tick`. Settings written: `schedule.attempts` (JSON object `{"<job key>": "<RFC 3339>"}`), `schedule.last_retry_at` (RFC 3339). Job keys: `collect`, `daily:YYYY-MM-DD`, `weekly:YYYY-MM-DD`, `monthly:YYYY-MM-DD`.
 
 - [ ] **Step 1: Dependencies**
 
-In `crates/cli/Cargo.toml` `[dependencies]`: change tokio to `tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "signal", "time"] }` and add `reqwest = "0.13.5"`. In `[dev-dependencies]` add `async-trait = "0.1.92"`.
+In `crates/cli/Cargo.toml` `[dependencies]` add `reqwest = "0.13.5"`. In `[dev-dependencies]` add `async-trait = "0.1.92"`. (No tokio feature change: `tick` runs once inside the existing runtime.)
 
-- [ ] **Step 2: Write the failing tests** (create `serve.rs` with the test module; add `mod serve;` to `lib.rs`)
+- [ ] **Step 2: Write the failing tests** (create `tick.rs` with the test module; add `mod tick;` to `lib.rs`)
 
 ```rust
 #[cfg(test)]
@@ -1235,7 +1131,6 @@ mod tests {
     use async_trait::async_trait;
     use chrono::TimeZone;
     use infodesk_core::sync::drive::MemoryDrive;
-    use infodesk_core::sync::headless::PeerStatus;
     use infodesk_core::sync::nas::*;
 
     struct Reply(std::result::Result<String, String>);
@@ -1249,24 +1144,17 @@ mod tests {
         }
     }
 
-    struct Peers;
-    #[async_trait]
-    impl PeerStatus for Peers {
-        async fn status_json(&self) -> Option<String> {
-            Some(r#"{"Peer":{"k":{"HostName":"nas","DNSName":"nas.t.ts.net.","TailscaleIPs":["100.1.1.1"]}}}"#.into())
-        }
-    }
-
     fn jst() -> FixedOffset {
         FixedOffset::east_opt(9 * 3600).unwrap()
     }
 
+    /// 2026-11-02 は月曜。
     fn at(h: u32, m: u32) -> DateTime<FixedOffset> {
         jst().with_ymd_and_hms(2026, 11, 2, h, m, 0).unwrap()
     }
 
-    /// ソースはすべて無効 (通信しない)。同期は NAS、パスワードあり。
-    fn server(llm: LlmFactory) -> Server {
+    /// ソースはすべて無効 (通信しない)。同期は LAN の NAS、パスワードあり。
+    fn runner(llm: LlmFactory) -> Runner {
         let store = Store::open_in_memory().unwrap();
         infodesk_core::seed::seed_defaults(&store).unwrap();
         for src in store.list_sources().unwrap() {
@@ -1274,57 +1162,88 @@ mod tests {
         }
         store.set_setting(SETTING_ENABLED, "true").unwrap();
         store.set_setting(SETTING_BACKEND, BACKEND_NAS).unwrap();
-        store.set_setting(SETTING_NAS_URL, "http://nas:5005/infodesk/").unwrap();
-        store.set_setting(SETTING_NAS_USER, "kou").unwrap();
+        store.set_setting(SETTING_NAS_URL, "http://192.168.0.151:5005/infodesk/").unwrap();
+        store.set_setting(SETTING_NAS_USER, "infodesk").unwrap();
         let env = HeadlessEnv { nas_password: Some("pw".into()), tz: jst() };
         let drive: Box<MakeDrive> =
             Box::new(|_| Ok(Arc::new(MemoryDrive::new()) as Arc<dyn DriveStore>));
-        Server::new(store, jst(), llm, Box::new(Peers), drive, env).unwrap()
+        Runner::new(store, jst(), llm, drive, env).unwrap()
     }
 
-    fn mock_llm() -> LlmFactory {
+    fn ok_llm() -> LlmFactory {
         Box::new(|_, _| Ok(Box::new(Reply(Ok("要約".into()))) as Box<dyn LlmProvider>))
     }
 
-    fn setting(s: &Server, key: &str) -> Option<String> {
-        s.store.lock().unwrap().get_setting(key).unwrap()
+    fn setting(r: &Runner, key: &str) -> Option<String> {
+        r.store.lock().unwrap().get_setting(key).unwrap()
+    }
+
+    fn has(log: &[String], prefix: &str) -> bool {
+        log.iter().any(|l| l.starts_with(prefix))
     }
 
     #[tokio::test]
-    async fn first_tick_collects_digests_and_syncs_in_order() {
-        let mut s = server(mock_llm());
-        let log = s.tick(at(8, 0)).await;
+    async fn first_run_collects_digests_and_syncs_in_order() {
+        let r = runner(ok_llm());
+        let log = r.run(at(8, 0)).await.unwrap();
         let pos = |p: &str| log.iter().position(|l| l.starts_with(p)).unwrap_or_else(|| panic!("{p} in {log:?}"));
         assert!(pos("collect:") < pos("sync:"), "{log:?}");
-        assert!(log.iter().any(|l| l.starts_with("digest daily 2026-11-01")), "{log:?}");
-        assert!(setting(&s, "schedule.last_collect_at").is_some());
-        assert_eq!(setting(&s, "schedule.last_daily_for").as_deref(), Some("2026-11-01"));
-        assert!(setting(&s, SETTING_LAST_SYNC_AT).is_some());
+        assert!(has(&log, "digest daily 2026-11-01"), "{log:?}");
+        assert!(setting(&r, "schedule.last_collect_at").is_some());
+        assert_eq!(setting(&r, "schedule.last_daily_for").as_deref(), Some("2026-11-01"));
+        assert!(setting(&r, SETTING_LAST_SYNC_AT).is_some());
+        assert!(setting(&r, "schedule.attempts").unwrap().contains("\"collect\""));
+        assert!(setting(&r, "schedule.last_retry_at").is_some());
     }
 
     #[tokio::test]
-    async fn a_second_tick_right_after_does_nothing() {
-        let mut s = server(mock_llm());
-        s.tick(at(8, 0)).await;
-        let log = s.tick(at(8, 1)).await;
-        assert!(log.iter().all(|l| !l.starts_with("collect:")), "{log:?}");
+    async fn a_second_run_right_after_does_nothing() {
+        let r = runner(ok_llm());
+        r.run(at(8, 0)).await.unwrap();
+        let log = r.run(at(8, 5)).await.unwrap();
+        assert!(log.iter().all(|l| !l.starts_with("collect:") && !l.starts_with("digest")), "{log:?}");
+    }
+
+    #[tokio::test]
+    async fn a_failed_weekly_waits_15_minutes_between_processes() {
+        // 各 tick は別のプロセスなので、試行時刻は DB の schedule.attempts だけが覚えている。
+        let llm: LlmFactory = Box::new(|_, role| {
+            let reply = match role {
+                LlmRole::Items => Ok("要約".to_string()),
+                LlmRole::Digest => Err("down".to_string()),
+            };
+            Ok(Box::new(Reply(reply)) as Box<dyn LlmProvider>)
+        });
+        let r = runner(llm);
+        // 前週 (2026-10-26 の週) に記事を1件置き、週次の生成を試させて失敗させる。
+        {
+            let s = r.store.lock().unwrap();
+            let source = s.list_sources().unwrap().remove(0);
+            add_item(&s, source, "2026-10-28T09:00:00+09:00");
+        }
+        r.run(at(8, 0)).await.unwrap();
+        assert_eq!(setting(&r, "schedule.last_weekly_for"), None);
+        let log = r.run(at(8, 5)).await.unwrap();
+        assert!(!has(&log, "digest weekly"), "{log:?}");
+        let log = r.run(at(8, 16)).await.unwrap();
+        assert!(has(&log, "digest weekly 2026-10-26"), "{log:?}");
     }
 
     #[tokio::test]
     async fn a_copied_database_continues_its_schedule() {
         // Review Focus 1
-        let mut s = server(mock_llm());
+        let r = runner(ok_llm());
         {
-            let st = s.store.lock().unwrap();
+            let st = r.store.lock().unwrap();
             st.set_setting("schedule.last_collect_at", &at(7, 30).to_rfc3339()).unwrap();
             st.set_setting("schedule.last_daily_for", "2026-11-01").unwrap();
             st.set_setting("schedule.last_weekly_for", "2026-10-26").unwrap();
             st.set_setting("schedule.last_monthly_for", "2026-10-01").unwrap();
             st.set_setting("sync.device_id", "mac-device").unwrap();
         }
-        let log = s.tick(at(8, 0)).await;
+        let log = r.run(at(8, 0)).await.unwrap();
         assert!(log.iter().all(|l| !l.starts_with("collect:") && !l.starts_with("digest")), "{log:?}");
-        assert_eq!(setting(&s, "sync.device_id").as_deref(), Some("mac-device"));
+        assert_eq!(setting(&r, "sync.device_id").as_deref(), Some("mac-device"));
     }
 
     #[tokio::test]
@@ -1333,35 +1252,71 @@ mod tests {
         let llm: LlmFactory = Box::new(|_, _| {
             Err(infodesk_core::Error::Invalid("ANTHROPIC_API_KEY is not set".into()))
         });
-        let mut s = server(llm);
-        let log = s.tick(at(8, 0)).await;
-        assert!(log.iter().any(|l| l.starts_with("collect:")), "{log:?}");
+        let r = runner(llm);
+        let log = r.run(at(8, 0)).await.unwrap();
+        assert!(has(&log, "collect:"), "{log:?}");
         assert!(log.iter().any(|l| l.contains("ANTHROPIC_API_KEY is not set")), "{log:?}");
-        assert!(setting(&s, "schedule.last_collect_at").is_some());
+        assert!(setting(&r, "schedule.last_collect_at").is_some());
     }
 
     #[tokio::test]
-    async fn a_sync_error_is_logged_and_the_loop_goes_on() {
-        let mut s = server(mock_llm());
-        s.env.nas_password = None;
-        let log = s.tick(at(8, 0)).await;
+    async fn a_sync_error_is_logged_and_the_run_still_succeeds() {
+        let mut r = runner(ok_llm());
+        r.env.nas_password = None;
+        let log = r.run(at(8, 0)).await.unwrap();
         assert!(log.iter().any(|l| l.starts_with("sync: error") && l.contains(NAS_INCOMPLETE_MESSAGE)), "{log:?}");
-        assert!(setting(&s, "schedule.last_collect_at").is_some());
+    }
+
+    #[test]
+    fn job_keys_round_trip() {
+        let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+        for job in [
+            Job::Collect,
+            Job::Daily(d("2026-11-01")),
+            Job::Weekly(d("2026-10-26")),
+            Job::Monthly(d("2026-10-01")),
+        ] {
+            assert_eq!(job_from_key(&job_key(&job)), Some(job.clone()), "{job:?}");
+        }
+        assert_eq!(job_from_key("weekly:garbage"), None);
+        assert_eq!(job_from_key("other"), None);
     }
 }
 ```
 
-- [ ] **Step 3: Run to see them fail**
-
-Run: `cargo test -p infodesk serve::`
-Expected: compile errors.
-
-- [ ] **Step 4: Implement** (top of `serve.rs`)
+Add this helper to the same test module (it saves one article through the public collector path; the collection time is the article time, so the article falls in that period whichever time the digest window uses):
 
 ```rust
-//! `infodesk serve`: 画面なしで、アプリと同じ規則で収集・要約・同期を続ける (自宅サーバー用)。
+    fn add_item(s: &Store, source: infodesk_core::model::Source, at: &str) {
+        let time = DateTime::parse_from_rfc3339(at).unwrap().with_timezone(&Utc);
+        let outcome = infodesk_core::collector::FetchOutcome {
+            source,
+            result: Ok(vec![infodesk_core::model::NewItem {
+                url: "https://example.com/weekly-1".into(),
+                title: "認知症の記事".into(),
+                excerpt: "本文".into(),
+                author: None,
+                published_at: Some(time),
+                score: None,
+                image_url: None,
+            }]),
+        };
+        infodesk_core::collector::apply_outcomes(s, &[outcome], &time).unwrap();
+    }
+```
 
-use std::collections::HashMap;
+- [ ] **Step 3: Run to see them fail**
+
+Run: `cargo test -p infodesk tick::`
+Expected: compile errors.
+
+- [ ] **Step 4: Implement** (top of `tick.rs`)
+
+```rust
+//! `infodesk tick`: 予定を1回だけ評価して終わる。自宅の k3s の Argo CronWorkflow が5分ごとに呼ぶ。
+//! 規則はアプリと同じ (`infodesk_core::schedule`)。プロセスをまたぐ状態は DB に置く。
+
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, Utc};
@@ -1370,66 +1325,76 @@ use infodesk_core::llm::{LlmProvider, LlmRole, provider_from_settings};
 use infodesk_core::model::{Category, DigestScope, Period};
 use infodesk_core::period::{period_start, utc_range};
 use infodesk_core::schedule::{
-    Job, LastRuns, RECENT_ATTEMPT, ScheduleConfig, TICK, all_failed_retry_base, due_jobs,
+    Job, LastRuns, RECENT_ATTEMPT, ScheduleConfig, all_failed_retry_base, due_jobs,
     filter_recent, job_plan, last_run_record, retry_due, should_record,
 };
 use infodesk_core::summarizer::{
     DigestOutcome, finish_digest, finish_item_summary, plan_digest, plan_item_summaries,
 };
 use infodesk_core::sync::drive::DriveStore;
-use infodesk_core::sync::headless::{
-    self, HeadlessEnv, MakeDrive, PeerStatus, SyncOutcome, TailscaleCli,
-};
+use infodesk_core::sync::headless::{self, HeadlessEnv, MakeDrive, SyncOutcome};
 use infodesk_core::{Result, Store};
 
 pub type LlmFactory =
     Box<dyn Fn(&Store, LlmRole) -> Result<Box<dyn LlmProvider>> + Send + Sync>;
 
-pub struct Server {
+const SETTING_ATTEMPTS: &str = "schedule.attempts";
+const SETTING_LAST_RETRY_AT: &str = "schedule.last_retry_at";
+
+pub struct Runner {
     pub(crate) store: Mutex<Store>,
     http: reqwest::Client,
     tz: FixedOffset,
     llm: LlmFactory,
-    peers: Box<dyn PeerStatus>,
     make_drive: Box<MakeDrive>,
     pub(crate) env: HeadlessEnv,
-    attempts: HashMap<Job, DateTime<Utc>>,
-    last_retry_at: Option<DateTime<Utc>>,
 }
 
 fn all_scopes() -> Vec<DigestScope> {
     Category::ALL.into_iter().map(DigestScope::Category).collect()
 }
 
-fn job_label(job: &Job) -> String {
+/// `schedule.attempts` のキー。
+pub(crate) fn job_key(job: &Job) -> String {
     match job {
         Job::Collect => "collect".to_string(),
-        Job::Daily(d) => format!("daily {d}"),
-        Job::Weekly(d) => format!("weekly {d}"),
-        Job::Monthly(d) => format!("monthly {d}"),
+        Job::Daily(d) => format!("daily:{d}"),
+        Job::Weekly(d) => format!("weekly:{d}"),
+        Job::Monthly(d) => format!("monthly:{d}"),
     }
 }
 
-impl Server {
+pub(crate) fn job_from_key(key: &str) -> Option<Job> {
+    if key == "collect" {
+        return Some(Job::Collect);
+    }
+    let (kind, date) = key.split_once(':')?;
+    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    match kind {
+        "daily" => Some(Job::Daily(date)),
+        "weekly" => Some(Job::Weekly(date)),
+        "monthly" => Some(Job::Monthly(date)),
+        _ => None,
+    }
+}
+
+fn label(job: &Job) -> String {
+    job_key(job).replace(':', " ")
+}
+
+fn parse_utc(v: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(v).ok().map(|d| d.with_timezone(&Utc))
+}
+
+impl Runner {
     pub fn new(
         store: Store,
         tz: FixedOffset,
         llm: LlmFactory,
-        peers: Box<dyn PeerStatus>,
         make_drive: Box<MakeDrive>,
         env: HeadlessEnv,
     ) -> Result<Self> {
-        Ok(Self {
-            store: Mutex::new(store),
-            http: http_client()?,
-            tz,
-            llm,
-            peers,
-            make_drive,
-            env,
-            attempts: HashMap::new(),
-            last_retry_at: None,
-        })
+        Ok(Self { store: Mutex::new(store), http: http_client()?, tz, llm, make_drive, env })
     }
 
     fn lock(&self) -> MutexGuard<'_, Store> {
@@ -1440,17 +1405,36 @@ impl Server {
         self.lock().get_setting(key).ok().flatten()
     }
 
-    /// 1回の評価。実行したことをログの行として順に返す。
-    pub async fn tick(&mut self, now: DateTime<FixedOffset>) -> Vec<String> {
+    fn load_attempts(&self) -> Result<HashMap<Job, DateTime<Utc>>> {
+        let raw = self.lock().get_setting(SETTING_ATTEMPTS)?.unwrap_or_default();
+        let map: BTreeMap<String, String> = serde_json::from_str(&raw).unwrap_or_default();
+        Ok(map
+            .iter()
+            .filter_map(|(k, v)| Some((job_from_key(k)?, parse_utc(v)?)))
+            .collect())
+    }
+
+    fn save_attempts(&self, attempts: &HashMap<Job, DateTime<Utc>>) {
+        let map: BTreeMap<String, String> =
+            attempts.iter().map(|(j, at)| (job_key(j), at.to_rfc3339())).collect();
+        let json = serde_json::to_string(&map).unwrap_or_else(|_| "{}".to_string());
+        let _ = self.lock().set_setting(SETTING_ATTEMPTS, &json);
+    }
+
+    /// 1回の評価。実行したことをログの行として順に返す。DB を読めないときだけ `Err`。
+    pub async fn run(&self, now: DateTime<FixedOffset>) -> Result<Vec<String>> {
         let mut log = Vec::new();
+        let now_utc = now.with_timezone(&Utc);
+        let mut attempts = self.load_attempts()?;
+        attempts.retain(|_, at| now_utc - *at < RECENT_ATTEMPT);
         let cfg = ScheduleConfig::from_settings(|k| self.get(k));
         let last = LastRuns::from_settings(|k| self.get(k));
-        let now_utc = now.with_timezone(&Utc);
-        self.attempts.retain(|_, at| now_utc - *at < RECENT_ATTEMPT);
-        let due = filter_recent(due_jobs(now, &cfg, &last), &self.attempts, now_utc, &cfg);
+        let due = filter_recent(due_jobs(now, &cfg, &last), &attempts, now_utc, &cfg);
         let today = now.date_naive();
         for job in &due {
-            self.attempts.insert(job.clone(), now_utc);
+            attempts.insert(job.clone(), now_utc);
+            // 途中で時間切れになっても試行を覚えているよう、実行の前に書く。
+            self.save_attempts(&attempts);
             let changed = match job {
                 Job::Collect => self.collect(now_utc, &cfg, &mut log).await,
                 _ => self.digest_job(job, today, &mut log).await,
@@ -1459,15 +1443,21 @@ impl Server {
                 self.sync(now_utc, &mut log).await;
             }
         }
-        if retry_due(self.last_retry_at, now_utc) {
-            self.last_retry_at = Some(now_utc);
+        self.save_attempts(&attempts);
+        let last_retry_at = self.get(SETTING_LAST_RETRY_AT).and_then(|v| parse_utc(&v));
+        if retry_due(last_retry_at, now_utc) {
+            let _ = self.lock().set_setting(SETTING_LAST_RETRY_AT, &now_utc.to_rfc3339());
             if self.retry_pending(&mut log).await {
                 self.sync(now_utc, &mut log).await;
             }
         }
-        log
+        Ok(log)
     }
+```
 
+The rest of `impl Runner` is the job flow. Write these methods exactly as follows (they mirror the app's `jobs.rs` and `scheduler.rs::run_job`, with short locks around store calls and none across an `await`):
+
+```rust
     /// 収集と記事要約。記録まで進んだら真 (同期する)。
     async fn collect(&self, now: DateTime<Utc>, cfg: &ScheduleConfig, log: &mut Vec<String>) -> bool {
         let sources = match self.lock().list_sources() {
@@ -1579,7 +1569,7 @@ impl Server {
 
     /// 日次・週次・月次のジョブ。アプリの `run_job` と同じ規則。何か生成したら真。
     async fn digest_job(&self, job: &Job, today: NaiveDate, log: &mut Vec<String>) -> bool {
-        let label = job_label(job);
+        let label = label(job);
         let mut plan = job_plan(job, today).into_iter();
         let Some((period, start, force)) = plan.next() else {
             return false;
@@ -1591,11 +1581,7 @@ impl Server {
                 return false;
             }
         };
-        let errors: Vec<String> = outcomes
-            .iter()
-            .flatten()
-            .filter_map(|o| o.error.clone())
-            .collect();
+        let errors: Vec<String> = outcomes.iter().flatten().filter_map(|o| o.error.clone()).collect();
         if !should_record(job, !errors.is_empty()) {
             log.push(format!("digest {label}: failed, will retry: {errors:?}"));
             return true;
@@ -1638,7 +1624,7 @@ impl Server {
     }
 
     async fn sync(&self, now: DateTime<Utc>, log: &mut Vec<String>) {
-        let got = headless::sync_nas(&self.store, &self.env, self.peers.as_ref(), &*self.make_drive, now).await;
+        let got = headless::sync_nas(&self.store, &self.env, &*self.make_drive, now).await;
         log.push(match got {
             Ok(SyncOutcome::Disabled) => "sync: off".to_string(),
             Ok(SyncOutcome::Synced(r)) => format!(
@@ -1650,204 +1636,371 @@ impl Server {
     }
 }
 
-/// SIGTERM か Ctrl-C まで評価を続ける。評価の途中で止めず、終わってから抜ける。
-pub async fn serve(store: Store, tz: FixedOffset) -> Result<()> {
+/// 1回評価して、ログを標準出力に出す。
+pub async fn tick(store: Store, tz: FixedOffset) -> Result<()> {
     let make_drive: Box<MakeDrive> = Box::new(headless::webdav);
-    let mut server = Server::new(
+    let runner = Runner::new(
         store,
         tz,
         Box::new(provider_from_settings),
-        Box::new(TailscaleCli::default()),
         make_drive,
         HeadlessEnv::from_env(tz),
     )?;
-    println!("serve: started");
-    let mut ticker = tokio::time::interval(TICK);
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    loop {
-        tokio::select! {
-            _ = ticker.tick() => {
-                for line in server.tick(Local::now().with_timezone(&tz)).await {
-                    println!("{line}");
-                }
-            }
-            _ = term.recv() => break,
-            _ = tokio::signal::ctrl_c() => break,
-        }
+    let lines = runner.run(Local::now().with_timezone(&tz)).await?;
+    if lines.is_empty() {
+        println!("tick: nothing due");
     }
-    println!("serve: stopped");
+    for line in lines {
+        println!("{line}");
+    }
     Ok(())
 }
 ```
 
-Notes for the implementer:
-- `self.digests` is called while `self` is borrowed immutably; `tick` takes `&mut self` only to update `attempts` and `last_retry_at`, which it does outside those calls.
-- `tokio::signal::unix::signal(...)?` returns `std::io::Error`, which converts through `infodesk_core::Error::Io`.
-- The `select!` body runs after the branch is chosen, so a SIGTERM during a tick is handled after the tick finishes (the spec's "finish the current step").
-- `Arc` and `DriveStore` imports are used by the tests; if clippy reports them unused outside tests, move them into the test module.
+If clippy reports `Arc` or `DriveStore` unused outside tests, move those imports into the test module.
 
 - [ ] **Step 5: Wire the command** in `lib.rs`
 
 Add to `enum Command` after `Sync`:
 
 ```rust
-    /// 定期実行を続ける (自宅サーバーの systemd 用)。SIGTERM で終わる
-    Serve,
+    /// 予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
+    Tick,
 ```
 
 In `run`, next to the `Sync` early return:
 
 ```rust
-    if matches!(cli.command, Command::Serve) {
-        return serve::serve(store, local_tz()).await;
+    if matches!(cli.command, Command::Tick) {
+        return tick::tick(store, local_tz()).await;
     }
 ```
 
-and `Command::Serve => unreachable!("handled before the match"),` in the match. Extend `sync_and_serve_are_commands` with `assert!(matches!(parse(&["serve"]).unwrap().command, Command::Serve));`.
+and `Command::Tick => unreachable!("handled before the match"),` in the match. Extend `sync_and_tick_are_commands` with `assert!(matches!(parse(&["tick"]).unwrap().command, Command::Tick));`.
 
-- [ ] **Step 6: Run tests**
+- [ ] **Step 6: Run** `cargo test -p infodesk` — Expected: PASS.
 
-Run: `cargo test -p infodesk`
-Expected: PASS.
-
-- [ ] **Step 7: Manual smoke run on the Mac** (no network sources, sync off)
+- [ ] **Step 7: Manual smoke run on the Mac** (sync off, sources on, LLM default Ollama may be absent)
 
 ```bash
-cargo run -q -p infodesk -- --db /tmp/infodesk-serve-smoke.db serve
+cargo run -q -p infodesk -- --db /tmp/infodesk-tick-smoke.db tick
+cargo run -q -p infodesk -- --db /tmp/infodesk-tick-smoke.db tick
 ```
 
-Expected: prints `serve: started`, then `collect: ...`, `summaries: ...` and digest lines within 15 seconds; Ctrl-C prints `serve: stopped`. Delete `/tmp/infodesk-serve-smoke.db*` afterwards.
+Expected: the first prints `collect: ...`, a `summaries:` line (an error line is fine if Ollama is not running) and digest lines; the second prints `tick: nothing due` or only a `retry:` line. Exit code 0 both times. Then `rm /tmp/infodesk-tick-smoke.db*`.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
 git add crates/cli
-git commit -m "feat(cli): infodesk serve runs the schedule headless for a home server"
+git commit -m "feat(cli): infodesk tick evaluates the schedule once for a CronWorkflow"
 ```
 
 ---
 
-### Task 7: systemd files and docs
+### Task 6: Container image, k3s manifests and docs
 
 **Files:**
-- Create: `deploy/linux/infodesk.service`, `deploy/linux/infodesk.env.example`, `docs/15-home-server.md`, `docs/15-home-server.ja.md`
-- Modify: `docs/07-settings.md`, `docs/07-settings.ja.md`, `docs/08-cli.md`, `docs/08-cli.ja.md`, `docs/14-mobile-app.md`, `docs/14-mobile-app.ja.md`, `README.md`, `README.ja.md`, `.gitignore` (only if `deploy/` is ignored)
+- Create: `Dockerfile`, `.dockerignore`, `deploy/k8s/namespace.yaml`, `deploy/k8s/pvc.yaml`, `deploy/k8s/rbac.yaml`, `deploy/k8s/workflowtemplate.yaml`, `deploy/k8s/cronworkflow.yaml`, `deploy/k8s/run-once.yaml`, `deploy/k8s/shell.yaml`, `deploy/k8s/secret.example.yaml`, `deploy/k8s/build-and-push.sh`, `docs/15-home-server.md`, `docs/15-home-server.ja.md`
+- Modify: `docs/07-settings.md`, `docs/07-settings.ja.md`, `docs/08-cli.md`, `docs/08-cli.ja.md`, `docs/14-mobile-app.md`, `docs/14-mobile-app.ja.md`, `README.md`, `README.ja.md`
 
-- [ ] **Step 1: `deploy/linux/infodesk.service`**
+- [ ] **Step 1: `Dockerfile`**
 
-```ini
-[Unit]
-Description=InfoDesk collector (headless)
-After=network-online.target tailscaled.service
-Wants=network-online.target
+```dockerfile
+# infodesk CLI for the home k3s cluster (amd64). Build on the WSL node; see docs/15-home-server.md.
+FROM rust:1.97-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN cargo build --release -p infodesk --locked
 
-[Service]
-Type=simple
-User=infodesk
-Group=infodesk
-EnvironmentFile=/etc/infodesk/infodesk.env
-ExecStart=/usr/local/bin/infodesk --db /var/lib/infodesk/infodesk.db serve
-Restart=on-failure
-RestartSec=60
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/var/lib/infodesk
-PrivateTmp=yes
+FROM build AS test
+RUN cargo test -p infodesk-core -p infodesk --locked
 
-[Install]
-WantedBy=multi-user.target
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --uid 10001 --home-dir /data --no-create-home infodesk
+COPY --from=build /src/target/release/infodesk /usr/local/bin/infodesk
+USER 10001
+ENTRYPOINT ["infodesk"]
 ```
 
-- [ ] **Step 2: `deploy/linux/infodesk.env.example`**
+- [ ] **Step 2: `.dockerignore`**
 
-```sh
-# Copy to /etc/infodesk/infodesk.env, then: sudo chown root:root and sudo chmod 600.
-# Never commit the real file.
-
-# Claude API key from the Claude Console (API Keys). Needed when
-# llm.items_provider or llm.digest_provider is claude_api.
-ANTHROPIC_API_KEY=
-
-# Password of the Synology DSM user that owns the WebDAV folder.
-INFODESK_NAS_PASSWORD=
+```
+.git
+target
+**/node_modules
+app/dist
+app/src-tauri/target
+app/src-tauri/google-oauth.json
+mobile
+design
+design.pen
+docs
+**/*.env
 ```
 
-- [ ] **Step 3: `docs/15-home-server.md`**
+The workspace lists `app/src-tauri` as a member, so its `Cargo.toml` and sources stay in the context (only `-p infodesk` is built).
 
-Header line, in the style of the other pages:
-
-```markdown
-**日本語: [15-home-server.ja.md](15-home-server.ja.md)** | ← [Mobile App](14-mobile-app.md)
-
-# Home Server (Ubuntu, headless)
-```
-
-Sections, with these contents:
-1. **What it does**: the server is the only writer; it collects, summarizes, makes digests and syncs to the NAS on the Mac app's schedule; the iPhone reads the NAS as before; the Mac app must not collect or sync while the server runs (a Mac reader mode comes later).
-2. **Why the Mac must stop**: the copied database carries the Mac's sync device id; two writers with one id overwrite each other's files.
-3. **Set up the server**: the runbook from spec section 8, steps 1 to 8, as commands:
-
-```sh
-sudo apt install -y build-essential pkg-config git curl
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up            # same tailnet as the NAS
-sudo timedatectl set-timezone Asia/Tokyo
-sudo useradd --system --home /var/lib/infodesk --create-home --shell /usr/sbin/nologin infodesk
-git clone <your InfoDesk repository> && cd InfoDesk
-cargo build --release -p infodesk
-sudo install -m 755 target/release/infodesk /usr/local/bin/infodesk
-sudo install -d -m 700 /etc/infodesk
-sudo install -m 600 deploy/linux/infodesk.env.example /etc/infodesk/infodesk.env
-sudoedit /etc/infodesk/infodesk.env   # fill in the two values
-```
-
-   Then: on the Mac turn off 同期する, quit InfoDesk and turn off launch at login; copy `~/Library/Application Support/jp.infodesk.app/infodesk.db` (and `infodesk.db-wal`, `infodesk.db-shm` if present) to the server as `/var/lib/infodesk/infodesk.db` owned by `infodesk`; set the providers and the device name:
-
-```sh
-db=/var/lib/infodesk/infodesk.db
-sudo -u infodesk infodesk --db $db config set llm.items_provider claude_api
-sudo -u infodesk infodesk --db $db config set llm.digest_provider claude_api
-sudo -u infodesk infodesk --db $db config set sync.device_name "$(hostname)"
-sudo -u infodesk infodesk --db $db config set sync.enabled true
-sudo -u infodesk env $(sudo cat /etc/infodesk/infodesk.env | xargs) infodesk --db $db sync
-sudo install -m 644 deploy/linux/infodesk.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now infodesk
-journalctl -u infodesk -f
-```
-
-4. **Claude API settings**: `claude_api.model` (default `claude-sonnet-5-5`), `claude_api.items_effort` (default `low`), `claude_api.digest_effort` (default empty = API default); the cost estimate from spec section 9 and the advice to check spend in the Claude Console after a week; the key lives only in `/etc/infodesk/infodesk.env`.
-5. **Changing sources and topics**: `ssh` to the server and use `infodesk --db /var/lib/infodesk/infodesk.db source|topic|config ...` as `sudo -u infodesk` (link to [CLI](08-cli.md)).
-6. **Troubleshooting** table: `sync: error Tailscale が停止中です` (run `tailscale status`; start `tailscaled`); `sync: error NAS が Tailscale の中に見つかりません…` (use the NAS name from the admin console); `sync: error NAS の URL、ユーザー名、パスワードを入力してください` (check `INFODESK_NAS_PASSWORD` and `sync.nas.url` / `sync.nas.user`); `summaries: error ANTHROPIC_API_KEY is not set` (fill the env file, `systemctl restart infodesk`); `claude_api 401 ... the API key was rejected` (create a new key in the Console); `claude_api 429` / `529` (temporary; digests stay pending and are retried every 15 minutes).
-
-`docs/15-home-server.ja.md`: the same page in Japanese, header `**English: [15-home-server.md](15-home-server.md)** | ← [前: モバイルアプリ](14-mobile-app.ja.md)`, following the wording style of `docs/13-nas-setup.ja.md`.
-
-- [ ] **Step 4: Update existing docs**
-
-- `docs/14-mobile-app.md` header: append ` | Next: [Home Server →](15-home-server.md)`; `.ja.md`: append ` | [次: 自宅サーバー →](15-home-server.ja.md)`.
-- `README.md` and `README.ja.md` docs table: add row 15 after row 14 (`| 15 | [Home Server](docs/15-home-server.md) | Run InfoDesk headless on an Ubuntu server with systemd, syncing to the NAS |` and the Japanese equivalent).
-- `docs/07-settings.md` (and `.ja.md`): in the settings table, `llm.items_provider` / `llm.digest_provider` accept `claude_api` too; add rows for `claude_api.model`, `claude_api.items_effort`, `claude_api.digest_effort` with the defaults and meanings from Task 2; note that `claude_api` is not offered in the Mac app's LLM tab and needs `ANTHROPIC_API_KEY`.
-- `docs/08-cli.md` (and `.ja.md`): the database path section names both defaults (macOS and Linux with `XDG_DATA_HOME`); add `sync` and `serve` to the command list and a short section for each (what they print, that `serve` stops on SIGTERM, link to [Home Server](15-home-server.md)).
-
-- [ ] **Step 5: Check**
-
-Run: `cargo test --workspace` and `git status` (the env example is committed; no real secrets anywhere: `git grep -n 'sk-ant' -- . ':!docs/superpowers'` must print nothing).
-Expected: tests PASS; grep prints nothing.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 3: `deploy/k8s/build-and-push.sh`** (run on the Mac from the repository root)
 
 ```bash
-git add deploy docs README.md README.ja.md
-git commit -m "docs: run InfoDesk headless on a home server"
+#!/usr/bin/env bash
+# Builds the image on the WSL node of 192.168.0.175 and pushes it to registry.umafolio.site.
+# Usage: deploy/k8s/build-and-push.sh   (prints the image tag)
+set -euo pipefail
+host="Kousuke Takeuchi@192.168.0.175"
+tag="$(git rev-parse --short HEAD)"
+image="registry.umafolio.site/infodesk:${tag}"
+dir="/root/build/infodesk-${tag}"
+# base64 keeps the tar intact through the Windows PowerShell session.
+git archive --format=tar.gz HEAD | base64 | ssh -o BatchMode=yes "$host" \
+  "wsl -d Ubuntu-24.04 -- bash -c 'rm -rf ${dir} && mkdir -p ${dir} && base64 -d | tar -xz -C ${dir}'"
+ssh -o BatchMode=yes "$host" "wsl -d Ubuntu-24.04 -- bash -c 'cd ${dir} && docker build --target test -t infodesk-test:${tag} . && docker build -t ${image} . && docker push ${image}'"
+echo "$image"
+```
+
+`chmod +x deploy/k8s/build-and-push.sh`.
+
+- [ ] **Step 4: Manifests**
+
+`deploy/k8s/namespace.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infodesk
+```
+
+`deploy/k8s/pvc.yaml`:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: infodesk-data
+  namespace: infodesk
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+```
+
+`deploy/k8s/rbac.yaml` (same rules as `umafolio/argo-workflow-executor`):
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infodesk
+  namespace: infodesk
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-executor
+  namespace: infodesk
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/exec]
+    verbs: [create, get, list, watch, patch, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, watch]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, get, list, watch, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-executor
+  namespace: infodesk
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-executor
+subjects:
+  - kind: ServiceAccount
+    name: infodesk
+    namespace: infodesk
+```
+
+`deploy/k8s/workflowtemplate.yaml` (replace `TAG` with the tag printed by `build-and-push.sh`):
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: infodesk-tick
+  namespace: infodesk
+spec:
+  entrypoint: tick
+  serviceAccountName: infodesk
+  activeDeadlineSeconds: 3000
+  nodeSelector:
+    kubernetes.io/hostname: takeuchi-nuc11atkc2
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: infodesk-data
+  templates:
+    - name: tick
+      container:
+        image: registry.umafolio.site/infodesk:TAG
+        args: ["--db", "/data/infodesk.db", "tick"]
+        env:
+          - name: TZ
+            value: Asia/Tokyo
+        envFrom:
+          - secretRef:
+              name: infodesk-env
+        volumeMounts:
+          - name: data
+            mountPath: /data
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 512Mi
+```
+
+`deploy/k8s/cronworkflow.yaml`:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: infodesk-tick
+  namespace: infodesk
+spec:
+  schedules: ["*/5 * * * *"]
+  timezone: Asia/Tokyo
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  workflowSpec:
+    workflowTemplateRef:
+      name: infodesk-tick
+```
+
+`deploy/k8s/run-once.yaml`:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: infodesk-tick-manual-
+  namespace: infodesk
+spec:
+  workflowTemplateRef:
+    name: infodesk-tick
+```
+
+`deploy/k8s/shell.yaml` (apply only to run CLI commands; delete afterwards; replace `TAG`):
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: infodesk-shell
+  namespace: infodesk
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: takeuchi-nuc11atkc2
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  containers:
+    - name: shell
+      image: registry.umafolio.site/infodesk:TAG
+      command: ["sleep", "infinity"]
+      env:
+        - name: TZ
+          value: Asia/Tokyo
+      envFrom:
+        - secretRef:
+            name: infodesk-env
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: infodesk-data
+```
+
+`deploy/k8s/secret.example.yaml`:
+
+```yaml
+# Documentation only. Do not fill in and do not commit real values.
+# Create the real Secret by hand:
+#   kubectl -n infodesk create secret generic infodesk-env \
+#     --from-literal=ANTHROPIC_API_KEY='<key from the Claude Console>' \
+#     --from-literal=INFODESK_NAS_PASSWORD='<DSM password of the WebDAV user>'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: infodesk-env
+  namespace: infodesk
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: ""
+  INFODESK_NAS_PASSWORD: ""
+```
+
+Validate: on the WSL node, `kubectl apply --dry-run=server -f deploy/k8s/namespace.yaml` first, then (after the namespace exists in Step 7) `kubectl apply --dry-run=server -f` for the others. Expected: no errors.
+
+- [ ] **Step 5: `docs/15-home-server.md` and `.ja.md`**
+
+Header: `**日本語: [15-home-server.ja.md](15-home-server.ja.md)** | ← [Mobile App](14-mobile-app.md)` and `# Home Server (k3s and Argo Workflows)`. The Japanese page has `**English: [15-home-server.md](15-home-server.md)** | ← [前: モバイルアプリ](14-mobile-app.ja.md)` and follows the wording style of `docs/13-nas-setup.ja.md`. Sections:
+
+1. **What it does**: the CronWorkflow `infodesk-tick` runs every 5 minutes on the NUC node; each run collects, summarizes, makes digests and syncs to the NAS when due, by the same rules as the Mac app; the iPhone reads the NAS as before; run history and logs are in the Argo UI (namespace `infodesk`).
+2. **Why the Mac must stop**: the copied database carries the Mac's sync device id; two writers with one id overwrite each other's files. Until the Mac reader mode exists, keep the Mac app's sync off and the app closed.
+3. **Set up**: spec section 8 as commands, in order: `deploy/k8s/build-and-push.sh`; put the tag into `workflowtemplate.yaml` and `shell.yaml`; `kubectl apply -f deploy/k8s/namespace.yaml -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml`; the user types the `kubectl create secret generic infodesk-env ...` command; on the Mac turn off 同期する and quit InfoDesk; `sqlite3 "$HOME/Library/Application Support/jp.infodesk.app/infodesk.db" ".backup /tmp/infodesk.db"`; `kubectl apply -f deploy/k8s/shell.yaml`; `kubectl -n infodesk cp /tmp/infodesk.db infodesk-shell:/data/infodesk.db`; the `config set` commands through `kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db config set ...` for `llm.items_provider claude_api`, `llm.digest_provider claude_api`, `sync.nas.url http://192.168.0.151:5005/infodesk/`, `sync.device_name infodesk-k3s`; `... sync`; `kubectl -n infodesk delete pod infodesk-shell`; `kubectl apply -f deploy/k8s/workflowtemplate.yaml`; `kubectl create -f deploy/k8s/run-once.yaml` and read the log (`kubectl -n infodesk logs -l workflows.argoproj.io/workflow --tail=100`); `kubectl apply -f deploy/k8s/cronworkflow.yaml`. Note that kubectl runs on the WSL node (`ssh "Kousuke Takeuchi@192.168.0.175"`, then `wsl -d Ubuntu-24.04`), and that `/tmp/infodesk.db` must be copied there first (`scp` to Windows, then it is visible in WSL under `/mnt/c/...`).
+4. **Updating**: `build-and-push.sh`, change the tag in `workflowtemplate.yaml`, `kubectl apply -f deploy/k8s/workflowtemplate.yaml`; the next run uses it.
+5. **Claude API settings**: `claude_api.model` (default `claude-sonnet-5-5`), `claude_api.items_effort` (default `low`), `claude_api.digest_effort` (default empty = API default); the cost estimate from spec section 9; check spend in the Claude Console after a week; the key lives only in the Secret `infodesk-env`.
+6. **Changing sources, topics and settings**: apply `shell.yaml`, run `kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db source|topic|config ...` (link to [CLI](08-cli.md)), delete the pod.
+7. **NAS address**: the URL must be a LAN IP (`http://192.168.0.151:5005/infodesk/`); give the NAS a fixed address (DHCP reservation) so it does not change.
+8. **Troubleshooting** table: `sync: error NAS の URL は LAN の IP アドレスで書いてください…` (set `sync.nas.url` to the IP form); `sync: error NAS の URL、ユーザー名、パスワードを入力してください` (check the Secret and `sync.nas.user`); `sync: error ネットワークに接続できません…` (NAS asleep or address changed); `summaries: error ANTHROPIC_API_KEY is not set` (recreate the Secret; the next run reads it); `claude_api 401 ... the API key was rejected` (create a new key in the Console and recreate the Secret); `claude_api 429` / `529` (temporary; digests stay pending and are retried every 15 minutes); a run stuck `Pending` (the PVC is bound to the NUC; check that node is Ready).
+
+- [ ] **Step 6: Update existing docs**
+
+- `docs/14-mobile-app.md` header: append ` | Next: [Home Server →](15-home-server.md)`; `.ja.md`: append ` | [次: 自宅サーバー →](15-home-server.ja.md)`.
+- `README.md` and `README.ja.md` docs table: add row 15 after row 14 (`| 15 | [Home Server](docs/15-home-server.md) | Run InfoDesk headless on the home k3s cluster with an Argo CronWorkflow, syncing to the NAS |` and the Japanese equivalent).
+- `docs/07-settings.md` (and `.ja.md`): `llm.items_provider` / `llm.digest_provider` accept `claude_api`; add rows for `claude_api.model`, `claude_api.items_effort`, `claude_api.digest_effort`, `schedule.attempts`, `schedule.last_retry_at` (the last two: written by `infodesk tick`, not shown in Settings); note that `claude_api` needs `ANTHROPIC_API_KEY` and is not offered in the Mac app's LLM tab.
+- `docs/08-cli.md` (and `.ja.md`): the database path section names both defaults (macOS, and Linux with `XDG_DATA_HOME`); add `sync` and `tick` to the command list with a short section each (what they print; `tick` exits 0 unless the database cannot be read; link to [Home Server](15-home-server.md)).
+
+- [ ] **Step 7: Build and dry-run on the cluster**
+
+Run: `deploy/k8s/build-and-push.sh` (the `test` stage runs `cargo test` on Linux). Then on the WSL node: `kubectl apply -f deploy/k8s/namespace.yaml && kubectl apply --dry-run=server -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml -f deploy/k8s/workflowtemplate.yaml -f deploy/k8s/cronworkflow.yaml`.
+Expected: build, tests and push succeed and print `registry.umafolio.site/infodesk:<sha>`; dry-run reports each object as created (server dry run). Do not create the Secret, copy the database or apply the CronWorkflow in this step: those are the user's go-ahead (spec section 8).
+
+- [ ] **Step 8: Check for secrets and commit**
+
+Run: `git grep -n -E 'sk-ant|umafolio-reg-' -- . ':!docs/superpowers'` — Expected: no output.
+
+```bash
+git add Dockerfile .dockerignore deploy docs README.md README.ja.md
+git commit -m "feat: run InfoDesk on the home k3s cluster with an Argo CronWorkflow"
 ```
 
 ---
 
 ## After the tasks
 
-- On the Ubuntu server: `cargo test -p infodesk-core -p infodesk` once (spec section 7), then the runbook.
-- The user puts the API key into `/etc/infodesk/infodesk.env` themselves.
-- One PR from `feature/headless-server` to `master`.
+- Open one PR from `feature/headless-server` to `master`.
+- The migration (Secret, Mac shutdown, database copy, first manual run, CronWorkflow) is done with the user, step by step, following `docs/15-home-server.md`. The user types the API key and the NAS password into `kubectl create secret` themselves.
