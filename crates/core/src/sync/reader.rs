@@ -9,10 +9,12 @@ use std::sync::Mutex;
 use chrono::{DateTime, FixedOffset, Utc};
 
 use super::drive::{DriveStore, RemoteFile};
-use super::engine::{MANIFEST, SyncError, local_ops, locked, ops_sort_key};
+use super::engine::{
+    MANIFEST, MAX_SEQ, MIME_JSON, OPS_PER_FILE, SyncError, local_ops, locked, ops_sort_key, st,
+};
 use super::format::{
     DayFile, DigestFile, FileKind, Manifest, Op, OpsFile, SCHEMA, StateSnapshot, gunzip_json,
-    normalize_op, op_time, parse_file_name, sha256_hex,
+    normalize_op, op_time, ops_file_name, parse_file_name, sha256_hex,
 };
 use crate::store::{Store, SyncFileRow};
 
@@ -283,6 +285,37 @@ impl Pass<'_> {
         }
         Ok(())
     }
+
+    /// Uploads this device's unsent marks as new ops files tagged with the
+    /// manifest's `db_id`, then marks them sent. Each file is recorded as
+    /// imported so it is not downloaded back.
+    async fn upload_own_ops(&mut self, manifest: &Manifest) -> Result<(), SyncError> {
+        let device = self.input.device_id.clone();
+        let pending = locked(self.store, |s| s.pending_local_ops(&device))?;
+        if pending.is_empty() {
+            return Ok(());
+        }
+        let chunk = OPS_PER_FILE.max(pending.len().div_ceil(MAX_SEQ));
+        for (i, part) in pending.chunks(chunk).enumerate() {
+            let name = ops_file_name(&device, self.input.now, (i + 1) as u32);
+            let file = OpsFile {
+                device: device.clone(),
+                db_id: Some(manifest.db_id.clone()),
+                ops: part.iter().map(|(_, op)| op.clone()).collect(),
+            };
+            let bytes = st(serde_json::to_vec(&file).map_err(Into::into))?;
+            let sha = sha256_hex(&bytes);
+            let created = self.drive.create(&name, bytes, MIME_JSON).await?;
+            let ids: Vec<i64> = part.iter().map(|(id, _)| *id).collect();
+            let row = in_row(&name, &created.id, &sha, self.input.now);
+            locked(self.store, |s| {
+                s.put_sync_file(&row)?;
+                s.mark_ops_uploaded(&ids)
+            })?;
+            self.report.uploaded_ops += ids.len();
+        }
+        Ok(())
+    }
 }
 
 pub async fn run_reader_sync(
@@ -321,6 +354,7 @@ pub async fn run_reader_sync(
     pass.import_digests(&manifest).await?;
     pass.import_snapshot(&manifest).await?;
     pass.apply_ops_files(&manifest).await?;
+    pass.upload_own_ops(&manifest).await?;
     Ok(pass.report)
 }
 #[cfg(test)]
@@ -820,5 +854,123 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(again.applied_ops, 0);
+    }
+
+    #[tokio::test]
+    async fn reader_marks_reach_the_writer() {
+        let w = writer();
+        let id = add_item(&w, "https://a/1", "2026-10-13T03:00:00Z");
+        let drive = MemoryDrive::new();
+        run_sync(&w, &drive, &writer_input(NOW)).await.unwrap();
+        let r = reader();
+        run_reader_sync(&r, &drive, &reader_input(&r, NOW))
+            .await
+            .unwrap();
+        r.lock().unwrap().set_starred(id, true).unwrap();
+
+        let input = reader_input(&r, "2026-10-13T12:01:00Z");
+        assert_ne!(
+            input.device_id, "server",
+            "the writer must not skip it as its own"
+        );
+        let report = run_reader_sync(&r, &drive, &input).await.unwrap();
+        assert_eq!(report.uploaded_ops, 1);
+        assert!(
+            r.lock()
+                .unwrap()
+                .pending_local_ops(&input.device_id)
+                .unwrap()
+                .is_empty()
+        );
+        let mine = format!("ops-{}-", input.device_id);
+        assert!(
+            drive.names().iter().any(|n| n.starts_with(&mine)),
+            "{:?}",
+            drive.names()
+        );
+
+        let wr = run_sync(&w, &drive, &writer_input("2026-10-13T12:02:00Z"))
+            .await
+            .unwrap();
+        assert_eq!(wr.applied_ops, 1);
+        assert!(w.lock().unwrap().get_item(id).unwrap().unwrap().starred);
+        // The writer folded the batch into the snapshot and deleted it; the star stays.
+        run_reader_sync(&r, &drive, &reader_input(&r, "2026-10-13T12:03:00Z"))
+            .await
+            .unwrap();
+        assert!(r.lock().unwrap().get_item(id).unwrap().unwrap().starred);
+    }
+
+    #[tokio::test]
+    async fn the_reader_writes_nothing_but_its_own_new_ops_files() {
+        let w = writer();
+        let id = add_item(&w, "https://a/1", "2026-10-13T03:00:00Z");
+        save(&w, Period::Day, day("2026-10-13"), "日次", vec![id]);
+        let spy = Spy::default();
+        run_sync(&w, &spy.inner, &writer_input(NOW)).await.unwrap();
+        let before = files(&spy.inner).await;
+        let r = reader();
+
+        run_reader_sync(&r, &spy, &reader_input(&r, NOW))
+            .await
+            .unwrap();
+        r.lock().unwrap().set_read(id, true).unwrap();
+        let input = reader_input(&r, "2026-10-13T12:01:00Z");
+        run_reader_sync(&r, &spy, &input).await.unwrap();
+        run_reader_sync(&r, &spy, &reader_input(&r, "2026-10-13T12:02:00Z"))
+            .await
+            .unwrap();
+
+        let writes = spy.writes.lock().unwrap().clone();
+        assert_eq!(writes.len(), 1, "{writes:?}");
+        assert!(
+            writes[0].starts_with(&format!("create ops-{}-", input.device_id)),
+            "{writes:?}"
+        );
+        assert!(
+            writes
+                .iter()
+                .all(|w| !w.starts_with("update ") && !w.starts_with("delete ")),
+            "{writes:?}"
+        );
+        let after = files(&spy.inner).await;
+        for (name, bytes) in &before {
+            assert_eq!(after.get(name), Some(bytes), "{name} unchanged");
+        }
+        assert_eq!(after.len(), before.len() + 1);
+    }
+
+    #[tokio::test]
+    async fn a_failed_upload_keeps_the_marks_for_the_next_pass() {
+        let w = writer();
+        let id = add_item(&w, "https://a/1", "2026-10-13T03:00:00Z");
+        let drive = MemoryDrive::new();
+        run_sync(&w, &drive, &writer_input(NOW)).await.unwrap();
+        let r = reader();
+        run_reader_sync(&r, &drive, &reader_input(&r, NOW))
+            .await
+            .unwrap();
+        r.lock().unwrap().set_read(id, true).unwrap();
+        *drive.fail_on_name.lock().unwrap() = Some("ops-".into());
+
+        let input = reader_input(&r, "2026-10-13T12:01:00Z");
+        let err = run_reader_sync(&r, &drive, &input).await.unwrap_err();
+        assert!(
+            matches!(err, SyncError::Drive(DriveError::Retryable(_))),
+            "{err:?}"
+        );
+        assert_eq!(
+            r.lock()
+                .unwrap()
+                .pending_local_ops(&input.device_id)
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let report = run_reader_sync(&r, &drive, &reader_input(&r, "2026-10-13T12:02:00Z"))
+            .await
+            .unwrap();
+        assert_eq!(report.uploaded_ops, 1);
     }
 }
