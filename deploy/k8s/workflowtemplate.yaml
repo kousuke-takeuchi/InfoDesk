@@ -22,6 +22,9 @@ spec:
     - name: tick
       container:
         image: registry.umafolio.site/infodesk:TAG
+        # Argo looks up the image entrypoint in the registry when command is unset;
+        # the private registry refuses that lookup, so name the binary here.
+        command: ["infodesk"]
         args: ["--db", "/data/infodesk.db", "tick"]
         env:
           - name: TZ
