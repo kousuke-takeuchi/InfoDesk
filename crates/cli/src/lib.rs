@@ -15,7 +15,7 @@ use infodesk_core::{Error, Result, Store, seed, summarizer};
 #[derive(Parser)]
 #[command(name = "infodesk", about = "情報収集と要約")]
 struct Cli {
-    /// DBファイルのパス。既定は ~/Library/Application Support/InfoDesk/infodesk.db
+    /// DBファイルのパス。既定は macOS では ~/Library/Application Support/InfoDesk/infodesk.db、Linux では ~/.local/share/InfoDesk/infodesk.db
     #[arg(long, global = true)]
     db: Option<PathBuf>,
     #[command(subcommand)]
@@ -72,6 +72,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
+    Sync,
     /// 保存済みの期間要約を表示する (生成はしない)
     Digests {
         /// day | week | month
@@ -166,11 +168,59 @@ enum ConfigCommand {
 }
 
 fn default_db_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME").map_err(|_| Error::Invalid("HOME is not set".into()))?;
-    Ok(PathBuf::from(home).join("Library/Application Support/InfoDesk/infodesk.db"))
+    db_path_for(
+        std::env::consts::OS,
+        std::env::var("HOME").ok(),
+        std::env::var("XDG_DATA_HOME").ok(),
+    )
 }
 
-fn local_tz() -> FixedOffset {
+/// OS ごとの既定の DB の場所。macOS は Application Support、ほかは XDG のデータの場所。
+fn db_path_for(os: &str, home: Option<String>, xdg_data_home: Option<String>) -> Result<PathBuf> {
+    let home = || {
+        home.clone()
+            .ok_or_else(|| Error::Invalid("HOME is not set".into()))
+    };
+    let base = match os {
+        "macos" => PathBuf::from(home()?).join("Library/Application Support"),
+        _ => match xdg_data_home.filter(|d| !d.is_empty()) {
+            Some(dir) => PathBuf::from(dir),
+            None => PathBuf::from(home()?).join(".local/share"),
+        },
+    };
+    Ok(base.join("InfoDesk/infodesk.db"))
+}
+
+async fn sync(store: Store) -> Result<()> {
+    use infodesk_core::sync::headless::{self, HeadlessEnv, SyncOutcome};
+    let store = std::sync::Mutex::new(store);
+    let env = HeadlessEnv::from_env(local_tz());
+    match headless::sync_nas(&store, &env, &headless::webdav, Utc::now()).await {
+        Ok(SyncOutcome::Disabled) => {
+            println!(
+                "同期は無効です (sync.enabled = true と sync.backend = nas を確かめてください)"
+            );
+            Ok(())
+        }
+        Ok(SyncOutcome::Synced(r)) => {
+            println!(
+                "ok  取り込み {}  反映 {}  送信 {}  書き込み {}  削除 {}",
+                r.imported_ops,
+                r.applied_ops,
+                r.uploaded_ops,
+                r.written_files.len(),
+                r.deleted_files.len()
+            );
+            for w in r.warnings {
+                println!("warn {w}");
+            }
+            Ok(())
+        }
+        Err(message) => Err(Error::Invalid(message)),
+    }
+}
+
+pub(crate) fn local_tz() -> FixedOffset {
     *Local::now().offset()
 }
 
@@ -506,6 +556,9 @@ async fn run(cli: Cli) -> Result<()> {
     };
     let store = Store::open(&path)?;
     seed::seed_defaults(&store)?;
+    if matches!(cli.command, Command::Sync) {
+        return sync(store).await;
+    }
     match cli.command {
         Command::Collect => collect(&store).await,
         Command::Summarize => summarize(&store).await,
@@ -545,6 +598,7 @@ async fn run(cli: Cli) -> Result<()> {
             topic,
             json,
         } => digests(&store, &period, date, category, topic, json),
+        Command::Sync => unreachable!("handled before the match"),
         Command::Page { .. } => unreachable!("handled before the store is opened"),
         Command::Source { command } => source(&store, command).await,
         Command::Topic { command: c } => topic(&store, c),
@@ -631,5 +685,33 @@ mod tests {
     fn page_accepts_global_db_before_the_subcommand() {
         let cli = parse(&["--db", "/tmp/x.db", "page", "https://a.example/", "--json"]).unwrap();
         assert!(matches!(cli.command, Command::Page { json: true, .. }));
+    }
+
+    #[test]
+    fn default_db_path_follows_the_os() {
+        let home = Some("/home/kou".to_string());
+        assert_eq!(
+            db_path_for("macos", home.clone(), None).unwrap(),
+            PathBuf::from("/home/kou/Library/Application Support/InfoDesk/infodesk.db")
+        );
+        assert_eq!(
+            db_path_for("linux", home.clone(), None).unwrap(),
+            PathBuf::from("/home/kou/.local/share/InfoDesk/infodesk.db")
+        );
+        assert_eq!(
+            db_path_for("linux", home.clone(), Some("/data".into())).unwrap(),
+            PathBuf::from("/data/InfoDesk/infodesk.db")
+        );
+        // 空の XDG_DATA_HOME は未設定と同じ。
+        assert_eq!(
+            db_path_for("linux", home, Some(String::new())).unwrap(),
+            PathBuf::from("/home/kou/.local/share/InfoDesk/infodesk.db")
+        );
+        assert!(db_path_for("linux", None, None).is_err());
+    }
+
+    #[test]
+    fn sync_and_tick_are_commands() {
+        assert!(matches!(parse(&["sync"]).unwrap().command, Command::Sync));
     }
 }
