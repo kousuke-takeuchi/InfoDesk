@@ -24,7 +24,7 @@ cargo build --release -p infodesk
 
 ## DB のパスと `--db`
 
-`page` 以外のコマンドは、SQLite の DB を開きます。既定は `~/Library/Application Support/InfoDesk/infodesk.db` です。
+`page` 以外のコマンドは、SQLite の DB を開きます。既定は、macOS では `~/Library/Application Support/InfoDesk/infodesk.db`、Linux では `$XDG_DATA_HOME/InfoDesk/infodesk.db` です (`XDG_DATA_HOME` が未設定か空のときは `~/.local/share/InfoDesk/infodesk.db`)。
 
 アプリは別のファイル `~/Library/Application Support/jp.infodesk.app/infodesk.db` を使います。そのため、CLI は、そこを指定しない限りアプリのデータを見ません。
 
@@ -48,6 +48,8 @@ Commands:
   items      記事を一覧する
   item       記事を1件表示する
   digests    保存済みの期間要約を表示する (生成はしない)
+  sync       NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
+  tick       予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
   page       URL の本文をテキストで取得する (DB は使わない)
   source
   topic
@@ -69,6 +71,22 @@ infodesk summarize
 ```
 
 今日取得した記事の上位に、カテゴリーごとに記事要約を付けます。カテゴリーごとの件数は `summary.top_n` (既定20) です。プロバイダーは `llm.items_provider` です。
+
+### sync
+
+```
+infodesk sync
+```
+
+NAS へ今すぐ 1 回同期します。保存先が NAS のときだけ使えます。同期がオフのときは `同期は無効です (sync.enabled = true と sync.backend = nas を確かめてください)` と出ます。そうでなければ `ok  取り込み <n>  反映 <n>  送信 <n>  書き込み <n>  削除 <n>` と出て、警告があれば 1 件ごとに `warn <メッセージ>` の行が続きます。失敗すると終了コード 1 です。NAS のパスワードは環境変数 `INFODESK_NAS_PASSWORD` から読み、NAS の URL はプライベートな IPv4 アドレスでなければなりません。[自宅サーバー](15-home-server.ja.md)を参照。
+
+### tick
+
+```
+infodesk tick
+```
+
+予定を 1 回だけ確かめて、時刻が来たものを実行します。収集、記事要約、日次・週次・月次のダイジェスト、NAS への同期を、Mac のアプリと同じ決まりで行います。手順ごとに 1 行 (`collect: ...`、`summaries: ...`、`digest daily <日付>: ...`、`sync: ...`)、何もなければ `tick: nothing due` と出ます。失敗した手順はその行にエラーが出て、コマンドの終了コードは 0 のままです。終了コード 1 になるのは、DB を読めないときだけです。5 分ごとに実行する k3s の CronWorkflow のためのコマンドです。[自宅サーバー](15-home-server.ja.md)を参照。
 
 ### digest
 

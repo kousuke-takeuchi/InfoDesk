@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: infodesk-tick
+  namespace: infodesk
+spec:
+  entrypoint: tick
+  serviceAccountName: infodesk
+  activeDeadlineSeconds: 3000
+  nodeSelector:
+    kubernetes.io/hostname: takeuchi-nuc11atkc2
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: infodesk-data
+  templates:
+    - name: tick
+      container:
+        image: registry.umafolio.site/infodesk:TAG
+        args: ["--db", "/data/infodesk.db", "tick"]
+        env:
+          - name: TZ
+            value: Asia/Tokyo
+        envFrom:
+          - secretRef:
+              name: infodesk-env
+        volumeMounts:
+          - name: data
+            mountPath: /data
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 512Mi

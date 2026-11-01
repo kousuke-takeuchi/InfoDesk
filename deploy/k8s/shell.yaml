@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: infodesk-shell
+  namespace: infodesk
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: takeuchi-nuc11atkc2
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  containers:
+    - name: shell
+      image: registry.umafolio.site/infodesk:TAG
+      command: ["sleep", "infinity"]
+      env:
+        - name: TZ
+          value: Asia/Tokyo
+      envFrom:
+        - secretRef:
+            name: infodesk-env
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: infodesk-data

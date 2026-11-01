@@ -24,7 +24,7 @@ cargo build --release -p infodesk
 
 ## The database path and `--db`
 
-Every command except `page` opens a SQLite database. The default is `~/Library/Application Support/InfoDesk/infodesk.db`.
+Every command except `page` opens a SQLite database. The default is `~/Library/Application Support/InfoDesk/infodesk.db` on macOS, and `$XDG_DATA_HOME/InfoDesk/infodesk.db` on Linux (`~/.local/share/InfoDesk/infodesk.db` when `XDG_DATA_HOME` is unset or empty).
 
 The app uses a different file: `~/Library/Application Support/jp.infodesk.app/infodesk.db`. So the CLI does not see the app's data unless you point it there:
 
@@ -48,6 +48,8 @@ Commands:
   items      記事を一覧する
   item       記事を1件表示する
   digests    保存済みの期間要約を表示する (生成はしない)
+  sync       NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
+  tick       予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
   page       URL の本文をテキストで取得する (DB は使わない)
   source
   topic
@@ -69,6 +71,22 @@ infodesk summarize
 ```
 
 Adds an article summary to the top articles collected today, per category. The count per category is `summary.top_n` (default 20). The provider is `llm.items_provider`.
+
+### sync
+
+```
+infodesk sync
+```
+
+Syncs once to the NAS now. It works only when the storage is the NAS. When sync is off it prints `同期は無効です (sync.enabled = true と sync.backend = nas を確かめてください)`. Otherwise it prints `ok  取り込み <n>  反映 <n>  送信 <n>  書き込み <n>  削除 <n>`, then a `warn <message>` line for each warning. A failure exits with 1. The NAS password comes from the environment variable `INFODESK_NAS_PASSWORD`, and the NAS URL must be a private IPv4 address. See [Home Server](15-home-server.md).
+
+### tick
+
+```
+infodesk tick
+```
+
+Checks the schedule once and runs what is due: collection, article summaries, day, week and month digests, and sync to the NAS, by the same rules as the Mac app. It prints one line per step (`collect: ...`, `summaries: ...`, `digest daily <date>: ...`, `sync: ...`), or `tick: nothing due`. A step that fails prints its error in the line and the command still exits 0. It exits with 1 only when the database cannot be read. It is made for the k3s CronWorkflow that runs it every 5 minutes; see [Home Server](15-home-server.md).
 
 ### digest
 

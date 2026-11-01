@@ -1,4 +1,4 @@
-**日本語: [14-mobile-app.ja.md](14-mobile-app.ja.md)** | ← [NAS Setup](13-nas-setup.md)
+**日本語: [14-mobile-app.ja.md](14-mobile-app.ja.md)** | ← [NAS Setup](13-nas-setup.md) | Next: [Home Server →](15-home-server.md)
 
 # Mobile App
 

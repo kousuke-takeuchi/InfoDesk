@@ -1,4 +1,4 @@
-**English: [14-mobile-app.md](14-mobile-app.md)** | ← [前: NAS の準備](13-nas-setup.ja.md)
+**English: [14-mobile-app.md](14-mobile-app.md)** | ← [前: NAS の準備](13-nas-setup.ja.md) | [次: 自宅サーバー →](15-home-server.ja.md)
 
 # モバイルアプリ
 

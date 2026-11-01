@@ -89,6 +89,7 @@ cargo run -p infodesk -- digest day
 | 12 | [クラウド同期](docs/12-cloud-sync.ja.md) | 記事とダイジェストを Google ドライブへ置く方法と、ビルドする人向けの Google 側の準備 |
 | 13 | [NAS の準備](docs/13-nas-setup.ja.md) | Tailscale 経由で Synology NAS へ同期する: 準備の手順、端末の承認、困ったとき |
 | 14 | [モバイルアプリ](docs/14-mobile-app.ja.md) | スマホでダイジェスト、フィード、記事を読み、既読とスターを双方向に同期する。開発者向けのビルド |
+| 15 | [自宅サーバー](docs/15-home-server.ja.md) | 自宅の k3s クラスターで Argo の CronWorkflow により InfoDesk を画面なしで動かし、NAS へ同期する |
 
 各ページに英語版があります (`*.md`)。開発者向けのドキュメントは [`docs/internal/`](docs/internal/README.md) にあり、日本語で書かれています。設計仕様と実装計画は [`docs/superpowers/`](docs/superpowers/) にあります。
 
