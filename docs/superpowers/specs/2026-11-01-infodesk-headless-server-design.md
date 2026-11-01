@@ -55,11 +55,13 @@ Ubuntu server (systemd: infodesk.service)
 
 ### 4.1 Shared schedule and jobs in `infodesk-core`
 
-Move, without changing behavior:
+Move the schedule rules, without changing behavior, from `app/src-tauri/src/scheduler.rs` to a new module `crates/core/src/schedule.rs`: `ScheduleConfig`, `LastRuns`, `Job`, `next_collect_at`, `due_jobs`, `filter_recent`, `retry_due`, `job_plan`, `RECENT_ATTEMPT`, the tick interval, and their tests. They are pure functions of settings and time. Add three small pure helpers that the app's `run_job` and `run_collect` use today inline, so the server uses the same rules:
 
-- From `app/src-tauri/src/scheduler.rs`: `ScheduleConfig`, `LastRuns`, `Job`, `next_collect_at`, `due_jobs`, `filter_recent`, `retry_due`, `job_plan` and their tests. They are pure functions of settings and time. New module: `crates/core/src/schedule.rs`.
-- From `app/src-tauri/src/jobs.rs`: the parts of `run_collect`, `run_item_summaries`, `run_digests`, `retry_pending` that only use the store, the collector and the LLM provider. New module: `crates/core/src/jobs.rs`. App-only parts (status events to the window, the tray, the `is_collecting` flag held in `AppState`) stay in the app and wrap the core functions.
-- A core `run_loop` is not shared. The app keeps its loop (it updates window status). The server has its own small loop in the CLI crate (section 4.4). Both call the same `due_jobs`, `filter_recent`, `retry_due` and the same core jobs.
+- `LastRuns::from_settings`: reads the `schedule.last_*` keys (today `read_last_runs` in the app).
+- `last_run_record(job)` and `should_record(job, generation_failed)`: which key a finished digest job writes, and the rule that a weekly or monthly job with a failed generation is not recorded.
+- `all_failed_retry_base(now, interval)`: the `schedule.last_collect_at` value written when every source failed, so the next collection comes about 10 minutes later.
+
+The job flow itself (`app/src-tauri/src/jobs.rs`) stays in the app. It is tied to the app's window status, events, sync requests and locking. The server has its own short job flow in the CLI crate (section 4.4) that calls the same core building blocks the app calls (`collector::fetch_all`, `apply_outcomes`, `summarizer::plan_item_summaries` / `finish_item_summary`, `plan_digest` / `finish_digest`) and the same schedule rules. Decision (2026-11-01, while planning): moving the job flow was dropped because it would mean rewriting the app's 955-line job module around a new interface for little gain; the rules, which are the part that must not drift, are shared.
 
 The app must behave exactly as before. Its existing tests move with the code, and the app's tests keep passing.
 
@@ -114,7 +116,13 @@ The Mac app's LLM tab does not offer `claude_api` in this design (the Mac will n
 New module `crates/core/src/sync/headless.rs` with one function the server calls after each collection and each digest run:
 
 ```rust
-pub async fn sync_nas(store: &Mutex<Store>, env: &HeadlessEnv, now: DateTime<Utc>) -> Result<SyncReport, SyncError>
+pub async fn sync_nas(
+    store: &Mutex<Store>,
+    env: &HeadlessEnv,
+    peers: &dyn PeerStatus,          // `tailscale status --json`, faked in tests
+    make_drive: &MakeDrive,          // WebDAV in production, MemoryDrive in tests
+    now: DateTime<Utc>,
+) -> Result<SyncOutcome, String>     // Disabled | Synced(SyncReport); Err is a user-facing message
 ```
 
 - Reads `sync.enabled`, `sync.backend`, `sync.nas.url`, `sync.nas.user`, `sync.last_compaction_at`, `schedule.daily_time` from the store. Returns without syncing when sync is off or the backend is not `nas`.
@@ -126,7 +134,7 @@ pub async fn sync_nas(store: &Mutex<Store>, env: &HeadlessEnv, now: DateTime<Utc
 
 ### 4.4 CLI changes
 
-- `infodesk serve`: runs until SIGTERM or SIGINT. Every 60 seconds (the app's `TICK`): read the schedule config and last runs from the store, compute due jobs with the shared functions, run them in order, sync after a collection or a digest job, and run `retry_pending` when `retry_due` says so. Logs one line per job and per sync to stdout (systemd sends it to the journal). On SIGTERM it finishes the current step and exits; a sync in progress is allowed to finish.
+- `infodesk serve`: runs until SIGTERM or SIGINT. Every 15 seconds (the app's `TICK`, shared from `schedule`): read the schedule config and last runs from the store, compute due jobs with the shared functions, run them in order, sync after a collection or a digest job, and run `retry_pending` when `retry_due` says so. Logs one line per job and per sync to stdout (systemd sends it to the journal). On SIGTERM it finishes the current step and exits; a sync in progress is allowed to finish.
 - `infodesk sync`: one NAS sync now, for checks and for the migration runbook. Prints the `SyncReport` counts or the error.
 - Default database path by OS: macOS keeps `~/Library/Application Support/InfoDesk/infodesk.db`. Linux uses `$XDG_DATA_HOME/InfoDesk/infodesk.db`, or `~/.local/share/InfoDesk/infodesk.db` when `XDG_DATA_HOME` is unset. `--db` still overrides it. The help text for `--db` names both.
 - The time zone is the host's local time zone (the app uses the Mac's). The runbook sets the server to `Asia/Tokyo`.
