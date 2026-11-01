@@ -68,10 +68,10 @@ Fetches every enabled source, saves new articles, and fills article images. Prin
 ### summarize
 
 ```
-infodesk summarize
+infodesk summarize [--date <DATE>]
 ```
 
-Adds an article summary to the top articles collected today, per category. The count per category is `summary.top_n` (default 20). The provider is `llm.items_provider`.
+Adds an article summary to the top articles collected today, per category. With `--date YYYY-MM-DD` it uses the articles collected on that day instead (used after `redate`). The count per category is `summary.top_n` (default 20). The provider is `llm.items_provider`.
 
 ### sync
 
@@ -157,7 +157,7 @@ Shows stored digests. It does not generate them (use `digest` for that). Options
 infodesk redate --fetched-on <DATE> --from <DATE> --to <DATE> [--apply]
 ```
 
-Fills a collection gap. Articles collected on `--fetched-on` whose publish date falls on a day from `--from` to `--to` (local time) are moved to their publish date (`fetched_at` becomes `published_at`). Articles with no publish date stay. Without `--apply` it only prints the counts. It then prints the digest commands to run (day digests first, then week and month, with `--force` where a digest already exists) and `sync`. `--from <= --to < --fetched-on` is required. See [Home Server](15-home-server.md) for the steps on the cluster.
+Fills a collection gap. Articles collected on `--fetched-on` whose publish date falls on a day from `--from` to `--to` (local time) are moved to their publish date (`fetched_at` becomes `published_at`). Articles with no publish date stay. Without `--apply` it only prints the counts. It then prints the commands to run: `summarize --date` for each day that received articles, the digest commands (day digests first, then week and month, with `--force` where a digest already exists) and `sync`. `--from <= --to < --fetched-on` is required. See [Home Server](15-home-server.md) for the steps on the cluster.
 
 ```sh
 infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31

@@ -176,7 +176,7 @@ If nothing collected for some days (for example the Mac stopped before the clust
    $cli redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
    ```
 
-3. If the counts look right, run it again with `--apply`, then run every command it prints under `then run:`, in order, with `kubectl -n infodesk exec infodesk-shell --` in front. The last one is `sync`.
+3. If the counts look right, run it again with `--apply`, then run every command it prints under `then run:`, in order, with `kubectl -n infodesk exec infodesk-shell --` in front. They add article summaries to the moved days, make the digests, and end with `sync`. Keep a copy of this output: if a command fails partway, running `redate` again prints only `nothing to move`, because the articles have already moved.
 
 4. Delete the shell pod and start the scheduled runs again:
 
@@ -185,7 +185,7 @@ If nothing collected for some days (for example the Mac stopped before the clust
    kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":false}}'
    ```
 
-The digest commands call the Claude API: one call per category for each day, week and month listed.
+The summarize and digest commands call the Claude API; digests make one call per category for each day, week and month listed.
 
 ## 9. Troubleshooting
 

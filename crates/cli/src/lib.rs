@@ -30,7 +30,11 @@ enum Command {
     /// 有効なソースをすべて取得する
     Collect,
     /// 今日取得した記事の上位に要約を付ける
-    Summarize,
+    Summarize {
+        /// 対象日 (YYYY-MM-DD)。その日に取得した記事が対象。既定は今日
+        #[arg(long)]
+        date: Option<String>,
+    },
     /// 期間要約を生成して表示する
     Digest {
         /// day | week | month
@@ -292,16 +296,30 @@ async fn collect(store: &Store) -> Result<()> {
     Ok(())
 }
 
-async fn summarize(store: &Store) -> Result<()> {
+async fn summarize(store: &Store, date: Option<String>) -> Result<()> {
     let llm = provider_from_settings(store, LlmRole::Items)?;
     let limit: u32 = store
         .get_setting_or("summary.top_n", "20")?
         .parse()
         .map_err(|_| Error::Invalid("summary.top_n must be a number".into()))?;
-    let (since, _) = utc_range(Period::Day, today(), local_tz());
+    // 既定 (今日) は今までどおり終わりを決めない。日付を指定したらその日だけ。
+    let (since, until) = match date {
+        Some(s) => {
+            let (since, until) = utc_range(Period::Day, parse_date(&s)?, local_tz());
+            (since, Some(until))
+        }
+        None => (utc_range(Period::Day, today(), local_tz()).0, None),
+    };
     for category in Category::ALL {
-        let report =
-            summarizer::summarize_top_items(store, llm.as_ref(), category, &since, limit).await?;
+        let report = summarizer::summarize_top_items_until(
+            store,
+            llm.as_ref(),
+            category,
+            &since,
+            until.as_ref(),
+            limit,
+        )
+        .await?;
         let detail = report.error.map(|e| format!(" ({e})")).unwrap_or_default();
         println!(
             "{:<12} summarized {}, failed {}{detail}",
@@ -372,6 +390,14 @@ fn format_redate(
         ));
     }
     out.push_str("then run:\n");
+    let mut days: Vec<NaiveDate> = counts.iter().map(|c| c.day).collect();
+    days.dedup();
+    for day in days {
+        out.push_str(&format!(
+            "  infodesk --db {db} summarize --date {}\n",
+            day.format("%Y-%m-%d")
+        ));
+    }
     for (period, start, force) in plan {
         out.push_str(&format!(
             "  infodesk --db {db} digest {} --date {}{}\n",
@@ -657,7 +683,7 @@ async fn run(cli: Cli) -> Result<()> {
     }
     match cli.command {
         Command::Collect => collect(&store).await,
-        Command::Summarize => summarize(&store).await,
+        Command::Summarize { date } => summarize(&store, date).await,
         Command::Digest {
             period,
             date,
@@ -817,6 +843,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn summarize_takes_an_optional_date() {
+        assert!(parse(&["summarize"]).is_ok());
+        assert!(parse(&["summarize", "--date", "2026-10-27"]).is_ok());
+    }
+
+    #[test]
     fn redate_requires_all_three_dates() {
         assert!(parse(&["redate", "--from", "2026-10-27", "--to", "2026-10-31"]).is_err());
         assert!(
@@ -864,6 +896,8 @@ mod tests {
              2026-10-27  tech_jp 1\n\
              2026-10-30  medcare 3  tech_jp 1\n\
              then run:\n  \
+             infodesk --db /data/infodesk.db summarize --date 2026-10-27\n  \
+             infodesk --db /data/infodesk.db summarize --date 2026-10-30\n  \
              infodesk --db /data/infodesk.db digest day --date 2026-10-27\n  \
              infodesk --db /data/infodesk.db digest week --date 2026-10-26 --force\n  \
              infodesk --db /data/infodesk.db sync\n"

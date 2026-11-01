@@ -275,9 +275,21 @@ impl Store {
         since: &DateTime<Utc>,
         limit: u32,
     ) -> Result<Vec<Item>> {
+        self.top_unsummarized_until(category, since, None, limit)
+    }
+
+    /// `top_unsummarized` と同じ。`until` があれば、それより前に取得した記事だけを対象にする。
+    pub fn top_unsummarized_until(
+        &self,
+        category: Category,
+        since: &DateTime<Utc>,
+        until: Option<&DateTime<Utc>>,
+        limit: u32,
+    ) -> Result<Vec<Item>> {
         let sql = format!(
             "SELECT * FROM (SELECT {ITEM_COLS} FROM items \
              WHERE items.category = ?1 AND items.fetched_at >= ?2 \
+               AND (?4 IS NULL OR items.fetched_at < ?4) \
              ORDER BY items.score IS NULL, items.score DESC, \
                COALESCE(items.published_at, items.fetched_at) DESC, \
                items.fetched_at DESC, items.id DESC \
@@ -287,7 +299,10 @@ impl Store {
         );
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![category.as_str(), ts(since), limit], row_to_item)?
+            .query_map(
+                params![category.as_str(), ts(since), limit, until.map(ts)],
+                row_to_item,
+            )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
@@ -697,6 +712,35 @@ mod tests {
         assert_eq!(titles(&store.query_items(&f).unwrap()), want);
         let top = store.top_unsummarized(Category::TechJp, &t, 10).unwrap();
         assert_eq!(titles(&top), want);
+    }
+
+    #[test]
+    fn top_unsummarized_until_stops_at_the_end_of_the_day() {
+        let (store, src) = store_with_source(Category::Github);
+        store
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/a", "day", "", Some(1))],
+                &at("2026-10-05T03:00:00Z"),
+            )
+            .unwrap();
+        store
+            .upsert_items(
+                &src,
+                &[new_item("https://e.com/b", "next", "", Some(99))],
+                &at("2026-10-06T03:00:00Z"),
+            )
+            .unwrap();
+        let since = at("2026-10-05T00:00:00Z");
+        let until = at("2026-10-06T00:00:00Z");
+        let top = store
+            .top_unsummarized_until(Category::Github, &since, Some(&until), 10)
+            .unwrap();
+        assert_eq!(titles(&top), vec!["day"]);
+        let open = store
+            .top_unsummarized_until(Category::Github, &since, None, 10)
+            .unwrap();
+        assert_eq!(titles(&open), vec!["next", "day"]);
     }
 
     #[test]

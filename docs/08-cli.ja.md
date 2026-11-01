@@ -68,10 +68,10 @@ infodesk collect
 ### summarize
 
 ```
-infodesk summarize
+infodesk summarize [--date <DATE>]
 ```
 
-今日取得した記事の上位に、カテゴリーごとに記事要約を付けます。カテゴリーごとの件数は `summary.top_n` (既定20) です。プロバイダーは `llm.items_provider` です。
+今日取得した記事の上位に、カテゴリーごとに記事要約を付けます。`--date YYYY-MM-DD` を付けると、その日に取得した記事が対象になります (`redate` のあとに使います)。カテゴリーごとの件数は `summary.top_n` (既定20) です。プロバイダーは `llm.items_provider` です。
 
 ### sync
 
@@ -157,7 +157,7 @@ infodesk digests [OPTIONS] <PERIOD>
 infodesk redate --fetched-on <DATE> --from <DATE> --to <DATE> [--apply]
 ```
 
-取得の空白を埋めます。`--fetched-on` の日に取得した記事のうち、公開日が `--from`〜`--to` の日 (現地時間) のものを、公開日に取得したことにします (`fetched_at` を `published_at` にする)。公開日のない記事は動きません。`--apply` を付けなければ件数を表示するだけです。続けて実行する期間要約のコマンド (日次、週次、月次の順。要約がすでにあれば `--force` 付き) と `sync` を表示します。`--from <= --to < --fetched-on` でなければエラーです。クラスターでの手順は[自宅サーバー](15-home-server.ja.md)を参照してください。
+取得の空白を埋めます。`--fetched-on` の日に取得した記事のうち、公開日が `--from`〜`--to` の日 (現地時間) のものを、公開日に取得したことにします (`fetched_at` を `published_at` にする)。公開日のない記事は動きません。`--apply` を付けなければ件数を表示するだけです。続けて実行するコマンドを表示します。記事が移った日ごとの `summarize --date`、期間要約のコマンド (日次、週次、月次の順。要約がすでにあれば `--force` 付き) と `sync` です。`--from <= --to < --fetched-on` でなければエラーです。クラスターでの手順は[自宅サーバー](15-home-server.ja.md)を参照してください。
 
 ```sh
 infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31

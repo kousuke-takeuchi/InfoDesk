@@ -176,7 +176,7 @@ NAS の URL は LAN の IP アドレスで書きます: `http://192.168.0.151:50
    $cli redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
    ```
 
-3. 件数がよければ `--apply` を付けてもう一度実行し、`then run:` の下に表示されたコマンドを、上から順に、前に `kubectl -n infodesk exec infodesk-shell --` を付けて実行します。最後は `sync` です。
+3. 件数がよければ `--apply` を付けてもう一度実行し、`then run:` の下に表示されたコマンドを、上から順に、前に `kubectl -n infodesk exec infodesk-shell --` を付けて実行します。移した日の記事要約、ダイジェストの作成と進み、最後は `sync` です。この出力は控えておいてください。途中でコマンドが失敗したとき、`redate` をもう一度実行しても、記事はすでに移っているので `nothing to move` としか表示されません。
 
 4. シェル用の Pod を削除し、定期実行を再開します。
 
@@ -185,7 +185,7 @@ NAS の URL は LAN の IP アドレスで書きます: `http://192.168.0.151:50
    kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":false}}'
    ```
 
-ダイジェストのコマンドは Claude API を使います。表示された日・週・月ごとに、カテゴリーの数だけ呼び出します。
+要約とダイジェストのコマンドは Claude API を使います。表示された日・週・月ごとに、カテゴリーの数だけ呼び出します。
 
 ## 9. 困ったとき
 

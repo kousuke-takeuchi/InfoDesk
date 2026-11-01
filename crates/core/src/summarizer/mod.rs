@@ -235,8 +235,19 @@ pub fn plan_item_summaries(
     since: &DateTime<Utc>,
     limit: u32,
 ) -> Result<Vec<ItemSummaryJob>> {
+    plan_item_summaries_until(store, category, since, None, limit)
+}
+
+/// `plan_item_summaries` と同じ。`until` があれば、それより前に取得した記事だけを対象にする。
+pub fn plan_item_summaries_until(
+    store: &Store,
+    category: Category,
+    since: &DateTime<Utc>,
+    until: Option<&DateTime<Utc>>,
+    limit: u32,
+) -> Result<Vec<ItemSummaryJob>> {
     Ok(store
-        .top_unsummarized(category, since, limit)?
+        .top_unsummarized_until(category, since, until, limit)?
         .iter()
         .map(|item| ItemSummaryJob {
             item_id: item.id,
@@ -272,7 +283,19 @@ pub async fn summarize_top_items(
     since: &DateTime<Utc>,
     limit: u32,
 ) -> Result<ItemSummaryReport> {
-    let jobs = plan_item_summaries(store, category, since, limit)?;
+    summarize_top_items_until(store, llm, category, since, None, limit).await
+}
+
+/// `summarize_top_items` と同じ。`until` があれば、それより前に取得した記事だけを対象にする。
+pub async fn summarize_top_items_until(
+    store: &Store,
+    llm: &dyn LlmProvider,
+    category: Category,
+    since: &DateTime<Utc>,
+    until: Option<&DateTime<Utc>>,
+    limit: u32,
+) -> Result<ItemSummaryReport> {
+    let jobs = plan_item_summaries_until(store, category, since, until, limit)?;
     let mut ok = 0;
     let mut error = None;
     for job in &jobs {
