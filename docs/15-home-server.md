@@ -156,7 +156,38 @@ The commands are in [CLI](08-cli.md) (`source`, `topic`, `config`); the keys are
 
 The NAS URL must be a LAN IP address: `http://192.168.0.151:5005/infodesk/`. A name is refused. Give the NAS a fixed address (a DHCP reservation in the router) so the address does not change.
 
-## 8. Troubleshooting
+## 8. Filling a collection gap
+
+If nothing collected for some days (for example the Mac stopped before the cluster took over), the first collection afterwards files every new article under its own day, and the gap days get no articles and no daily digest. `infodesk redate` moves the articles published during the gap back to their publish day. Articles with no publish date (GitHub Trending) stay where they are. See [the CLI reference](08-cli.md#redate).
+
+1. Stop the scheduled runs and wait until no run is in progress:
+
+   ```bash
+   kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":true}}'
+   kubectl -n infodesk get workflows
+   ```
+
+   Wait until no workflow shows `Running`.
+
+2. Start the shell pod (section 6) and check what would move:
+
+   ```bash
+   cli="kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db"
+   $cli redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
+   ```
+
+3. If the counts look right, run it again with `--apply`, then run every command it prints under `then run:`, in order, with `kubectl -n infodesk exec infodesk-shell --` in front. The last one is `sync`.
+
+4. Delete the shell pod and start the scheduled runs again:
+
+   ```bash
+   kubectl -n infodesk delete pod infodesk-shell
+   kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":false}}'
+   ```
+
+The digest commands call the Claude API: one call per category for each day, week and month listed.
+
+## 9. Troubleshooting
 
 The `tick` command writes one line per step to the log. It exits 0 unless the database cannot be read, so a failed step shows in the log, not as a failed run.
 

@@ -202,6 +202,28 @@ fn plan(store: &Store, input: &SyncInput) -> crate::Result<Plan> {
         });
     }
 
+    let out_rows: HashMap<String, SyncFileRow> = store
+        .sync_files("out")?
+        .into_iter()
+        .map(|r| (r.name.clone(), r))
+        .collect();
+
+    // A day written before that now has no items (they were re-dated to
+    // another day) is rewritten empty, so readers drop the stale copies.
+    let planned_days: HashSet<String> = jobs.iter().map(|j| j.name.clone()).collect();
+    for name in out_rows.keys() {
+        if let Some(FileKind::Day(date)) = parse_file_name(name)
+            && date >= day_cut
+            && !planned_days.contains(name)
+        {
+            jobs.push(Planned {
+                name: name.clone(),
+                fingerprint: sha256_hex(format!("empty\u{1e}{topics_version}").as_bytes()),
+                job: Job::Day(date),
+            });
+        }
+    }
+
     let digests = store.done_digest_keys(long_cut)?;
     for (period, start) in digest_starts(today) {
         let Some(rows) = digests.get(&(period.as_str(), start)) else {
@@ -225,11 +247,6 @@ fn plan(store: &Store, input: &SyncInput) -> crate::Result<Plan> {
         });
     }
 
-    let out_rows = store
-        .sync_files("out")?
-        .into_iter()
-        .map(|r| (r.name.clone(), r))
-        .collect();
     Ok(Plan {
         meta,
         jobs,
@@ -2143,5 +2160,70 @@ mod tests {
             tz,
             t
         ));
+    }
+
+    #[tokio::test]
+    async fn redated_articles_move_between_day_files_on_the_next_sync() {
+        let m = setup();
+        let id = {
+            let s = m.lock().unwrap();
+            let src = s.list_sources().unwrap().remove(0);
+            let mut it = new_item("https://a/late", "t", "", None);
+            it.published_at = Some(at("2026-10-11T03:00:00Z"));
+            s.upsert_items(&src, &[it], &at("2026-10-13T03:00:00Z"))
+                .unwrap();
+            s.query_items(&ItemFilter::default()).unwrap()[0].id
+        };
+        let drive = MemoryDrive::new();
+        let first = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(
+            first
+                .written_files
+                .iter()
+                .any(|f| f == "day-2026-10-13.json.gz")
+        );
+
+        m.lock()
+            .unwrap()
+            .redate_apply(
+                &crate::store::RedateRange {
+                    fetched_on: NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
+                    from: NaiveDate::from_ymd_opt(2026, 10, 11).unwrap(),
+                    to: NaiveDate::from_ymd_opt(2026, 10, 11).unwrap(),
+                },
+                tz(),
+            )
+            .unwrap();
+        let second = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(
+            second
+                .written_files
+                .iter()
+                .any(|f| f == "day-2026-10-11.json.gz"),
+            "{:?}",
+            second.written_files
+        );
+
+        let day11: DayFile =
+            gunzip_json(&read_file(&drive, "day-2026-10-11.json.gz").await.unwrap()).unwrap();
+        assert_eq!(
+            day11.items.iter().map(|i| i.id).collect::<Vec<_>>(),
+            vec![id]
+        );
+        // 10-13 has no items left: its file is rewritten empty or removed, but it no longer lists the article.
+        if let Some(bytes) = read_file(&drive, "day-2026-10-13.json.gz").await {
+            let day13: DayFile = gunzip_json(&bytes).unwrap();
+            assert!(day13.items.iter().all(|i| i.id != id));
+        }
+        // The emptied day is written once, not on every pass.
+        let third = run_sync(&m, &drive, &input(NOW, false)).await.unwrap();
+        assert!(
+            !third
+                .written_files
+                .iter()
+                .any(|f| f == "day-2026-10-13.json.gz"),
+            "{:?}",
+            third.written_files
+        );
     }
 }
