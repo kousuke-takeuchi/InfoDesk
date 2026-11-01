@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use chrono::{DateTime, NaiveDate, Utc};
 use tauri::{AppHandle, Manager};
 
+use infodesk_core::sync::mode::is_reader;
+
 use crate::jobs;
 use crate::state::{AppState, ErrorOrigin};
+use crate::sync::SETTING_LAST_SYNC_AT;
 
 pub use infodesk_core::schedule::{
     Job, LastRuns, RECENT_ATTEMPT, ScheduleConfig, TICK, due_jobs, filter_recent, job_plan,
@@ -55,19 +58,52 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
     }
 }
 
+/// 読むだけのモードで同期を頼む間隔 (分)。サーバーは最短 5 分ごとに書く。
+pub const READER_SYNC_MINUTES: i64 = 10;
+
+/// 読むだけのモードで同期を頼むか。最後の成功と最後の依頼の遅いほうから 10 分たったら頼む
+/// (NAS が落ちていても、15 秒ごとには頼まない)。どちらもなければ (起動直後) すぐ頼む。
+pub fn reader_sync_due(
+    last_sync: Option<DateTime<Utc>>,
+    last_request: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> bool {
+    last_sync
+        .max(last_request)
+        .is_none_or(|t| now - t >= chrono::Duration::minutes(READER_SYNC_MINUTES))
+}
+
 /// 起動直後と15秒ごとに `due_jobs` を評価する。
 ///
 /// 同じジョブは `filter_recent` の待ち時間内に再実行しない。収集中に収集の時刻が来ても
 /// 黙って見送る。保留の再試行は、ジョブの有無にかかわらず、実行したジョブの後に
 /// `RECENT_ATTEMPT` に1回まで行う。
+/// 読むだけのモードでは、ジョブを評価せず、`reader_sync_due` のときに同期だけ頼む。
 pub async fn run_loop(app: AppHandle) {
     let mut ticker = tokio::time::interval(TICK);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut attempts: HashMap<Job, DateTime<Utc>> = HashMap::new();
     let mut last_retry_at: Option<DateTime<Utc>> = None;
+    let mut last_reader_request: Option<DateTime<Utc>> = None;
     loop {
         ticker.tick().await;
         let state = app.state::<AppState>();
+        if state.with_store(is_reader).unwrap_or(false) {
+            // 読むだけのモード: 収集、要約、再試行はしない。10 分ごとに同期だけ頼む。
+            state.update_status(|s| s.next_collect_at = None);
+            let now_utc = Utc::now();
+            let last_sync = state
+                .with_store(|s| s.get_setting(SETTING_LAST_SYNC_AT))
+                .ok()
+                .flatten()
+                .and_then(|v| DateTime::parse_from_rfc3339(&v).ok())
+                .map(|d| d.with_timezone(&Utc));
+            if reader_sync_due(last_sync, last_reader_request, now_utc) {
+                last_reader_request = Some(now_utc);
+                state.request_sync();
+            }
+            continue;
+        }
         let cfg = ScheduleConfig::from_settings(|k| {
             state.with_store(|s| s.get_setting(k)).ok().flatten()
         });
@@ -99,6 +135,47 @@ mod tests {
 
     fn d(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    #[test]
+    fn reader_sync_waits_ten_minutes_after_a_sync_or_a_request() {
+        // Review Focus 5
+        let t = |s: &str| s.parse::<DateTime<Utc>>().unwrap();
+        let now = t("2026-11-01T10:00:00Z");
+        assert!(reader_sync_due(None, None, now), "first tick after start");
+        assert!(!reader_sync_due(Some(t("2026-11-01T09:51:00Z")), None, now));
+        assert!(reader_sync_due(Some(t("2026-11-01T09:50:00Z")), None, now));
+        // NAS down: the last success is old, but a request went out a minute ago.
+        assert!(!reader_sync_due(
+            Some(t("2026-11-01T08:00:00Z")),
+            Some(t("2026-11-01T09:59:00Z")),
+            now
+        ));
+        assert!(reader_sync_due(
+            Some(t("2026-11-01T08:00:00Z")),
+            Some(t("2026-11-01T09:50:00Z")),
+            now
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_job_in_reader_mode_makes_no_digest_and_records_no_run() {
+        use infodesk_core::model::Period;
+        let state = state_with_daily_in_previous_week(Ok("週次"));
+        state.with_store(|s| s.switch_to_reader()).unwrap();
+        run_job(&state, &Job::Weekly(d("2026-09-28")), d("2026-10-06")).await;
+        assert_eq!(
+            state
+                .with_store(|s| s.get_setting("schedule.last_weekly_for"))
+                .unwrap(),
+            None
+        );
+        assert!(
+            state
+                .with_store(|s| s.list_digests(Period::Week, d("2026-09-28")))
+                .unwrap()
+                .is_empty()
+        );
     }
 
     struct FixedLlm(Result<&'static str, &'static str>);
