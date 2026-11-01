@@ -464,18 +464,6 @@ pub fn reset_pending(state: &AppState) -> bool {
         == Some("true")
 }
 
-/// 予約があれば、向こうのファイルの記録を捨て、まとめ直しを求める。捨てたら `true`。
-/// 途中で失敗しても予約は最後に消すので、次の同期でやり直せる。
-fn take_reset(s: &infodesk_core::Store) -> infodesk_core::Result<bool> {
-    if s.get_setting(SETTING_RESET_PENDING)?.as_deref() != Some("true") {
-        return Ok(false);
-    }
-    s.clear_sync_files()?;
-    s.set_setting(SETTING_LAST_COMPACTION_AT, "")?;
-    s.set_setting(SETTING_RESET_PENDING, "")?;
-    Ok(true)
-}
-
 /// NAS の URL として使えるか。http で、ホストがあり、URL に資格情報を含まない。
 /// https は止める (宛先を Tailscale の IP に書き換えると、証明書の名前が合わず TLS が失敗する)。
 fn check_nas_url(url: &str) -> AppResult<()> {
@@ -763,18 +751,19 @@ async fn run_once(state: &AppState) -> AppResult<()> {
     let stale = || state.sync_generation.load(Ordering::SeqCst) != generation;
     // 保存先の切り替えのやり直しは、実行中の印を持ったここで行う。前の同期が記録を書き戻すことはない。
     // 保存先も同じロックの中で読み、やり直しと食い違わないようにする。
-    let nas = match state.with_store(|s| Ok((take_reset(s)?, read_nas(s)?))) {
-        Ok((reset, nas)) => {
-            if reset {
-                *state.drive_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    let nas =
+        match state.with_store(|s| Ok((infodesk_core::sync::nas::take_reset(s)?, read_nas(s)?))) {
+            Ok((reset, nas)) => {
+                if reset {
+                    *state.drive_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                }
+                nas
             }
-            nas
-        }
-        Err(e) => {
-            record_error(state, &e.message);
-            return Err(e);
-        }
-    };
+            Err(e) => {
+                record_error(state, &e.message);
+                return Err(e);
+            }
+        };
     let drive = match make_drive_for(state, &nas, generation).await {
         Ok(d) => d,
         Err(e) => {

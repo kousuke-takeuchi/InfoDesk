@@ -79,10 +79,9 @@ fn prepare(store: &Mutex<Store>) -> crate::Result<Option<Prepared>> {
     if text(SETTING_ENABLED)? != "true" || text(SETTING_BACKEND)? != BACKEND_NAS {
         return Ok(None);
     }
-    // 保存先の切り替えの予約。ここでは保存先の控えを持たないので、消すだけでよい。
-    if text(SETTING_RESET_PENDING)? == "true" {
-        s.set_setting(SETTING_RESET_PENDING, "false")?;
-    }
+    // 保存先の切り替えの予約があれば、アプリと同じく記録を捨て、このパスでまとめ直す。
+    // まとめた時刻はこの後に読むので、空にした値がこのパスに効く。
+    take_reset(&s)?;
     let (device_id, db_id) = s.ensure_sync_ids()?;
     let writer = Some(text(SETTING_DEVICE_NAME)?)
         .filter(|n| !n.is_empty())
@@ -263,6 +262,49 @@ mod tests {
         assert_eq!(
             s.get_setting(SETTING_LAST_COMPACTION_AT).unwrap(),
             Some(now().to_rfc3339())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pending_reset_drops_old_records_and_compacts() {
+        // Fix round 1: a DB copied from a Mac that just switched Google -> NAS.
+        let store = nas_store(NAS);
+        {
+            let s = store.lock().unwrap();
+            s.set_setting(SETTING_RESET_PENDING, "true").unwrap();
+            // 直前にまとめたことにする。予約がなければ、このパスではまとめない。
+            s.set_setting(SETTING_LAST_COMPACTION_AT, &now().to_rfc3339())
+                .unwrap();
+            s.put_sync_file(&crate::store::SyncFileRow {
+                name: "ops-old-google-file.json.gz".to_string(),
+                kind: "in".to_string(),
+                drive_id: Some("google-file-id".to_string()),
+                sha256: Some("00".to_string()),
+                updated_at: "2026-10-31T00:00:00Z".to_string(),
+                fingerprint: None,
+            })
+            .unwrap();
+        }
+        let (_seen, make) = recording();
+        let later = now() + chrono::Duration::minutes(5);
+        let got = sync_nas(&store, &env(Some("pw")), &*make, later).await;
+        let Ok(SyncOutcome::Synced(report)) = got else {
+            panic!("{got:?}");
+        };
+        assert!(report.compacted);
+        let s = store.lock().unwrap();
+        assert_ne!(
+            s.get_setting(SETTING_RESET_PENDING).unwrap().as_deref(),
+            Some("true")
+        );
+        assert!(
+            s.sync_file("ops-old-google-file.json.gz")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            s.get_setting(SETTING_LAST_COMPACTION_AT).unwrap(),
+            Some(later.to_rfc3339())
         );
     }
 
