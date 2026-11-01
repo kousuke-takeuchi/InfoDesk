@@ -179,9 +179,6 @@ async fn retry_from(
 /// 有効なソースがすべて取得に失敗したときの `last_error`。
 pub const ALL_SOURCES_FAILED: &str = "全ソースの取得に失敗しました";
 
-/// 全ソースが失敗したとき、次の収集までの待ち時間。
-const RETRY_AFTER_ALL_FAILED: chrono::Duration = chrono::Duration::minutes(10);
-
 /// 収集中に再度 `run_collect` を呼んだときのエラーメッセージ。
 pub const COLLECT_ALREADY_RUNNING: &str = "collect already running";
 
@@ -243,7 +240,7 @@ async fn collect_inner(state: &AppState) -> AppResult<CollectSummary> {
             state.with_store(|s| s.get_setting(k)).ok().flatten()
         })
         .collect_interval;
-        let retry_base = (now - interval + RETRY_AFTER_ALL_FAILED.min(interval)).min(now);
+        let retry_base = infodesk_core::schedule::all_failed_retry_base(now, interval);
         state
             .with_store(|s| s.set_setting("schedule.last_collect_at", &retry_base.to_rfc3339()))?;
         state.update_status(|s| s.set_error(ErrorOrigin::Collect, ALL_SOURCES_FAILED));
