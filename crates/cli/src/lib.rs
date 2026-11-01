@@ -11,6 +11,8 @@ use infodesk_core::model::{
     Category, DigestScope, DigestStatus, ItemFilter, ItemOrder, Period, SourceKind,
 };
 use infodesk_core::period::{period_start, utc_range};
+use infodesk_core::redate::redate_digest_plan;
+use infodesk_core::store::{RedateCount, RedateRange};
 use infodesk_core::{Error, Result, Store, seed, summarizer};
 
 #[derive(Parser)]
@@ -28,7 +30,11 @@ enum Command {
     /// 有効なソースをすべて取得する
     Collect,
     /// 今日取得した記事の上位に要約を付ける
-    Summarize,
+    Summarize {
+        /// 対象日 (YYYY-MM-DD)。その日に取得した記事が対象。既定は今日
+        #[arg(long)]
+        date: Option<String>,
+    },
     /// 期間要約を生成して表示する
     Digest {
         /// day | week | month
@@ -92,6 +98,21 @@ enum Command {
         /// JSONで出力する
         #[arg(long)]
         json: bool,
+    },
+    /// 取得の空白を埋める: 指定日に取得した記事を公開日に移し、作るべき期間要約を表示する
+    Redate {
+        /// 記事を取得した日 (YYYY-MM-DD)
+        #[arg(long)]
+        fetched_on: String,
+        /// 移す公開日の最初の日 (YYYY-MM-DD)
+        #[arg(long)]
+        from: String,
+        /// 移す公開日の最後の日 (YYYY-MM-DD)。--fetched-on より前
+        #[arg(long)]
+        to: String,
+        /// 実際に移す。付けなければ件数を表示するだけ
+        #[arg(long)]
+        apply: bool,
     },
     /// URL の本文をテキストで取得する (DB は使わない)
     Page {
@@ -275,16 +296,30 @@ async fn collect(store: &Store) -> Result<()> {
     Ok(())
 }
 
-async fn summarize(store: &Store) -> Result<()> {
+async fn summarize(store: &Store, date: Option<String>) -> Result<()> {
     let llm = provider_from_settings(store, LlmRole::Items)?;
     let limit: u32 = store
         .get_setting_or("summary.top_n", "20")?
         .parse()
         .map_err(|_| Error::Invalid("summary.top_n must be a number".into()))?;
-    let (since, _) = utc_range(Period::Day, today(), local_tz());
+    // 既定 (今日) は今までどおり終わりを決めない。日付を指定したらその日だけ。
+    let (since, until) = match date {
+        Some(s) => {
+            let (since, until) = utc_range(Period::Day, parse_date(&s)?, local_tz());
+            (since, Some(until))
+        }
+        None => (utc_range(Period::Day, today(), local_tz()).0, None),
+    };
     for category in Category::ALL {
-        let report =
-            summarizer::summarize_top_items(store, llm.as_ref(), category, &since, limit).await?;
+        let report = summarizer::summarize_top_items_until(
+            store,
+            llm.as_ref(),
+            category,
+            &since,
+            until.as_ref(),
+            limit,
+        )
+        .await?;
         let detail = report.error.map(|e| format!(" ({e})")).unwrap_or_default();
         println!(
             "{:<12} summarized {}, failed {}{detail}",
@@ -294,6 +329,85 @@ async fn summarize(store: &Store) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn redate(
+    store: &Store,
+    fetched_on: &str,
+    from: &str,
+    to: &str,
+    apply: bool,
+    db: &str,
+) -> Result<()> {
+    let r = RedateRange {
+        fetched_on: parse_date(fetched_on)?,
+        from: parse_date(from)?,
+        to: parse_date(to)?,
+    };
+    r.validate()?;
+    let tz = local_tz();
+    let counts = if apply {
+        store.redate_apply(&r, tz)?
+    } else {
+        store.redate_preview(&r, tz)?
+    };
+    let plan = if counts.is_empty() {
+        Vec::new()
+    } else {
+        redate_digest_plan(store, &r, today())?
+    };
+    print!("{}", format_redate(&counts, &plan, apply, db));
+    Ok(())
+}
+
+fn format_redate(
+    counts: &[RedateCount],
+    plan: &[(Period, NaiveDate, bool)],
+    applied: bool,
+    db: &str,
+) -> String {
+    if counts.is_empty() {
+        return "nothing to move\n".to_string();
+    }
+    let total: usize = counts.iter().map(|c| c.count).sum();
+    let mut out = if applied {
+        format!("moved {total} articles\n")
+    } else {
+        format!("dry run: {total} articles would move (nothing changed; add --apply)\n")
+    };
+    let mut i = 0;
+    while i < counts.len() {
+        let day = counts[i].day;
+        let mut parts = Vec::new();
+        while i < counts.len() && counts[i].day == day {
+            parts.push(format!("{} {}", counts[i].category, counts[i].count));
+            i += 1;
+        }
+        out.push_str(&format!(
+            "{}  {}\n",
+            day.format("%Y-%m-%d"),
+            parts.join("  ")
+        ));
+    }
+    out.push_str("then run:\n");
+    let mut days: Vec<NaiveDate> = counts.iter().map(|c| c.day).collect();
+    days.dedup();
+    for day in days {
+        out.push_str(&format!(
+            "  infodesk --db {db} summarize --date {}\n",
+            day.format("%Y-%m-%d")
+        ));
+    }
+    for (period, start, force) in plan {
+        out.push_str(&format!(
+            "  infodesk --db {db} digest {} --date {}{}\n",
+            period.as_str(),
+            start.format("%Y-%m-%d"),
+            if *force { " --force" } else { "" }
+        ));
+    }
+    out.push_str(&format!("  infodesk --db {db} sync\n"));
+    out
 }
 
 async fn digest(
@@ -569,7 +683,7 @@ async fn run(cli: Cli) -> Result<()> {
     }
     match cli.command {
         Command::Collect => collect(&store).await,
-        Command::Summarize => summarize(&store).await,
+        Command::Summarize { date } => summarize(&store, date).await,
         Command::Digest {
             period,
             date,
@@ -606,6 +720,19 @@ async fn run(cli: Cli) -> Result<()> {
             topic,
             json,
         } => digests(&store, &period, date, category, topic, json),
+        Command::Redate {
+            fetched_on,
+            from,
+            to,
+            apply,
+        } => redate(
+            &store,
+            &fetched_on,
+            &from,
+            &to,
+            apply,
+            &path.display().to_string(),
+        ),
         Command::Sync => unreachable!("handled before the match"),
         Command::Tick => unreachable!("handled before the match"),
         Command::Page { .. } => unreachable!("handled before the store is opened"),
@@ -654,6 +781,48 @@ mod entry_tests {
     }
 
     #[test]
+    fn redate_checks_the_range_and_runs_on_an_empty_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db").display().to_string();
+        let base = [
+            "infodesk",
+            "--db",
+            db.as_str(),
+            "redate",
+            "--fetched-on",
+            "2026-11-01",
+        ];
+        let with = |extra: &[&str]| {
+            let mut v: Vec<&str> = base.to_vec();
+            v.extend_from_slice(extra);
+            args(&v)
+        };
+        assert_eq!(
+            run_from(with(&["--from", "2026-10-27", "--to", "2026-10-31"])),
+            0
+        );
+        assert_eq!(
+            run_from(with(&[
+                "--from",
+                "2026-10-27",
+                "--to",
+                "2026-10-31",
+                "--apply"
+            ])),
+            0
+        );
+        assert_eq!(
+            run_from(with(&["--from", "2026-10-31", "--to", "2026-10-27"])),
+            1
+        );
+        assert_eq!(
+            run_from(with(&["--from", "2026-10-27", "--to", "2026-11-01"])),
+            1
+        );
+        assert_eq!(run_from(with(&["--from", "bad", "--to", "2026-10-31"])), 1);
+    }
+
+    #[test]
     fn runs_a_command_and_reports_errors_by_exit_code() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("t.db").display().to_string();
@@ -672,6 +841,70 @@ mod entry_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn summarize_takes_an_optional_date() {
+        assert!(parse(&["summarize"]).is_ok());
+        assert!(parse(&["summarize", "--date", "2026-10-27"]).is_ok());
+    }
+
+    #[test]
+    fn redate_requires_all_three_dates() {
+        assert!(parse(&["redate", "--from", "2026-10-27", "--to", "2026-10-31"]).is_err());
+        assert!(
+            parse(&[
+                "redate",
+                "--fetched-on",
+                "2026-11-01",
+                "--from",
+                "2026-10-27",
+                "--to",
+                "2026-10-31"
+            ])
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn format_redate_lists_counts_then_commands() {
+        use infodesk_core::store::RedateCount;
+        let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+        let counts = vec![
+            RedateCount {
+                day: d("2026-10-27"),
+                category: "tech_jp".into(),
+                count: 1,
+            },
+            RedateCount {
+                day: d("2026-10-30"),
+                category: "medcare".into(),
+                count: 3,
+            },
+            RedateCount {
+                day: d("2026-10-30"),
+                category: "tech_jp".into(),
+                count: 1,
+            },
+        ];
+        let plan = vec![
+            (Period::Day, d("2026-10-27"), false),
+            (Period::Week, d("2026-10-26"), true),
+        ];
+        assert_eq!(
+            format_redate(&counts, &plan, false, "/data/infodesk.db"),
+            "dry run: 5 articles would move (nothing changed; add --apply)\n\
+             2026-10-27  tech_jp 1\n\
+             2026-10-30  medcare 3  tech_jp 1\n\
+             then run:\n  \
+             infodesk --db /data/infodesk.db summarize --date 2026-10-27\n  \
+             infodesk --db /data/infodesk.db summarize --date 2026-10-30\n  \
+             infodesk --db /data/infodesk.db digest day --date 2026-10-27\n  \
+             infodesk --db /data/infodesk.db digest week --date 2026-10-26 --force\n  \
+             infodesk --db /data/infodesk.db sync\n"
+        );
+        assert!(format_redate(&counts, &plan, true, "x").starts_with("moved 5 articles\n"));
+        assert_eq!(format_redate(&[], &plan, true, "x"), "nothing to move\n");
+    }
 
     fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
         Cli::try_parse_from(std::iter::once("infodesk").chain(args.iter().copied()))

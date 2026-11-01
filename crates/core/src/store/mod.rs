@@ -2,6 +2,7 @@ mod chat;
 mod digests;
 mod items;
 mod migrate;
+mod redate;
 mod schema;
 mod settings;
 mod sources;
@@ -10,6 +11,7 @@ mod sync;
 mod topics;
 
 pub use digests::NewDigest;
+pub use redate::{RedateCount, RedateRange};
 pub use sync::SyncFileRow;
 
 use std::path::Path;

@@ -156,7 +156,38 @@ kubectl -n infodesk delete pod infodesk-shell
 
 NAS の URL は LAN の IP アドレスで書きます: `http://192.168.0.151:5005/infodesk/`。名前は受け付けません。アドレスが変わらないように、NAS にはルーターの DHCP の固定割り当てなどで、固定のアドレスを与えてください。
 
-## 8. 困ったとき
+## 8. 取得の空白を埋める
+
+何日か収集しなかった場合 (たとえばクラスターに移る前に Mac が止まっていた場合)、そのあと最初の収集で、新しい記事はすべてその日の記事になります。空白の日には記事も日次ダイジェストもできません。`infodesk redate` は、空白の期間に公開された記事を公開日に移します。公開日のない記事 (GitHub Trending) は動きません。[CLI リファレンス](08-cli.ja.md#redate)も参照してください。
+
+1. 定期実行を止め、実行中のものがなくなるまで待ちます。
+
+   ```bash
+   kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":true}}'
+   kubectl -n infodesk get workflows
+   ```
+
+   `Running` のワークフローがなくなるまで待ちます。
+
+2. シェル用の Pod を起動し (6 章)、移る件数を確かめます。
+
+   ```bash
+   cli="kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db"
+   $cli redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
+   ```
+
+3. 件数がよければ `--apply` を付けてもう一度実行し、`then run:` の下に表示されたコマンドを、上から順に、前に `kubectl -n infodesk exec infodesk-shell --` を付けて実行します。移した日の記事要約、ダイジェストの作成と進み、最後は `sync` です。この出力は控えておいてください。途中でコマンドが失敗したとき、`redate` をもう一度実行しても、記事はすでに移っているので `nothing to move` としか表示されません。
+
+4. シェル用の Pod を削除し、定期実行を再開します。
+
+   ```bash
+   kubectl -n infodesk delete pod infodesk-shell
+   kubectl -n infodesk patch cronworkflow infodesk-tick --type merge -p '{"spec":{"suspend":false}}'
+   ```
+
+要約とダイジェストのコマンドは Claude API を使います。表示された日・週・月ごとに、カテゴリーの数だけ呼び出します。
+
+## 9. 困ったとき
 
 `tick` は、手順ごとに 1 行をログに出します。DB を読めないとき以外は終了コード 0 なので、失敗した手順は、実行の失敗ではなくログに出ます。
 

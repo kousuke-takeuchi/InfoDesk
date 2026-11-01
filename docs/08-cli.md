@@ -50,6 +50,7 @@ Commands:
   sync       NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
   tick       予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
   digests    保存済みの期間要約を表示する (生成はしない)
+  redate     取得の空白を埋める: 指定日に取得した記事を公開日に移し、作るべき期間要約を表示する
   page       URL の本文をテキストで取得する (DB は使わない)
   source
   topic
@@ -67,10 +68,10 @@ Fetches every enabled source, saves new articles, and fills article images. Prin
 ### summarize
 
 ```
-infodesk summarize
+infodesk summarize [--date <DATE>]
 ```
 
-Adds an article summary to the top articles collected today, per category. The count per category is `summary.top_n` (default 20). The provider is `llm.items_provider`.
+Adds an article summary to the top articles collected today, per category. With `--date YYYY-MM-DD` it uses the articles collected on that day instead (used after `redate`). The count per category is `summary.top_n` (default 20). The provider is `llm.items_provider`.
 
 ### sync
 
@@ -149,6 +150,19 @@ infodesk digests [OPTIONS] <PERIOD>
 ```
 
 Shows stored digests. It does not generate them (use `digest` for that). Options: `--date <DATE>` (default today), `--category <CATEGORY>`, `--topic <TOPIC>` and `--json`. `--category` and `--topic` cannot be used together. Without either, it shows every category.
+
+### redate
+
+```
+infodesk redate --fetched-on <DATE> --from <DATE> --to <DATE> [--apply]
+```
+
+Fills a collection gap. Articles collected on `--fetched-on` whose publish date falls on a day from `--from` to `--to` (local time) are moved to their publish date (`fetched_at` becomes `published_at`). Articles with no publish date stay. Without `--apply` it only prints the counts. It then prints the commands to run: `summarize --date` for each day that received articles, the digest commands (day digests first, then week and month, with `--force` where a digest already exists) and `sync`. `--from <= --to < --fetched-on` is required. See [Home Server](15-home-server.md) for the steps on the cluster.
+
+```sh
+infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
+infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31 --apply
+```
 
 ### page
 
