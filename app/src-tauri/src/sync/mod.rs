@@ -415,9 +415,11 @@ pub fn signed_out(state: &AppState) {
 
 /// 有効にするときは、無効の間に残った未送信の操作を捨て、次の同期でスナップショットを作り直させる。
 /// 印の状態は記事の `*_changed_at` が持っているので、そのスナップショットで届く。
+/// 読むだけのモードはスナップショットを書かないので、何も捨てない。無効の間の印も `sync_ops` に
+/// 記録してあり、次の同期で送る。
 pub fn set_enabled(state: &AppState, enabled: bool) -> AppResult<()> {
     state.with_store(|s| {
-        if enabled {
+        if enabled && !is_reader(s)? {
             s.discard_pending_ops()?;
             s.set_setting(SETTING_LAST_COMPACTION_AT, "")?;
         }
@@ -1563,6 +1565,28 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn a_reader_keeps_marks_made_while_sync_was_off_when_sync_is_turned_on() {
+        let (state, _) = test_state();
+        state
+            .with_store(|s| {
+                s.switch_to_reader()?;
+                s.set_setting(SETTING_ENABLED, "false")
+            })
+            .unwrap();
+        read_while_sync_is_off(&state);
+        let (device, _) = state.with_store(|s| s.ensure_sync_ids()).unwrap();
+        let pending = || {
+            state
+                .with_store(|s| s.pending_local_ops(&device))
+                .unwrap()
+                .len()
+        };
+        assert_eq!(pending(), 1);
+        set_enabled(&state, true).unwrap();
+        assert_eq!(pending(), 1, "the next reader pass uploads it");
     }
 
     #[tokio::test]
