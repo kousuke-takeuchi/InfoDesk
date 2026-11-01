@@ -7,7 +7,7 @@ import type { AppStatus, Item } from "../types";
 import type { Selection } from "../components/Sidebar";
 import type { ViewActionsRef } from "../hooks/useShortcuts";
 
-const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: "2026-10-06T00:00:00Z", next_collect_at: null, last_error: null };
+const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: "2026-10-06T00:00:00Z", next_collect_at: null, last_error: null, reader_mode: false };
 const item = (over: Partial<Item>): Item => ({
   id: 1, source_id: 1, source_name: "Google News: 認知症", category: "medcare", url: "https://e.com/1",
   title: "認知症の新薬", excerpt: "", author: null, published_at: null, fetched_at: new Date().toISOString(),
@@ -80,6 +80,15 @@ describe("FeedView", () => {
     setupIpc({ list_items: () => { throw { message: "database lock poisoned" }; }, count_items: () => 0, list_sources: () => [] });
     render(<FeedView selection={{ kind: "all" }} topics={[]} status={status} view="feed" onSwitchView={() => {}} onOpenSources={() => {}} {...CHAT} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("database lock poisoned");
+  });
+
+  it("has no collect button in the empty state in reader mode", async () => {
+    setupIpc({ list_items: () => [], count_items: () => 0, list_sources: () => [] });
+    render(<FeedView selection={{ kind: "all" }} topics={[]} status={{ ...status, last_collect_at: null, reader_mode: true }}
+      view="feed" onSwitchView={() => {}} onOpenSources={() => {}} {...CHAT} />);
+    expect(await screen.findByText("まだ記事がありません")).toBeInTheDocument();
+    expect(screen.getByText("読むだけのモードです。記事はサーバーが集め、同期で届きます。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "今すぐ収集" })).not.toBeInTheDocument();
   });
 
   it("shows the filtered empty state when items exist elsewhere", async () => {

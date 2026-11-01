@@ -9,7 +9,7 @@ import { EVENTS } from "../../api";
 import type { SyncStatus } from "../../types";
 
 const out: SyncStatus = {
-  available: true, signed_in: false, account_email: null, enabled: false, syncing: false,
+  available: true, signed_in: false, account_email: null, enabled: false, reader_mode: false, syncing: false,
   last_sync_at: null, error: null, device_name: "MacBook Pro",
   backend: "gdrive", nas_url: "", nas_user: "", nas_password_set: false,
   tailnet: { state: "stopped", name: null, reason: null },
@@ -596,5 +596,35 @@ describe("SyncTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "NAS の準備を見る (初めての方へ)" }));
     await userEvent.keyboard("{Control>}r{/Control}");
     expect(collect).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns reader mode on and off and explains that sync went off", async () => {
+    let current: SyncStatus = signedIn;
+    const ipc = setupIpc({
+      sync_status: () => current,
+      sync_set_reader_mode: (a) => { current = { ...current, reader_mode: a.on, enabled: a.on ? current.enabled : false }; return current; },
+    });
+    render(<SyncTab />);
+    const toggle = await screen.findByRole("switch", { name: "読むだけ (サーバーが収集)" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(toggle);
+    expect(ipc.last("sync_set_reader_mode")).toEqual({ on: true });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+    expect(screen.queryByText(/同期をオフにしました/)).not.toBeInTheDocument();
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+    expect(ipc.last("sync_set_reader_mode")).toEqual({ on: false });
+    expect(await screen.findByText("同期をオフにしました。この Mac で収集して書き出すなら、「同期する」をもう一度オンにしてください。")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "同期する" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("shows a refused switch", async () => {
+    setupIpc({
+      sync_status: () => signedIn,
+      sync_set_reader_mode: () => { throw { message: "同期中は切り替えられません。終わってからもう一度試してください" }; },
+    });
+    render(<SyncTab />);
+    await userEvent.click(await screen.findByRole("switch", { name: "読むだけ (サーバーが収集)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("同期中は切り替えられません");
   });
 });

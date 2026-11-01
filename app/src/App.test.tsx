@@ -15,7 +15,7 @@ vi.mock("./hooks/useStaleRefresh", async (orig) => {
 
 const STATUS: AppStatus = {
   collecting: false, summarizing: false, digesting: false,
-  last_collect_at: null, next_collect_at: null, last_error: null,
+  last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false,
 };
 const TOPICS: Topic[] = [];
 
@@ -304,6 +304,17 @@ describe("App", () => {
       await press("r", { metaKey: true });
       await waitFor(() => expect(ipc.count("collect_now")).toBe(2));
       await waitFor(() => expect(ipc.count("get_status")).toBe(3));
+    });
+
+    it("Cmd+R and the sidebar button sync instead of collecting in reader mode", async () => {
+      const ipc = setupIpc(handlers({ get_status: () => ({ ...STATUS, reader_mode: true }), sync_now: () => undefined }));
+      await ready();
+      const button = await screen.findByTitle("今すぐ同期 (⌘R)");
+      await press("r", { metaKey: true });
+      await waitFor(() => expect(ipc.count("sync_now")).toBe(1));
+      await userEvent.click(button);
+      await waitFor(() => expect(ipc.count("sync_now")).toBe(2));
+      expect(ipc.count("collect_now")).toBe(0);
     });
 
     it("prevents the default action of handled keys only", async () => {
