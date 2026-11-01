@@ -21,12 +21,12 @@ use crate::store::SyncFileRow;
 const DAY_RETENTION: i64 = 60;
 const LONG_RETENTION: i64 = 400;
 const OPS_RETENTION_DAYS: i64 = 30;
-const MAX_SEQ: usize = 9999;
-const OPS_PER_FILE: usize = 1000;
-const MIME_JSON: &str = "application/json";
+pub(crate) const MAX_SEQ: usize = 9999;
+pub(crate) const OPS_PER_FILE: usize = 1000;
+pub(crate) const MIME_JSON: &str = "application/json";
 const MIME_GZ: &str = "application/gzip";
 const SNAPSHOT: &str = "state-snapshot.json.gz";
-const MANIFEST: &str = "manifest.json";
+pub(crate) const MANIFEST: &str = "manifest.json";
 const META: &str = "meta.json.gz";
 
 #[derive(Debug, thiserror::Error)]
@@ -37,7 +37,7 @@ pub enum SyncError {
     Store(String),
 }
 
-fn st<T>(r: crate::Result<T>) -> Result<T, SyncError> {
+pub(crate) fn st<T>(r: crate::Result<T>) -> Result<T, SyncError> {
     r.map_err(|e| SyncError::Store(e.to_string()))
 }
 
@@ -86,7 +86,7 @@ pub fn compaction_due(
 }
 
 /// Locks, runs `f`, and releases before returning, so callers never hold the guard across an await.
-fn locked<T>(
+pub(crate) fn locked<T>(
     store: &Mutex<Store>,
     f: impl FnOnce(&Store) -> crate::Result<T>,
 ) -> Result<T, SyncError> {
@@ -296,7 +296,7 @@ fn build_digest(
 }
 
 /// Sort key for an ops file name: the UTC stamp, then the whole name.
-fn ops_sort_key(name: &str) -> (String, String) {
+pub(crate) fn ops_sort_key(name: &str) -> (String, String) {
     let stamp = name
         .strip_suffix(".json")
         .and_then(|r| r.rsplit('-').nth(1))
@@ -305,7 +305,7 @@ fn ops_sort_key(name: &str) -> (String, String) {
     (stamp, name.to_string())
 }
 
-fn local_ops(local: BTreeMap<i64, ItemState>) -> impl Iterator<Item = Op> {
+pub(crate) fn local_ops(local: BTreeMap<i64, ItemState>) -> impl Iterator<Item = Op> {
     local.into_iter().flat_map(|(item_id, item)| {
         [(Field::Read, item.read), (Field::Starred, item.starred)]
             .into_iter()

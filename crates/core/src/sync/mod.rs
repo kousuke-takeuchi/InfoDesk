@@ -5,4 +5,5 @@ pub mod google;
 pub mod headless;
 pub mod mode;
 pub mod nas;
+pub mod reader;
 pub mod webdav;
