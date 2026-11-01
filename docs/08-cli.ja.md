@@ -50,6 +50,7 @@ Commands:
   sync       NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
   tick       予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
   digests    保存済みの期間要約を表示する (生成はしない)
+  redate     取得の空白を埋める: 指定日に取得した記事を公開日に移し、作るべき期間要約を表示する
   page       URL の本文をテキストで取得する (DB は使わない)
   source
   topic
@@ -149,6 +150,19 @@ infodesk digests [OPTIONS] <PERIOD>
 ```
 
 保存済みの期間要約を表示します。生成はしません (生成は `digest` を使います)。オプションは `--date <DATE>` (既定は今日)、`--category <CATEGORY>`、`--topic <TOPIC>`、`--json` です。`--category` と `--topic` は同時に使えません。どちらも省くと全カテゴリーを表示します。
+
+### redate
+
+```
+infodesk redate --fetched-on <DATE> --from <DATE> --to <DATE> [--apply]
+```
+
+取得の空白を埋めます。`--fetched-on` の日に取得した記事のうち、公開日が `--from`〜`--to` の日 (現地時間) のものを、公開日に取得したことにします (`fetched_at` を `published_at` にする)。公開日のない記事は動きません。`--apply` を付けなければ件数を表示するだけです。続けて実行する期間要約のコマンド (日次、週次、月次の順。要約がすでにあれば `--force` 付き) と `sync` を表示します。`--from <= --to < --fetched-on` でなければエラーです。クラスターでの手順は[自宅サーバー](15-home-server.ja.md)を参照してください。
+
+```sh
+infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31
+infodesk redate --fetched-on 2026-11-01 --from 2026-10-27 --to 2026-10-31 --apply
+```
 
 ### page
 
