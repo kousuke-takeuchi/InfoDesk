@@ -21,6 +21,8 @@ The database you copy to the cluster carries the Mac's sync device id. If the Ma
 
 kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi@192.168.0.175"`, then `wsl -d Ubuntu-24.04`. The commands below that start with `kubectl` run there. The repository files must be there too (clone the repository in WSL, or copy `deploy/k8s/`).
 
+Apply the files one by one as below. Do not run `kubectl apply -f deploy/k8s/` on the whole folder: `shell.yaml` and `run-once.yaml` are meant to be applied only at the steps that need them, and `TAG` must be filled in first.
+
 1. On the Mac, build and push the image from the repository root. It prints the image name:
 
    ```sh
@@ -34,7 +36,7 @@ kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi
    kubectl apply -f deploy/k8s/namespace.yaml -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml
    ```
 
-4. Create the Secret. Type the values yourself; they are never written to a file or to git (see `deploy/k8s/secret.example.yaml`):
+4. Create the Secret. Type the values yourself; they are never written to a file or to git (see `deploy/secret.example.yaml`):
 
    ```sh
    kubectl -n infodesk create secret generic infodesk-env \
@@ -42,21 +44,29 @@ kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi
      --from-literal=INFODESK_NAS_PASSWORD='<DSM password of the WebDAV user>'
    ```
 
-5. On the Mac, turn off 同期する in Settings and quit InfoDesk. Then make a consistent copy of the database:
+5. On the Mac, in Settings, turn off 同期する and ログイン時に起動, then quit InfoDesk. Make a consistent copy of the database and send it to the Windows user's home folder:
 
    ```sh
    sqlite3 "$HOME/Library/Application Support/jp.infodesk.app/infodesk.db" ".backup /tmp/infodesk.db"
+   scp /tmp/infodesk.db "Kousuke Takeuchi@192.168.0.175:infodesk.db"
    ```
 
-   Copy `/tmp/infodesk.db` to the Windows PC with `scp`. WSL sees the Windows disk under `/mnt/c/...`, so copy it from there into WSL.
-6. Start the shell pod and copy the database in:
+   Then, in WSL, copy it from the Windows disk into WSL:
+
+   ```sh
+   cp "/mnt/c/Users/Kousuke Takeuchi/infodesk.db" /tmp/infodesk.db
+   ```
+
+   The Windows profile folder name may differ from the user name. If the `cp` fails, check the name with `ls /mnt/c/Users`.
+6. Start the shell pod, wait until it is ready, and copy the database in:
 
    ```sh
    kubectl apply -f deploy/k8s/shell.yaml
+   kubectl -n infodesk wait --for=condition=Ready pod/infodesk-shell --timeout=5m
    kubectl -n infodesk cp /tmp/infodesk.db infodesk-shell:/data/infodesk.db
    ```
 
-7. Change the settings for the cluster:
+7. Change the settings for the cluster. Turning off 同期する in step 5 was copied into the database, so turn it back on here:
 
    ```sh
    cli="kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db"
@@ -64,6 +74,7 @@ kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi
    $cli config set llm.digest_provider claude_api
    $cli config set sync.nas.url http://192.168.0.151:5005/infodesk/
    $cli config set sync.device_name infodesk-k3s
+   $cli config set sync.enabled true
    ```
 
 8. Run one sync to check the NAS connection, then remove the shell pod:
@@ -73,12 +84,16 @@ kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi
    kubectl -n infodesk delete pod infodesk-shell
    ```
 
-9. Apply the WorkflowTemplate and run it once by hand. Read the log:
+   A good sync prints one line that starts with `ok  取り込み` and then the counts. If it prints `同期は無効です (...)`, check `sync.enabled` and `sync.backend` and run it again.
+9. Apply the WorkflowTemplate and run it once by hand. Wait until that run finishes and read its log:
 
    ```sh
    kubectl apply -f deploy/k8s/workflowtemplate.yaml
-   kubectl create -f deploy/k8s/run-once.yaml
-   kubectl -n infodesk logs -l workflows.argoproj.io/workflow --tail=100
+   wf="$(kubectl create -f deploy/k8s/run-once.yaml -o name)"
+   wf="${wf#*/}"
+   until [ -n "$(kubectl -n infodesk get workflow "$wf" -o jsonpath='{.status.finishedAt}')" ]; do sleep 10; done
+   pod="$(kubectl -n infodesk get pods -l workflows.argoproj.io/workflow="$wf" -o name)"
+   kubectl -n infodesk logs "$pod" -c main
    ```
 
 10. When the log looks right, start the schedule:
@@ -87,15 +102,17 @@ kubectl and Docker run on the WSL node of the Windows PC: `ssh "Kousuke Takeuchi
     kubectl apply -f deploy/k8s/cronworkflow.yaml
     ```
 
+11. If the NAS address is not fixed yet, add a DHCP reservation for `192.168.0.151` in the router (see section 7).
+
 ## 4. Updating
 
-Run `deploy/k8s/build-and-push.sh` on the Mac, put the new tag in `deploy/k8s/workflowtemplate.yaml`, and apply it:
+Run `deploy/k8s/build-and-push.sh` on the Mac, put the new tag in `deploy/k8s/workflowtemplate.yaml` and `deploy/k8s/shell.yaml`, and apply the WorkflowTemplate:
 
 ```sh
 kubectl apply -f deploy/k8s/workflowtemplate.yaml
 ```
 
-The next run uses the new image.
+The next run uses the new image. The shell pod uses the new tag the next time you apply `shell.yaml`.
 
 ## 5. Claude API settings
 
@@ -115,6 +132,7 @@ Apply the shell pod, run the CLI in it, then delete the pod:
 
 ```sh
 kubectl apply -f deploy/k8s/shell.yaml
+kubectl -n infodesk wait --for=condition=Ready pod/infodesk-shell --timeout=5m
 kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db source list
 kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db config set summary.top_n 10
 kubectl -n infodesk delete pod infodesk-shell

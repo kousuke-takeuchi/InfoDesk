@@ -47,9 +47,9 @@ Commands:
   digest     期間要約を生成して表示する
   items      記事を一覧する
   item       記事を1件表示する
-  digests    保存済みの期間要約を表示する (生成はしない)
   sync       NAS へ今すぐ1回同期する (保存先が NAS のときだけ)
   tick       予定を1回だけ評価して、収集・要約・同期のうち時刻が来たものを実行する (k3s の CronWorkflow 用)
+  digests    保存済みの期間要約を表示する (生成はしない)
   page       URL の本文をテキストで取得する (DB は使わない)
   source
   topic

@@ -21,6 +21,8 @@ CLI のコマンドは [CLI](08-cli.ja.md) を、同期フォルダと NAS は[�
 
 kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Takeuchi@192.168.0.175"` でつないで、`wsl -d Ubuntu-24.04` に入ります。下の `kubectl` で始まるコマンドは、そこで実行します。リポジトリのファイルも、そこに必要です (WSL でリポジトリを clone するか、`deploy/k8s/` を写します)。
 
+ファイルは、下のとおり 1 つずつ適用します。`kubectl apply -f deploy/k8s/` でフォルダーをまとめて適用しないでください。`shell.yaml` と `run-once.yaml` は必要な手順でだけ適用するもので、`TAG` も先に書き換える必要があります。
+
 1. Mac で、リポジトリのルートからイメージを作って送ります。イメージの名前が出ます。
 
    ```sh
@@ -34,7 +36,7 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
    kubectl apply -f deploy/k8s/namespace.yaml -f deploy/k8s/pvc.yaml -f deploy/k8s/rbac.yaml
    ```
 
-4. Secret を作ります。値は自分で入力します。ファイルにも git にも書きません (`deploy/k8s/secret.example.yaml` を参照)。
+4. Secret を作ります。値は自分で入力します。ファイルにも git にも書きません (`deploy/secret.example.yaml` を参照)。
 
    ```sh
    kubectl -n infodesk create secret generic infodesk-env \
@@ -42,21 +44,29 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
      --from-literal=INFODESK_NAS_PASSWORD='<WebDAV ユーザーの DSM のパスワード>'
    ```
 
-5. Mac で、設定の「同期する」をオフにして、InfoDesk を終了します。そのあと、DB の整合したコピーを作ります。
+5. Mac で、設定の「同期する」と「ログイン時に起動」をオフにして、InfoDesk を終了します。そのあと、DB の整合したコピーを作り、Windows のユーザーのホームフォルダーへ送ります。
 
    ```sh
    sqlite3 "$HOME/Library/Application Support/jp.infodesk.app/infodesk.db" ".backup /tmp/infodesk.db"
+   scp /tmp/infodesk.db "Kousuke Takeuchi@192.168.0.175:infodesk.db"
    ```
 
-   `/tmp/infodesk.db` を `scp` で Windows PC へ送ります。WSL からは Windows のディスクが `/mnt/c/...` に見えるので、そこから WSL の中へコピーします。
-6. シェル用の Pod を起動して、DB を入れます。
+   続けて WSL で、Windows のディスクから WSL の中へコピーします。
+
+   ```sh
+   cp "/mnt/c/Users/Kousuke Takeuchi/infodesk.db" /tmp/infodesk.db
+   ```
+
+   Windows のプロファイルのフォルダー名は、ユーザー名と違うことがあります。`cp` が失敗したら、`ls /mnt/c/Users` で名前を確かめます。
+6. シェル用の Pod を起動し、準備ができるまで待って、DB を入れます。
 
    ```sh
    kubectl apply -f deploy/k8s/shell.yaml
+   kubectl -n infodesk wait --for=condition=Ready pod/infodesk-shell --timeout=5m
    kubectl -n infodesk cp /tmp/infodesk.db infodesk-shell:/data/infodesk.db
    ```
 
-7. クラスター用に設定を変えます。
+7. クラスター用に設定を変えます。手順 5 で「同期する」をオフにしたことが DB に写っているので、ここでオンに戻します。
 
    ```sh
    cli="kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db"
@@ -64,6 +74,7 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
    $cli config set llm.digest_provider claude_api
    $cli config set sync.nas.url http://192.168.0.151:5005/infodesk/
    $cli config set sync.device_name infodesk-k3s
+   $cli config set sync.enabled true
    ```
 
 8. 同期を 1 回行って NAS への接続を確かめ、シェル用の Pod を消します。
@@ -73,12 +84,16 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
    kubectl -n infodesk delete pod infodesk-shell
    ```
 
-9. WorkflowTemplate を適用し、手で 1 回実行して、ログを読みます。
+   うまくいくと、`ok  取り込み` で始まり件数が続く 1 行が出ます。`同期は無効です (...)` と出たときは、`sync.enabled` と `sync.backend` を確かめて、もう一度実行します。
+9. WorkflowTemplate を適用し、手で 1 回実行します。その実行が終わるまで待って、ログを読みます。
 
    ```sh
    kubectl apply -f deploy/k8s/workflowtemplate.yaml
-   kubectl create -f deploy/k8s/run-once.yaml
-   kubectl -n infodesk logs -l workflows.argoproj.io/workflow --tail=100
+   wf="$(kubectl create -f deploy/k8s/run-once.yaml -o name)"
+   wf="${wf#*/}"
+   until [ -n "$(kubectl -n infodesk get workflow "$wf" -o jsonpath='{.status.finishedAt}')" ]; do sleep 10; done
+   pod="$(kubectl -n infodesk get pods -l workflows.argoproj.io/workflow="$wf" -o name)"
+   kubectl -n infodesk logs "$pod" -c main
    ```
 
 10. ログに問題がなければ、スケジュールを始めます。
@@ -87,15 +102,17 @@ kubectl と Docker は、Windows PC の WSL で動きます。`ssh "Kousuke Take
     kubectl apply -f deploy/k8s/cronworkflow.yaml
     ```
 
+11. NAS のアドレスがまだ固定でなければ、ルーターで `192.168.0.151` を DHCP の固定割り当てにします (7 を参照)。
+
 ## 4. 更新
 
-Mac で `deploy/k8s/build-and-push.sh` を実行し、新しいタグを `deploy/k8s/workflowtemplate.yaml` に書いて、適用します。
+Mac で `deploy/k8s/build-and-push.sh` を実行し、新しいタグを `deploy/k8s/workflowtemplate.yaml` と `deploy/k8s/shell.yaml` に書いて、WorkflowTemplate を適用します。
 
 ```sh
 kubectl apply -f deploy/k8s/workflowtemplate.yaml
 ```
 
-次の実行から新しいイメージを使います。
+次の実行から新しいイメージを使います。シェル用の Pod は、次に `shell.yaml` を適用したときから新しいタグを使います。
 
 ## 5. Claude API の設定
 
@@ -115,6 +132,7 @@ API キーは Secret `infodesk-env` にだけあります。DB に保存せず�
 
 ```sh
 kubectl apply -f deploy/k8s/shell.yaml
+kubectl -n infodesk wait --for=condition=Ready pod/infodesk-shell --timeout=5m
 kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db source list
 kubectl -n infodesk exec infodesk-shell -- infodesk --db /data/infodesk.db config set summary.top_n 10
 kubectl -n infodesk delete pod infodesk-shell

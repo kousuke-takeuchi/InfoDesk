@@ -1702,7 +1702,7 @@ git commit -m "feat(cli): infodesk tick evaluates the schedule once for a CronWo
 ### Task 6: Container image, k3s manifests and docs
 
 **Files:**
-- Create: `Dockerfile`, `.dockerignore`, `deploy/k8s/namespace.yaml`, `deploy/k8s/pvc.yaml`, `deploy/k8s/rbac.yaml`, `deploy/k8s/workflowtemplate.yaml`, `deploy/k8s/cronworkflow.yaml`, `deploy/k8s/run-once.yaml`, `deploy/k8s/shell.yaml`, `deploy/k8s/secret.example.yaml`, `deploy/k8s/build-and-push.sh`, `docs/15-home-server.md`, `docs/15-home-server.ja.md`
+- Create: `Dockerfile`, `.dockerignore`, `deploy/k8s/namespace.yaml`, `deploy/k8s/pvc.yaml`, `deploy/k8s/rbac.yaml`, `deploy/k8s/workflowtemplate.yaml`, `deploy/k8s/cronworkflow.yaml`, `deploy/k8s/run-once.yaml`, `deploy/k8s/shell.yaml`, `deploy/secret.example.yaml`, `deploy/k8s/build-and-push.sh`, `docs/15-home-server.md`, `docs/15-home-server.ja.md`
 - Modify: `docs/07-settings.md`, `docs/07-settings.ja.md`, `docs/08-cli.md`, `docs/08-cli.ja.md`, `docs/14-mobile-app.md`, `docs/14-mobile-app.ja.md`, `README.md`, `README.ja.md`
 
 - [ ] **Step 1: `Dockerfile`**
@@ -1943,7 +1943,7 @@ spec:
         claimName: infodesk-data
 ```
 
-`deploy/k8s/secret.example.yaml`:
+`deploy/secret.example.yaml`:
 
 ```yaml
 # Documentation only. Do not fill in and do not commit real values.
