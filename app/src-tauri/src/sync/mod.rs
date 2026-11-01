@@ -16,13 +16,11 @@ use crate::state::{AppState, EVENT_ITEMS, EVENT_SYNC};
 use crate::tailnet::{TailnetProgress, TailnetState, starting_phase};
 use infodesk_core::sync::webdav::{WebDavConfig, WebDavStore};
 
-pub const SETTING_ENABLED: &str = "sync.enabled";
-pub const SETTING_DEVICE_NAME: &str = "sync.device_name";
-pub const SETTING_LAST_SYNC_AT: &str = "sync.last_sync_at";
-pub const SETTING_LAST_COMPACTION_AT: &str = "sync.last_compaction_at";
-pub const SETTING_BACKEND: &str = "sync.backend";
-pub const SETTING_NAS_URL: &str = "sync.nas.url";
-pub const SETTING_NAS_USER: &str = "sync.nas.user";
+pub use infodesk_core::sync::nas::{
+    BACKEND_GDRIVE, BACKEND_NAS, NAS_INCOMPLETE_MESSAGE, NAS_PREPARE_MESSAGE, NETWORK_MESSAGE,
+    SETTING_BACKEND, SETTING_DEVICE_NAME, SETTING_ENABLED, SETTING_LAST_COMPACTION_AT,
+    SETTING_LAST_SYNC_AT, SETTING_NAS_URL, SETTING_NAS_USER, SETTING_RESET_PENDING,
+};
 /// パスワードそのものはキーチェーンにあり、ここには入れたかどうかだけを持つ。
 pub const SETTING_NAS_PASSWORD_SET: &str = "sync.nas.password_set";
 /// 開発中の DB に残っている古いキー。読んだときに新しいキーへ移す。
@@ -31,31 +29,21 @@ const LEGACY_NAS_KEYS: [(&str, &str); 3] = [
     (SETTING_NAS_USER, "sync.nas_user"),
     (SETTING_NAS_PASSWORD_SET, "sync.nas_password_set"),
 ];
-/// 保存先が変わった。次の同期の始めに、向こうのファイルの記録を捨てて最初から書き出す。
-pub const SETTING_RESET_PENDING: &str = "sync.reset_pending";
-/// 既定。`nas` 以外の値 (古い `google` も) はすべてこれとして読む。
-pub const BACKEND_GDRIVE: &str = "gdrive";
-pub const BACKEND_NAS: &str = "nas";
 pub const NAS_URL_MESSAGE: &str =
     "NAS の URL を確かめてください (例: http://takeuchi-nas:5005/infodesk/)";
 /// https の NAS の URL。Tailscale の中は WireGuard で暗号化されている。
 pub const NAS_HTTPS_MESSAGE: &str =
     "http:// を使ってください (Tailscale の中なので暗号化されています)";
-/// WebDAV クライアントを作れなかった。詳細 (プロキシの資格情報を含みうる) は出さない。
-pub const NAS_PREPARE_MESSAGE: &str = "NAS への接続を準備できません";
 pub const TAILNET_LOGIN_MESSAGE: &str = "Tailscale にログインしてください";
 /// ログイン済みの端末はあるが、止まっている (同期が無効など)。
 pub const TAILNET_STOPPED_MESSAGE: &str = "Tailscale が停止中です";
 pub const TAILNET_APPROVAL_MESSAGE: &str = "Tailscale の管理画面でこの端末を承認してください";
-pub const NAS_INCOMPLETE_MESSAGE: &str = "NAS の URL、ユーザー名、パスワードを入力してください";
 pub const NAS_CHECK_OK: &str = "読み書きできました";
 /// URL のホストが tailnet の端末ではない。外のネットワークには送らない。
 pub const NAS_NOT_IN_TAILNET_MESSAGE: &str =
     "NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください";
 pub const FALLBACK_DEVICE_NAME: &str = "この Mac";
 pub const REAUTH_MESSAGE: &str = "Google の再ログインが必要です";
-/// 通信できなかった失敗 (`DriveError::Retryable`) に出す文。詳細は画面に出さない。
-pub const NETWORK_MESSAGE: &str = "ネットワークに接続できません。次の同期で再試行します。";
 
 /// 同期の状態。収集やダイジェストの `last_error` とは別に持つ。
 #[derive(Debug, Clone, Default, Serialize)]
