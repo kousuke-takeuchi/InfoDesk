@@ -22,6 +22,8 @@ pub struct AppStatus {
     pub last_collect_at: Option<DateTime<Utc>>,
     pub next_collect_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
+    /// 読むだけのモード (サーバーが収集)。`get_status` が設定から埋める。ここには保存しない。
+    pub reader_mode: bool,
     /// `last_error` を記録した処理。収集の成功は収集のエラーだけを消す。
     #[serde(skip)]
     pub error_origin: ErrorOrigin,

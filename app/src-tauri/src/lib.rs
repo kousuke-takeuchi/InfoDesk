@@ -184,6 +184,7 @@ pub fn run() {
             commands::sync::sync_login,
             commands::sync::sync_logout,
             commands::sync::sync_set_enabled,
+            commands::sync::sync_set_reader_mode,
             commands::sync::sync_set_device_name,
             commands::sync::sync_now,
             commands::sync::sync_set_backend,

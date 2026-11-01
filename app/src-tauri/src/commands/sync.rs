@@ -41,6 +41,22 @@ pub fn sync_set_enabled(app: AppHandle, enabled: bool) -> AppResult<SyncStatus> 
     Ok(sync::status_now(&state))
 }
 
+/// 「読むだけ (サーバーが収集)」。入れたら同期を 1 回投げる。切ると同期もオフになるので、
+/// NAS なら Tailscale も止める (別スレッドで)。
+#[tauri::command]
+pub fn sync_set_reader_mode(app: AppHandle, on: bool) -> AppResult<SyncStatus> {
+    let state = app.state::<AppState>();
+    if sync::set_reader_mode(&state, on)? {
+        if on {
+            sync::start_tailnet_if_needed(&state);
+            sync::spawn_sync(&app);
+        } else if sync::backend_is_nas(&state) {
+            drop(sync::stop_tailnet(&state));
+        }
+    }
+    Ok(sync::status_now(&state))
+}
+
 #[tauri::command]
 pub fn sync_set_device_name(state: State<'_, AppState>, name: String) -> AppResult<SyncStatus> {
     sync::set_device_name(&state, &name)?;
