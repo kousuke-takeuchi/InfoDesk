@@ -10,12 +10,30 @@ For the CLI commands see [CLI](08-cli.md). For the sync folder and the NAS see [
 
 - The CronWorkflow `infodesk-tick` runs `infodesk tick` every 5 minutes on the NUC node (`takeuchi-nuc11atkc2`). Each run collects, summarizes, makes digests and syncs to the NAS when it is due, by the same rules as the Mac app.
 - The summaries and digests come from the Claude API (`claude_api`), not from Ollama or the `claude` command.
-- The data is a SQLite database on the PVC `infodesk-data`. The iPhone app reads the NAS as before.
+- The data is a SQLite database on the PVC `infodesk-data`. The iPhone app reads the NAS as before, and so does the Mac app in reader mode (section 2).
 - Run history and logs are in the Argo UI, in the namespace `infodesk`.
 
-## 2. Why the Mac must stop
+## 2. Reading on the Mac (reader mode)
 
-The database you copy to the cluster carries the Mac's sync device id. If the Mac app and the cluster both sync with that id, they overwrite each other's files on the NAS. Until a Mac reader mode exists, turn off 同期する in the Mac app and keep the app closed.
+The cluster is the only writer of the NAS folder. The Mac app must never write it as well: the database you copy to the cluster carries the Mac's sync device id, and two writers overwrite each other's files. The Mac app reads the folder in reader mode instead, like the iPhone app.
+
+To switch the Mac to reader mode, after the cluster's first successful sync (section 3):
+
+1. Open InfoDesk, then Settings, 同期. Check that 保存先 is NAS and the NAS address and user are set.
+2. If you want the Mac app to start at login, turn on ログイン時に起動 in the スケジュール tab now. That tab is locked in reader mode.
+3. In the 同期 tab, turn on 読むだけ (サーバーが収集). The Mac gets a new sync device id and drops its unsent marks (the cluster already has them in the copied database).
+4. Turn on 同期する if it is off.
+
+In reader mode the Mac:
+
+- syncs when it starts, every 10 minutes, on 今すぐ同期 and on ⌘R (⌘R and the sidebar button sync instead of collecting);
+- never collects, summarizes or makes digests; the collect and regenerate buttons are hidden, and the menu bar item becomes 今すぐ同期;
+- writes only its own change batches (`ops-<device id>-...json`) with the read and starred marks made on the Mac; the cluster folds them in at its next sync and the iPhone sees them;
+- keeps articles older than 60 days that are still in its database: it never deletes an article because its day left the folder.
+
+The ソース, トピック and スケジュール tabs are locked in reader mode; change the cluster's settings with the CLI (section 6). The LLM tab stays editable because AI chat still runs on the Mac.
+
+Turning 読むだけ off also turns 同期する off. Do not turn 同期する on again while the cluster runs: the Mac would write the folder as a second writer.
 
 ## 3. Set up
 
@@ -115,6 +133,8 @@ Apply the files one by one as below. Do not run `kubectl apply -f deploy/k8s/` o
     ```
 
 11. If the NAS address is not fixed yet, add a DHCP reservation for `192.168.0.151` in the router (see section 7).
+
+When the first `infodesk-tick` run has synced to the NAS, switch the Mac to reader mode (section 2).
 
 ## 4. Updating
 
