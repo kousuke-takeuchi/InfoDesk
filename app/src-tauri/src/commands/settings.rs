@@ -60,6 +60,13 @@ pub fn set_setting_value(state: &AppState, key: &str, value: &str) -> AppResult<
                 .into(),
         );
     }
+    if key == "sync.mode" {
+        return Err(
+            "'sync.mode' cannot be set directly; use sync_set_reader_mode"
+                .to_string()
+                .into(),
+        );
+    }
     if EXECUTABLE_SETTINGS.contains(&key) {
         validate_executable(key, value)?;
     }
@@ -197,6 +204,18 @@ mod tests {
         assert!(!stay_resident(&state));
         set_setting_value(&state, "app.stay_resident", "garbage").unwrap();
         assert!(stay_resident(&state), "不正な値は既定の true");
+    }
+
+    #[test]
+    fn reader_mode_is_not_a_plain_setting() {
+        let (state, _) = test_state();
+        let err = set_setting_value(&state, "sync.mode", "reader").unwrap_err();
+        assert!(
+            err.message.contains("sync_set_reader_mode"),
+            "{}",
+            err.message
+        );
+        assert_eq!(settings_map(&state).unwrap()["sync.mode"], "writer");
     }
 
     #[test]

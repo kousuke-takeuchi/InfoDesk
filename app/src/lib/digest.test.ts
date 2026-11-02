@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { digestDisplay, parseDigestBody } from "./digest";
 import type { AppStatus, Digest, DigestView } from "../types";
 
-const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null };
+const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false };
 const digest = (over: Partial<Digest>): Digest => ({
   id: 1, period: "day", period_start: "2026-10-06", scope: { category: "github" }, body: "", item_ids: [],
   provider: "ollama:gemma4:26b", status: "done", attempts: 0, created_at: "2026-10-06T00:00:00Z", last_error: null, ...over,

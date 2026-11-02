@@ -122,6 +122,7 @@ pub fn regenerate_digest(
     date: String,
     scopes: Vec<DigestScope>,
 ) -> AppResult<()> {
+    jobs::ensure_writer(&app.state::<AppState>())?;
     let Some((period, date, scopes)) = regenerate_request(&period, &date, scopes)? else {
         return Ok(());
     };
@@ -136,6 +137,7 @@ pub fn regenerate_digest(
 
 #[tauri::command]
 pub fn collect_now(app: AppHandle) -> AppResult<()> {
+    jobs::ensure_writer(&app.state::<AppState>())?;
     // 収集中なら何もしない (重複起動はエラーではない)。
     if jobs::is_collecting(&app.state::<AppState>()) {
         return Ok(());
@@ -154,6 +156,7 @@ pub fn collect_now(app: AppHandle) -> AppResult<()> {
 /// 手動の再試行。保留中に加え、上限まで失敗した要約も対象にする。
 #[tauri::command]
 pub fn retry_pending_digests(app: AppHandle) -> AppResult<()> {
+    jobs::ensure_writer(&app.state::<AppState>())?;
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         if let Err(e) = jobs::retry_all(&state).await {

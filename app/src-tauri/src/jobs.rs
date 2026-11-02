@@ -7,6 +7,7 @@ use infodesk_core::period::{period_start, utc_range};
 use infodesk_core::summarizer::{
     DigestOutcome, finish_digest, finish_item_summary, plan_digest, plan_item_summaries,
 };
+use infodesk_core::sync::mode::{READER_ONLY_MESSAGE, is_reader};
 use serde::Serialize;
 
 use crate::error::AppResult;
@@ -79,6 +80,14 @@ pub async fn run_item_summaries(
     result.map(|()| totals)
 }
 
+/// 読むだけのモードなら断る。収集、要約、再試行の入り口で呼ぶ (画面とスケジューラーでも止めるが、念のため)。
+pub fn ensure_writer(state: &AppState) -> AppResult<()> {
+    if state.with_store(is_reader)? {
+        return Err(READER_ONLY_MESSAGE.to_string().into());
+    }
+    Ok(())
+}
+
 /// 期間要約を順に生成する。各 scope の結果 (`None` は生成不要) を返す。
 pub async fn run_digests(
     state: &AppState,
@@ -87,6 +96,7 @@ pub async fn run_digests(
     scopes: &[DigestScope],
     force: bool,
 ) -> AppResult<Vec<(DigestScope, Option<DigestOutcome>)>> {
+    ensure_writer(state)?;
     let tz = state.tz;
     // 他の要約ジョブと重なってもよいよう、フラグではなくジョブ数で数える。
     let job_guard = state.begin_digest_job();
@@ -140,6 +150,7 @@ async fn retry_from(
     state: &AppState,
     list: fn(&Store) -> infodesk_core::Result<Vec<Digest>>,
 ) -> AppResult<usize> {
+    ensure_writer(state)?;
     let pending = state.with_store(list)?;
     let had_pending = !pending.is_empty();
     let mut recovered = 0;
@@ -188,6 +199,7 @@ pub fn is_collecting(state: &AppState) -> bool {
 
 /// 収集と記事要約。日次要約は作らない (スケジュールの日次ジョブが作る)。収集中なら拒否する (`last_error` は変えない)。
 pub async fn run_collect(state: &AppState) -> AppResult<CollectSummary> {
+    ensure_writer(state)?;
     {
         let mut status = state.status.lock().expect("status lock");
         if status.collecting {
@@ -273,6 +285,33 @@ mod tests {
     use infodesk_core::model::{ItemFilter, SourceKind};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn reader_mode_refuses_collect_digests_and_retries() {
+        let (state, _) = crate::state::test_state();
+        state.with_store(|s| s.switch_to_reader()).unwrap();
+        let err = run_collect(&state).await.unwrap_err();
+        assert_eq!(err.message, READER_ONLY_MESSAGE);
+        let st = state.status();
+        assert!(!st.collecting);
+        assert_eq!(st.last_error, None);
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 6).unwrap();
+        let err = run_digests(&state, Period::Day, day, &all_category_scopes(), true)
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, READER_ONLY_MESSAGE);
+        assert!(!state.status().digesting);
+        assert_eq!(
+            retry_all(&state).await.unwrap_err().message,
+            READER_ONLY_MESSAGE
+        );
+        assert_eq!(
+            retry_pending(&state).await.unwrap_err().message,
+            READER_ONLY_MESSAGE
+        );
+        state.with_store(|s| s.switch_to_writer()).unwrap();
+        assert!(ensure_writer(&state).is_ok());
+    }
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

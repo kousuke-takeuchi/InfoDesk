@@ -122,6 +122,8 @@ export interface AppStatus {
   last_collect_at: string | null;
   next_collect_at: string | null;
   last_error: string | null;
+  /** 読むだけのモード (サーバーが収集)。get_status が設定から埋める。 */
+  reader_mode: boolean;
 }
 
 export interface SidebarCounts {
@@ -168,6 +170,8 @@ export interface SyncStatus {
   signed_in: boolean;
   account_email: string | null;
   enabled: boolean;
+  /** 読むだけのモード (サーバーが収集し、この Mac は保存先を読む)。 */
+  reader_mode: boolean;
   syncing: boolean;
   last_sync_at: string | null;
   error: string | null;

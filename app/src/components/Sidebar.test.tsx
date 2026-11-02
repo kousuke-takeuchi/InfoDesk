@@ -15,7 +15,7 @@ const topics: Topic[] = [
 ];
 const status: AppStatus = {
   collecting: false, summarizing: false, digesting: false,
-  last_collect_at: "2026-10-06T00:00:00Z", next_collect_at: null, last_error: null,
+  last_collect_at: "2026-10-06T00:00:00Z", next_collect_at: null, last_error: null, reader_mode: false,
 };
 
 describe("Sidebar", () => {

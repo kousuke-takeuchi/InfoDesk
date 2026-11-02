@@ -102,7 +102,8 @@ fn device_id_in(conn: &Connection) -> Result<String> {
     }
 }
 
-/// 呼び出し側のトランザクションの中で使う `set_flag`。`sync_ops` に足すのは同期が有効なときだけ。
+/// 呼び出し側のトランザクションの中で使う `set_flag`。`sync_ops` に足すのは同期が有効なときか、
+/// 読むだけのモードのとき。
 pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool) -> Result<()> {
     let (col, at_col) = match field {
         Field::Read => ("read", "read_changed_at"),
@@ -125,15 +126,22 @@ pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool)
         &format!("UPDATE items SET {col} = ?2, {at_col} = ?3, {by_col} = ?4 WHERE id = ?1"),
         params![id, value, now, device],
     )?;
-    // 同期が無効の間は記録しない。印の時刻は残るので、有効にした後の最初の同期で送れる。
-    let enabled: Option<String> = conn
-        .query_row(
-            "SELECT value FROM settings WHERE key = 'sync.enabled'",
-            [],
-            |r| r.get(0),
-        )
-        .optional()?;
-    if enabled.as_deref() == Some("true") {
+    // 書き手は、同期が無効の間は記録しない。印の時刻は残るので、有効にした後の最初の同期の
+    // スナップショットで届く。読むだけのモードはスナップショットを書かないので、無効の間も記録し、
+    // 次の同期で ops として送る。
+    let setting = |key: &str| -> Result<Option<String>> {
+        Ok(conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                params![key],
+                |r| r.get(0),
+            )
+            .optional()?)
+    };
+    let journal = setting("sync.enabled")?.as_deref() == Some("true")
+        || setting(crate::sync::mode::SETTING_MODE)?.as_deref()
+            == Some(crate::sync::mode::MODE_READER);
+    if journal {
         conn.execute(
             "INSERT INTO sync_ops(item_id, field, value, at) VALUES (?1, ?2, ?3, ?4)",
             params![id, field_name(field), value, now],
@@ -143,7 +151,8 @@ pub(super) fn set_flag_in(conn: &Connection, id: i64, field: Field, value: bool)
 }
 
 impl Store {
-    /// 値が変わったときだけ、列と `*_changed_at` を更新し、同期が有効なら `sync_ops` に1行足す。
+    /// 値が変わったときだけ、列と `*_changed_at` を更新し、同期が有効か読むだけのモードなら
+    /// `sync_ops` に1行足す。
     pub(super) fn set_flag(&self, id: i64, field: Field, value: bool) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         set_flag_in(&tx, id, field, value)?;
@@ -607,6 +616,32 @@ mod tests {
         assert!(read.value);
         assert_eq!(read.device, device);
         assert!(stamps[&id].starred.clone().unwrap().value);
+    }
+
+    #[test]
+    fn a_reader_journals_marks_even_while_sync_is_off() {
+        let s = store_with_source(Category::TechJp).0;
+        s.set_setting("sync.enabled", "false").unwrap();
+        s.set_setting("sync.mode", "reader").unwrap();
+        let a = insert_item(&s, "https://a/1");
+        let b = insert_item(&s, "https://a/2");
+        s.set_read(a, true).unwrap();
+        s.set_starred(a, true).unwrap();
+        s.mark_all_read(&ItemFilter::default()).unwrap();
+        let ops: Vec<(i64, Field, bool)> = s
+            .pending_local_ops("mac")
+            .unwrap()
+            .into_iter()
+            .map(|(_, op)| (op.item_id, op.field, op.value))
+            .collect();
+        assert_eq!(
+            ops,
+            vec![
+                (a, Field::Read, true),
+                (a, Field::Starred, true),
+                (b, Field::Read, true),
+            ]
+        );
     }
 
     #[test]

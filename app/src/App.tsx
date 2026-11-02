@@ -22,7 +22,7 @@ function sameAttachment(a: ChatAttachment, b: ChatAttachment): boolean {
 const EMPTY_COUNTS: SidebarCounts = { total_unread: 0, categories: {}, topics: {} };
 const IDLE_STATUS: AppStatus = {
   collecting: false, summarizing: false, digesting: false,
-  last_collect_at: null, next_collect_at: null, last_error: null,
+  last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false,
 };
 
 export default function App() {
@@ -85,11 +85,12 @@ export default function App() {
     setInSettings(false);
   }, [openSettings]);
 
+  // 読むだけのモードでは、収集の代わりに同期する (⌘R とサイドバーのボタン)。
   const collectNow = useCallback(() => {
-    api.collectNow()
+    (status.reader_mode ? api.syncNow() : api.collectNow())
       .then(() => setActionError(null))
       .catch((e) => setActionError(errorMessage(e)));
-  }, []);
+  }, [status.reader_mode]);
 
   const select = useCallback((s: Selection) => {
     setSelection(s);

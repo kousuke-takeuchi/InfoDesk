@@ -15,7 +15,7 @@ const WEEK_STATS: DigestStats = {
 /** どのテストでも概観の取得が呼ばれるので、既定の digest_stats を足す。 */
 const setupIpc = (handlers: IpcHandlers) => baseSetupIpc({ digest_stats: () => EMPTY_STATS, ...handlers });
 
-const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null };
+const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false };
 const digest = (over: Partial<Digest>): Digest => ({
   id: 1, period: "day", period_start: "2026-10-06", scope: { category: "github" }, body: "- 一つ目。\n- 二つ目。\n全体の傾向。",
   item_ids: [11, 12], provider: "ollama:gemma4:26b", status: "done", attempts: 0, created_at: "2026-10-06T00:00:00Z", last_error: null, ...over,
@@ -515,5 +515,14 @@ describe("DigestView", () => {
     await userEvent.click(screen.getByRole("button", { name: "週" }));
     expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "week", date: "2026-10-06" });
     expect(onPeriodChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides every generate and retry button in reader mode", async () => {
+    setupIpc({ get_digests: () => fresh(views), get_item: item });
+    renderAll({ ...status, reader_mode: true });
+    expect(await screen.findByText("一つ目。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "再生成" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "今すぐ再試行" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
   });
 });

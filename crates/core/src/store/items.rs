@@ -37,7 +37,7 @@ fn row_to_item(r: &Row) -> rusqlite::Result<Item> {
 /// `items_words` (unicode61) に入れる文字列。unicode61 は「Rustの新機能」を1語として
 /// 扱うため、CJK以降の文字 (U+2E80 以上) を空白に置き換え、英数字の語を切り出せるようにする。
 /// この表は英数字だけのキーワードの照合にしか使わないので、CJKの文字を落としても困らない。
-fn word_index_text(s: &str) -> String {
+pub(super) fn word_index_text(s: &str) -> String {
     s.chars()
         .map(|c| if c >= '\u{2E80}' { ' ' } else { c })
         .collect()

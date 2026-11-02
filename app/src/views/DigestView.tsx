@@ -183,6 +183,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
   };
 
   const heading = periodHeading(period, today);
+  const canGenerate = !status.reader_mode;
   const shown = (views ?? []).filter((v) => sameScope(v.scope, selection));
   const scopeNote = selection.kind === "topic" ? topics.find((t) => t.id === selection.topicId)?.name ?? null : null;
 
@@ -201,10 +202,12 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
           <span className="text-secondary">{heading.range}</span>
           {scopeNote && <span className="text-secondary">· {scopeNote}</span>}
           <div className="spacer" />
-          <button className="btn btn-ghost" disabled={status.digesting || requested.size > 0 || shown.length === 0}
-            onClick={() => request(shown.map((v) => v.scope))}>
-            <RotateCw size={14} /> 再生成
-          </button>
+          {canGenerate && (
+            <button className="btn btn-ghost" disabled={status.digesting || requested.size > 0 || shown.length === 0}
+              onClick={() => request(shown.map((v) => v.scope))}>
+              <RotateCw size={14} /> 再生成
+            </button>
+          )}
         </div>
         <Overview stats={stats && stats.key === loadKey ? stats.value : null} error={stats && stats.key === loadKey ? stats.error : null} />
         {views === null && !error && (
@@ -246,14 +249,14 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
                 <div className="state-box">
                   <Hourglass size={15} />
                   <span className="grow">保留中。次回のスケジュールで再試行します。{display.error ? ` 最後のエラー: ${display.error}` : ""}</span>
-                  <button className="btn" onClick={() => request([v.scope])}>今すぐ再試行</button>
+                  {canGenerate && <button className="btn" onClick={() => request([v.scope])}>今すぐ再試行</button>}
                 </div>
               )}
               {display.kind === "failed" && (
                 <div className="state-box">
                   <CircleAlert size={15} style={{ color: "var(--danger)" }} />
                   <span className="grow">生成に{display.attempts}回失敗しました。LLMの設定を確認してから再試行してください。{display.error ? ` 最後のエラー: ${display.error}` : ""}</span>
-                  <button className="btn" onClick={() => request([v.scope])}>再試行</button>
+                  {canGenerate && <button className="btn" onClick={() => request([v.scope])}>再試行</button>}
                 </div>
               )}
               {display.kind === "none" && display.itemCount === 0 && (
@@ -263,7 +266,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
                 <div className="state-box">
                   <Inbox size={15} />
                   <span className="grow">まだ要約がありません (記事 {display.itemCount}件)</span>
-                  <button className="btn" onClick={() => request([v.scope])}>生成</button>
+                  {canGenerate && <button className="btn" onClick={() => request([v.scope])}>生成</button>}
                 </div>
               )}
             </section>

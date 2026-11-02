@@ -9,10 +9,12 @@ use chrono::{DateTime, Utc};
 use infodesk_core::sync::drive::{DriveError, DriveStore};
 use infodesk_core::sync::engine::{SyncError, SyncInput, compaction_due, run_sync};
 use infodesk_core::sync::google::GoogleDrive;
+use infodesk_core::sync::mode::is_reader;
+use infodesk_core::sync::reader::{ReaderInput, run_reader_sync};
 use serde::Serialize;
 
 use crate::error::AppResult;
-use crate::state::{AppState, EVENT_ITEMS, EVENT_SYNC};
+use crate::state::{AppState, EVENT_DIGESTS, EVENT_ITEMS, EVENT_STATUS, EVENT_SYNC};
 use crate::tailnet::{TailnetProgress, TailnetState, starting_phase};
 use infodesk_core::sync::webdav::{WebDavConfig, WebDavStore};
 
@@ -43,6 +45,10 @@ pub const NAS_CHECK_OK: &str = "読み書きできました";
 pub const NAS_NOT_IN_TAILNET_MESSAGE: &str =
     "NAS が Tailscale の中に見つかりません。NAS の名前を確かめてください";
 pub const FALLBACK_DEVICE_NAME: &str = "この Mac";
+/// 同期の実行中に読むだけのモードを切り替えようとした。
+pub const SYNC_RUNNING_MESSAGE: &str =
+    "同期中は切り替えられません。終わってからもう一度試してください";
+
 pub const REAUTH_MESSAGE: &str = "Google の再ログインが必要です";
 
 /// 同期の状態。収集やダイジェストの `last_error` とは別に持つ。
@@ -53,6 +59,8 @@ pub struct SyncStatus {
     pub signed_in: bool,
     pub account_email: Option<String>,
     pub enabled: bool,
+    /// 読むだけのモード (サーバーが収集し、この Mac は保存先を読む)。
+    pub reader_mode: bool,
     pub syncing: bool,
     pub last_sync_at: Option<DateTime<Utc>>,
     pub error: Option<String>,
@@ -153,9 +161,10 @@ pub fn refresh_status(state: &AppState) {
             s.get_setting(SETTING_DEVICE_NAME)?,
             s.get_setting(SETTING_LAST_SYNC_AT)?,
             read_nas(s)?,
+            is_reader(s)?,
         ))
     });
-    let (enabled, email, name, last, nas) = match read {
+    let (enabled, email, name, last, nas, reader) = match read {
         Ok(v) => v,
         Err(e) => {
             let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
@@ -173,6 +182,7 @@ pub fn refresh_status(state: &AppState) {
     let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
     st.available = oauth::oauth_config().is_some();
     st.enabled = enabled.as_deref() == Some("true");
+    st.reader_mode = reader;
     st.account_email = email.filter(|e| !e.is_empty());
     st.device_name = name;
     st.last_sync_at = parse_time(last);
@@ -405,9 +415,11 @@ pub fn signed_out(state: &AppState) {
 
 /// 有効にするときは、無効の間に残った未送信の操作を捨て、次の同期でスナップショットを作り直させる。
 /// 印の状態は記事の `*_changed_at` が持っているので、そのスナップショットで届く。
+/// 読むだけのモードはスナップショットを書かないので、何も捨てない。無効の間の印も `sync_ops` に
+/// 記録してあり、次の同期で送る。
 pub fn set_enabled(state: &AppState, enabled: bool) -> AppResult<()> {
     state.with_store(|s| {
-        if enabled {
+        if enabled && !is_reader(s)? {
             s.discard_pending_ops()?;
             s.set_setting(SETTING_LAST_COMPACTION_AT, "")?;
         }
@@ -777,6 +789,17 @@ async fn run_once(state: &AppState) -> AppResult<()> {
         return Ok(());
     }
     let now = Utc::now();
+    let reader = match state.with_store(is_reader) {
+        Ok(r) => r,
+        Err(e) => {
+            record_error(state, &e.message);
+            return Err(e);
+        }
+    };
+    if reader {
+        // 読むだけのモード: 書き手の同期 (`run_sync`) は決して呼ばない。
+        return run_reader_once(state, drive.as_ref(), now, &stale).await;
+    }
     let prepared = state.with_store(|s| {
         let (d, b) = s.ensure_sync_ids()?;
         Ok((
@@ -847,37 +870,129 @@ async fn run_once(state: &AppState) -> AppResult<()> {
         Err(err) => {
             // 取り込みのあとで失敗しても、取り込み済みの変更は画面に出す必要がある。
             state.notify(EVENT_ITEMS);
-            {
-                // 古さの確認と書き換えを同じロックの中で行い、間に入ったサインインを消さない。
-                let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
-                if stale() {
-                    // 実行中にサインインし直された。古い認証の結果は捨てる。
-                    return Ok(());
-                }
-                match err {
-                    SyncError::Drive(DriveError::AuthExpired) => {
-                        reset_auth(state);
-                        let _ =
-                            state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
-                        st.signed_in = false;
-                        st.account_email = None;
-                        st.error = Some(REAUTH_MESSAGE.to_string());
-                    }
-                    SyncError::Drive(DriveError::BadCredentials) => {
-                        // 設定が変わるまで再試行しない。signed_in は変えない。
-                        state.nas_rejected.store(true, Ordering::SeqCst);
-                        st.error = Some(DriveError::BadCredentials.to_string());
-                    }
-                    SyncError::Drive(DriveError::Retryable(_)) => {
-                        st.error = Some(NETWORK_MESSAGE.to_string());
-                    }
-                    other => st.error = Some(other.to_string()),
-                }
-            }
-            state.notify(EVENT_SYNC);
+            record_failure(state, err, &stale);
         }
     }
     Ok(())
+}
+
+/// 同期の失敗を `SyncStatus` に写す。実行中に認証が変わっていたら (`stale`)、古い結果は捨てる。
+fn record_failure(state: &AppState, err: SyncError, stale: &(dyn Fn() -> bool + Sync)) {
+    {
+        // 古さの確認と書き換えを同じロックの中で行い、間に入ったサインインを消さない。
+        let mut st = state.sync.lock().unwrap_or_else(|e| e.into_inner());
+        if stale() {
+            // 実行中にサインインし直された。古い認証の結果は捨てる。
+            return;
+        }
+        match err {
+            SyncError::Drive(DriveError::AuthExpired) => {
+                reset_auth(state);
+                let _ = state.with_store(|s| s.set_setting(oauth::SETTING_ACCOUNT_EMAIL, ""));
+                st.signed_in = false;
+                st.account_email = None;
+                st.error = Some(REAUTH_MESSAGE.to_string());
+            }
+            SyncError::Drive(DriveError::BadCredentials) => {
+                // 設定が変わるまで再試行しない。signed_in は変えない。
+                state.nas_rejected.store(true, Ordering::SeqCst);
+                st.error = Some(DriveError::BadCredentials.to_string());
+            }
+            SyncError::Drive(DriveError::Retryable(_)) => {
+                st.error = Some(NETWORK_MESSAGE.to_string());
+            }
+            other => st.error = Some(other.to_string()),
+        }
+    }
+    state.notify(EVENT_SYNC);
+}
+
+/// 読むだけのモードの 1 回。保存先を読み、書くのはこの Mac の ops ファイルだけ。
+/// 警告 (データがない、読めないファイルなど) は、最初の 1 つを同期の行に出す。
+async fn run_reader_once(
+    state: &AppState,
+    drive: &dyn DriveStore,
+    now: DateTime<Utc>,
+    stale: &(dyn Fn() -> bool + Sync),
+) -> AppResult<()> {
+    let device_id = match state.with_store(|s| Ok(s.ensure_sync_ids()?.0)) {
+        Ok(d) => d,
+        Err(e) => {
+            record_error(state, &e.message);
+            return Err(e);
+        }
+    };
+    let input = ReaderInput {
+        device_id,
+        now,
+        tz: state.tz,
+    };
+    match run_reader_sync(&state.store, drive, &input).await {
+        Ok(report) => {
+            let stamp = now.to_rfc3339();
+            let recorded = state.with_store(|s| {
+                if stale() || s.get_setting(SETTING_RESET_PENDING)?.as_deref() == Some("true") {
+                    return Ok(false);
+                }
+                s.set_setting(SETTING_LAST_SYNC_AT, &stamp)?;
+                Ok(true)
+            });
+            if recorded.unwrap_or(false) {
+                update(state, |s| {
+                    s.last_sync_at = Some(now);
+                    s.error = report.warnings.first().cloned();
+                });
+            }
+            if report.imported_files > 0 || report.applied_ops > 0 {
+                state.notify(EVENT_ITEMS);
+                state.notify(EVENT_DIGESTS);
+            }
+        }
+        Err(err) => {
+            state.notify(EVENT_ITEMS);
+            state.notify(EVENT_DIGESTS);
+            record_failure(state, err, stale);
+        }
+    }
+    Ok(())
+}
+
+/// 読むだけのモードを切り替える。変えたら `true`。同期の実行中は断る。切り替えの間は実行中の印を
+/// 持ち、古い役割や端末 id のままの同期が始まらないようにする。入れると新しい端末 id を作り、
+/// 送っていない印を捨てる。切ると同期もオフにする (サーバーと 2 台で書かないよう、オンは手で戻す)。
+pub fn set_reader_mode(state: &AppState, on: bool) -> AppResult<bool> {
+    if state
+        .sync_running
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(SYNC_RUNNING_MESSAGE.to_string().into());
+    }
+    let result = state.with_store(|s| {
+        if is_reader(s)? == on {
+            return Ok(false);
+        }
+        if on {
+            s.switch_to_reader()?;
+        } else {
+            s.switch_to_writer()?;
+        }
+        Ok(true)
+    });
+    state.sync_running.store(false, Ordering::SeqCst);
+    let changed = result?;
+    if changed {
+        update(state, |s| {
+            s.reader_mode = on;
+            if !on {
+                s.enabled = false;
+                s.error = None;
+            }
+        });
+        // サイドバーや画面の表示 (AppStatus.reader_mode) も変わる。
+        state.notify(EVENT_STATUS);
+    }
+    Ok(changed)
 }
 
 #[cfg(test)]
@@ -907,6 +1022,135 @@ mod tests {
         let drive = Arc::new(MemoryDrive::new());
         use_drive(state, drive.clone());
         drive
+    }
+
+    /// サーバー (書き手) が 1 回同期した保存先。記事は 1 件。
+    async fn server_folder(drive: &MemoryDrive) {
+        use infodesk_core::model::{Category, NewItem, SourceKind};
+        use infodesk_core::sync::engine::SyncInput;
+        let s = infodesk_core::Store::open_in_memory().unwrap();
+        let id = s
+            .add_source(
+                SourceKind::Rss,
+                "Feed",
+                Category::TechJp,
+                "https://e.com/feed",
+            )
+            .unwrap();
+        let src = s.get_source(id).unwrap().unwrap();
+        let item = NewItem {
+            url: "https://server.example/1".into(),
+            title: "サーバーの記事".into(),
+            excerpt: String::new(),
+            author: None,
+            published_at: None,
+            score: None,
+            image_url: None,
+        };
+        s.upsert_items(&src, &[item], &Utc::now()).unwrap();
+        let input = SyncInput {
+            device_id: "server".into(),
+            db_id: "db1".into(),
+            writer: "infodesk-server".into(),
+            now: Utc::now(),
+            tz: chrono::FixedOffset::east_opt(9 * 3600).unwrap(),
+            compact: true,
+        };
+        run_sync(&std::sync::Mutex::new(s), drive, &input)
+            .await
+            .unwrap();
+    }
+
+    async fn folder_bytes(drive: &MemoryDrive) -> Vec<(String, Vec<u8>)> {
+        let mut out = Vec::new();
+        for f in drive.list().await.unwrap() {
+            out.push((f.name.clone(), drive.download(&f.id).await.unwrap()));
+        }
+        out
+    }
+
+    fn to_reader(state: &AppState) {
+        state
+            .with_store(|s| {
+                s.set_setting("sync.db_id", "db1")?;
+                s.switch_to_reader()
+            })
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn reader_mode_imports_the_folder_without_writing_it() {
+        let (mut state, events) = test_state();
+        let drive = Arc::new(MemoryDrive::new());
+        server_folder(&drive).await;
+        use_drive(&mut state, drive.clone());
+        to_reader(&state);
+        let before = folder_bytes(&drive).await;
+
+        sync_once(&state).await.unwrap();
+
+        assert_eq!(folder_bytes(&drive).await, before, "nothing written");
+        let urls: Vec<String> = state
+            .with_store(|s| s.query_items(&infodesk_core::model::ItemFilter::default()))
+            .unwrap()
+            .into_iter()
+            .map(|i| i.url)
+            .collect();
+        assert!(
+            urls.contains(&"https://server.example/1".to_string()),
+            "{urls:?}"
+        );
+        let st = state.sync.lock().unwrap().clone();
+        assert!(st.last_sync_at.is_some());
+        assert_eq!(st.error, None);
+        assert!(events.lock().unwrap().contains(&EVENT_ITEMS.to_string()));
+    }
+
+    #[tokio::test]
+    async fn reader_mode_shows_an_empty_folder_and_writes_nothing() {
+        let (mut state, _) = test_state();
+        let drive = ready(&mut state);
+        to_reader(&state);
+        sync_once(&state).await.unwrap();
+        assert!(drive.names().is_empty(), "{:?}", drive.names());
+        assert_eq!(
+            state.sync.lock().unwrap().error.as_deref(),
+            Some(infodesk_core::sync::reader::NO_DATA_MESSAGE)
+        );
+    }
+
+    #[test]
+    fn set_reader_mode_switches_both_ways_and_refuses_while_syncing() {
+        // Review Focus 4
+        let (state, events) = test_state();
+        state
+            .with_store(|s| s.set_setting(SETTING_ENABLED, "true"))
+            .unwrap();
+        let old = state.with_store(|s| s.ensure_sync_ids()).unwrap().0;
+
+        state.sync_running.store(true, Ordering::SeqCst);
+        let err = set_reader_mode(&state, true).unwrap_err();
+        assert_eq!(err.message, SYNC_RUNNING_MESSAGE);
+        assert!(!status_now(&state).reader_mode);
+        state.sync_running.store(false, Ordering::SeqCst);
+
+        assert!(set_reader_mode(&state, true).unwrap());
+        assert!(!state.sync_running.load(Ordering::SeqCst), "flag released");
+        let st = status_now(&state);
+        assert!(st.reader_mode);
+        assert!(st.enabled, "turning reader on keeps sync on");
+        let new = state
+            .with_store(|s| s.get_setting("sync.device_id"))
+            .unwrap()
+            .unwrap();
+        assert_ne!(new, old);
+        assert!(!set_reader_mode(&state, true).unwrap(), "already a reader");
+        assert!(events.lock().unwrap().contains(&EVENT_STATUS.to_string()));
+
+        assert!(set_reader_mode(&state, false).unwrap());
+        let st = status_now(&state);
+        assert!(!st.reader_mode);
+        assert!(!st.enabled, "turning reader off turns sync off");
     }
 
     /// `list` で1回譲る Drive。他の処理が割り込める。呼ばれた回数を数え、仕込んだ失敗を返す。
@@ -1321,6 +1565,28 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn a_reader_keeps_marks_made_while_sync_was_off_when_sync_is_turned_on() {
+        let (state, _) = test_state();
+        state
+            .with_store(|s| {
+                s.switch_to_reader()?;
+                s.set_setting(SETTING_ENABLED, "false")
+            })
+            .unwrap();
+        read_while_sync_is_off(&state);
+        let (device, _) = state.with_store(|s| s.ensure_sync_ids()).unwrap();
+        let pending = || {
+            state
+                .with_store(|s| s.pending_local_ops(&device))
+                .unwrap()
+                .len()
+        };
+        assert_eq!(pending(), 1);
+        set_enabled(&state, true).unwrap();
+        assert_eq!(pending(), 1, "the next reader pass uploads it");
     }
 
     #[tokio::test]

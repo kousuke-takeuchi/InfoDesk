@@ -67,10 +67,12 @@ export function Sidebar({ selection, view, counts, topics, status, onSelect, onO
           onClick={() => onSelect({ kind: "topic", topicId: t.id })} />
       ))}
       <div className="sidebar-spacer" />
-      <button className="sidebar-status" onClick={onCollectNow} disabled={status.collecting} title="今すぐ収集 (⌘R)">
+      <button className="sidebar-status" onClick={onCollectNow} disabled={status.collecting}
+        title={status.reader_mode ? "今すぐ同期 (⌘R)" : "今すぐ収集 (⌘R)"}>
         <RefreshCw size={14} className={status.collecting ? "spin" : undefined} />
         <span>
-          {status.collecting ? "収集中…" : status.last_collect_at ? `最終収集 ${formatClock(status.last_collect_at)}` : "未収集"}
+          {status.reader_mode ? "読むだけ · サーバーが収集"
+            : status.collecting ? "収集中…" : status.last_collect_at ? `最終収集 ${formatClock(status.last_collect_at)}` : "未収集"}
         </span>
       </button>
       {status.last_error && <div className="sidebar-error">{status.last_error}</div>}

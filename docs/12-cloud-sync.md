@@ -12,6 +12,7 @@ The phone side is the mobile app; see [Mobile App](14-mobile-app.md).
 - A phone reads those files. It never writes articles or digests.
 - Read and starred marks go both ways. A mark made on the phone reaches the Mac, and a mark made on the Mac reaches the phone. When two devices change the same article, the newer change wins.
 - Each file on Drive has one writer, so devices never overwrite each other.
+- Only one device writes the articles and digests: the Mac, or the home server when you use one ([Home Server](15-home-server.md)). A Mac in reader mode (読むだけ) reads the folder like the phone and writes only its own change batches.
 - If the network is down, the Mac keeps working on its own and catches up at the next sync.
 
 ## 2. Choosing where to sync

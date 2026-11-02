@@ -71,6 +71,7 @@ export function SyncTab() {
   const [nasTest, setNasTest] = useState<{ text: string; ok: boolean } | null>(null);
   const [confirmForget, setConfirmForget] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [writerNotice, setWriterNotice] = useState(false);
   const closeGuide = useCallback(() => setGuideOpen(false), []);
 
   const ticket = useRef(0);
@@ -234,9 +235,15 @@ export function SyncTab() {
           <section className="section">
             <h2>同期</h2>
             <div className="setting-row">
-              <div className="label"><span>同期する</span><span className="hint">収集のあと、ダイジェストを作ったあと、⌘R のときに同期します</span></div>
+              <div className="label"><span>同期する</span><span className="hint">{status.reader_mode ? "起動時、10 分ごと、⌘R のときに保存先を読みます" : "収集のあと、ダイジェストを作ったあと、⌘R のときに同期します"}</span></div>
               <Toggle checked={status.enabled} ariaLabel="同期する" disabled={(!canSync && !status.enabled) || busy.has("enabled")} onChange={(v) => run("enabled", () => api.syncSetEnabled(v))} />
             </div>
+            <div className="setting-row">
+              <div className="label"><span>読むだけ (サーバーが収集)</span><span className="hint">収集と要約はサーバーに任せ、この Mac は保存先を読みます。既読とスターは送ります</span></div>
+              <Toggle checked={status.reader_mode} ariaLabel="読むだけ (サーバーが収集)" disabled={status.syncing || busy.has("reader")}
+                onChange={(v) => { void run("reader", () => api.syncSetReaderMode(v)).then((r) => setWriterNotice(r.ok && !v)); }} />
+            </div>
+            {writerNotice && <p className="desc">同期をオフにしました。この Mac で収集して書き出すなら、「同期する」をもう一度オンにしてください。</p>}
             <SettingField id="device-name" label="この Mac の名前" hint="スマホの同期の記録に出ます" value={status.device_name}
               onSave={(v) => run("name", () => api.syncSetDeviceName(v))} />
             <div className="setting-row">

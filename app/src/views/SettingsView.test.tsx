@@ -5,7 +5,7 @@ import { SettingsView } from "./SettingsView";
 import { setupIpc } from "../test/ipc";
 import type { AppStatus } from "../types";
 
-const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null };
+const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false };
 const settings = {
   "llm.items_provider": "ollama", "llm.digest_provider": "claude", "llm.chat_provider": "ollama",
   "ollama.base_url": "http://localhost:11434", "ollama.model": "gemma4:26b", "ollama.web_search_api_key": "",
@@ -28,11 +28,25 @@ describe("SettingsView", () => {
   });
 
   it("has the sync tab last", async () => {
-    setupIpc({ list_sources: () => [], source_item_counts: () => ({}), sync_status: () => ({ available: true, signed_in: false, account_email: null, enabled: false, syncing: false, last_sync_at: null, error: null, device_name: "Mac", backend: "gdrive", nas_url: "", nas_user: "", nas_password_set: false, tailnet: { state: "stopped", name: null, reason: null } }) });
+    setupIpc({ list_sources: () => [], source_item_counts: () => ({}), sync_status: () => ({ available: true, signed_in: false, account_email: null, enabled: false, reader_mode: false, syncing: false, last_sync_at: null, error: null, device_name: "Mac", backend: "gdrive", nas_url: "", nas_user: "", nas_password_set: false, tailnet: { state: "stopped", name: null, reason: null } }) });
     render(<SettingsView status={status} />);
     const tabs = screen.getByRole("group", { name: "設定のタブ" });
     expect(Array.from(tabs.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["ソース", "トピック", "LLM", "スケジュール", "同期"]);
     await userEvent.click(screen.getByRole("button", { name: "同期" }));
     expect(await screen.findByRole("button", { name: "Google でログイン" })).toBeInTheDocument();
+  });
+
+  it("locks the sources tab in reader mode with a notice", async () => {
+    setupIpc({ list_sources: () => [], source_item_counts: () => ({}) });
+    render(<SettingsView status={{ ...status, reader_mode: true }} />);
+    expect(await screen.findByRole("button", { name: "RSSを追加" })).toBeDisabled();
+    expect(screen.getByText("読むだけのモードです。ソース、トピック、スケジュールはサーバーの設定が使われます。サーバーの設定は CLI で変えます。")).toBeInTheDocument();
+  });
+
+  it("keeps the LLM tab editable in reader mode for the chat", async () => {
+    setupIpc({ get_settings: () => settings, ollama_models: () => [] });
+    render(<SettingsView status={{ ...status, reader_mode: true }} initialTab="llm" />);
+    expect(await screen.findByLabelText("Node のパス")).toBeEnabled();
+    expect(screen.getByText("読むだけのモードです。記事の要約とダイジェストはサーバーが作ります。ここの設定は AI チャットにだけ使います。")).toBeInTheDocument();
   });
 });

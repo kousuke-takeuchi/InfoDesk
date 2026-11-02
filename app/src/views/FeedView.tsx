@@ -251,12 +251,18 @@ export function FeedView({ selection, topics, status, view, onSwitchView, action
           <div className="empty">
             <Newspaper size={40} className="text-tertiary" />
             <h2>まだ記事がありません</h2>
-            <p className="text-secondary">収集を始めると、GitHub、arXiv、Hugging Face、Hacker News、国内外のtechニュース、医療介護ニュースが集まり、朝7時に日次要約が生成されます。</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-primary" disabled={status.collecting} onClick={() => run(api.collectNow())}>今すぐ収集</button>
-              <button className="btn" onClick={onOpenSources}>ソースを確認</button>
-            </div>
-            <p className="tiny text-tertiary">収集には1〜2分かかります。進行状況はサイドバー下部に表示されます。</p>
+            {status.reader_mode ? (
+              <p className="text-secondary">読むだけのモードです。記事はサーバーが集め、同期で届きます。</p>
+            ) : (
+              <>
+                <p className="text-secondary">収集を始めると、GitHub、arXiv、Hugging Face、Hacker News、国内外のtechニュース、医療介護ニュースが集まり、朝7時に日次要約が生成されます。</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn btn-primary" disabled={status.collecting} onClick={() => run(api.collectNow())}>今すぐ収集</button>
+                  <button className="btn" onClick={onOpenSources}>ソースを確認</button>
+                </div>
+                <p className="tiny text-tertiary">収集には1〜2分かかります。進行状況はサイドバー下部に表示されます。</p>
+              </>
+            )}
           </div>
         )}
         {items && items.length === 0 && !neverCollected && !loadError && (

@@ -2,6 +2,7 @@ use chrono::{FixedOffset, NaiveDate, Utc};
 use infodesk_core::Store;
 use infodesk_core::model::{Category, DigestScope, DigestStatus, ItemFilter, Period};
 use infodesk_core::period::period_start;
+use infodesk_core::sync::mode::is_reader;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Manager, Wry};
@@ -11,6 +12,20 @@ use crate::state::{AppState, AppStatus};
 pub struct TrayMenu {
     pub status_line: MenuItem<Wry>,
     pub unread_line: MenuItem<Wry>,
+    pub action_line: MenuItem<Wry>,
+}
+
+/// トレイの操作の項目の文。読むだけのモードでは同期にする。
+pub fn action_label(reader: bool) -> &'static str {
+    if reader {
+        "今すぐ同期"
+    } else {
+        "今すぐ収集"
+    }
+}
+
+fn reader_mode(state: &AppState) -> bool {
+    state.with_store(is_reader).unwrap_or(false)
 }
 
 /// メニューの状態行。1行目は収集、2行目は未読と日次要約。
@@ -86,6 +101,7 @@ pub fn refresh(app: &AppHandle) {
     );
     let _ = menu.status_line.set_text(first);
     let _ = menu.unread_line.set_text(second);
+    let _ = menu.action_line.set_text(action_label(reader_mode(&state)));
 }
 
 pub fn show_main_window(app: &AppHandle) {
@@ -120,6 +136,7 @@ pub fn install(app: &App) -> tauri::Result<()> {
     app.manage(TrayMenu {
         status_line,
         unread_line,
+        action_line: collect.clone(),
     });
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().expect("app icon").clone())
@@ -127,7 +144,11 @@ pub fn install(app: &App) -> tauri::Result<()> {
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "collect" => {
-                let _ = crate::commands::digests::collect_now(app.clone());
+                if reader_mode(&app.state::<AppState>()) {
+                    crate::sync::spawn_sync(app);
+                } else {
+                    let _ = crate::commands::digests::collect_now(app.clone());
+                }
             }
             "open" => show_main_window(app),
             "settings" => {
@@ -145,6 +166,12 @@ pub fn install(app: &App) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_action_item_syncs_in_reader_mode() {
+        assert_eq!(action_label(false), "今すぐ収集");
+        assert_eq!(action_label(true), "今すぐ同期");
+    }
 
     fn jst() -> FixedOffset {
         FixedOffset::east_opt(9 * 3600).unwrap()
