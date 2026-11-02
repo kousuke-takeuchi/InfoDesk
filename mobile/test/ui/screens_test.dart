@@ -122,6 +122,86 @@ void main() {
       expect(find.text('認知症の新薬'), findsOneWidget);
     });
 
+    group('browsing past digests', () {
+      DigestFile dayAt(DateTime d) {
+        final f = digestFile(body: '見出し: ${dateString(d)}の要点');
+        return DigestFile(
+          period: 'day',
+          periodStart: dateString(d),
+          stats: f.stats,
+          entries: f.entries,
+        );
+      }
+
+      void addDays(Harness h, List<int> daysAgo) {
+        for (final n in daysAgo) {
+          final d = DateTime(fakeNow.year, fakeNow.month, fakeNow.day - n);
+          h.store.digestFiles['day|${dateString(d)}'] = dayAt(d);
+        }
+      }
+
+      String dayText(int n) =>
+          '見出し: ${dateString(DateTime(fakeNow.year, fakeNow.month, fakeNow.day - n))}の要点'
+              .substring(5);
+
+      bool enabled(WidgetTester tester, String tooltip) =>
+          tester
+              .widget<IconButton>(
+                find.widgetWithIcon(
+                  IconButton,
+                  tooltip == '前へ' ? Icons.chevron_left : Icons.chevron_right,
+                ),
+              )
+              .onPressed !=
+          null;
+
+      testWidgets('falls back to the newest earlier day with a note', (
+        tester,
+      ) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 3]));
+        expect(find.text(dayText(1)), findsOneWidget);
+        expect(find.text('10月14日(水)'), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsOneWidget);
+        expect(find.text('この期間のダイジェストはまだありません'), findsNothing);
+      });
+
+      testWidgets('no note when today exists', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [0, 1]));
+        expect(find.text(dayText(0)), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
+      });
+
+      testWidgets('previous and next skip gaps and disable at the ends', (
+        tester,
+      ) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
+        expect(find.text(dayText(1)), findsOneWidget);
+        expect(enabled(tester, '次へ'), isFalse);
+        expect(enabled(tester, '前へ'), isTrue);
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(4)), findsOneWidget);
+        expect(enabled(tester, '前へ'), isFalse);
+        expect(enabled(tester, '次へ'), isTrue);
+        await tester.tap(find.byTooltip('次へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+      });
+
+      testWidgets('switching period resets the selection', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(4)), findsOneWidget);
+        await tester.tap(find.text('週'));
+        await tester.pumpAndSettle();
+        expect(find.text('この期間のダイジェストはまだありません'), findsOneWidget);
+        await tester.tap(find.text('今日'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+      });
+    });
+
     testWidgets('empty state and period switch', (tester) async {
       await pumpApp(tester);
       expect(find.text('今日のダイジェスト'), findsOneWidget);

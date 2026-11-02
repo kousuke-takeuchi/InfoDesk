@@ -111,6 +111,12 @@ class FakeStore implements LocalStore {
       digestFiles['$period|$start'];
 
   @override
+  Future<List<String>> digestStarts(String period) async => [
+    for (final k in digestFiles.keys)
+      if (k.startsWith('$period|')) k.substring(period.length + 1),
+  ]..sort();
+
+  @override
   Future<MetaFile?> meta() async => metaFile;
 
   void _set(int id, Field f, bool v) {
