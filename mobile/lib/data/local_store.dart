@@ -382,6 +382,19 @@ CREATE TABLE pending_ops (
         : DigestFile.fromJson(jsonDecode(r.first['body'] as String));
   }
 
+  /// Every `period_start` (YYYY-MM-DD) that has a stored digest for
+  /// [period], oldest first.
+  Future<List<String>> digestStarts(String period) async {
+    final r = await _db.query(
+      'digests',
+      columns: ['period_start'],
+      where: 'period = ?',
+      whereArgs: [period],
+      orderBy: 'period_start ASC',
+    );
+    return [for (final row in r) row['period_start'] as String];
+  }
+
   Future<MetaFile?> meta() async {
     final r = await _db.query('meta');
     return r.isEmpty

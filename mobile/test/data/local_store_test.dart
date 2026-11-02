@@ -369,6 +369,23 @@ void main() {
     );
   });
 
+  test('digestStarts lists sorted distinct starts for one period', () async {
+    expect(await s.digestStarts('day'), isEmpty);
+    DigestFile f(String period, String start) => DigestFile(
+      period: period,
+      periodStart: start,
+      stats: {'n': 1},
+      entries: [],
+    );
+    await s.upsertDigests(f('day', '2026-10-12'));
+    await s.upsertDigests(f('day', '2026-10-10'));
+    await s.upsertDigests(f('day', '2026-10-12'));
+    await s.upsertDigests(f('week', '2026-10-05'));
+    expect(await s.digestStarts('day'), ['2026-10-10', '2026-10-12']);
+    expect(await s.digestStarts('week'), ['2026-10-05']);
+    expect(await s.digestStarts('month'), isEmpty);
+  });
+
   test('digests, meta, settings, synced files round trip', () async {
     expect(await s.meta(), isNull);
     await s.putMeta(

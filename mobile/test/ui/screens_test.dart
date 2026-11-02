@@ -122,6 +122,158 @@ void main() {
       expect(find.text('認知症の新薬'), findsOneWidget);
     });
 
+    group('browsing past digests', () {
+      DigestFile dayAt(DateTime d) {
+        final f = digestFile(body: '見出し: ${dateString(d)}の要点');
+        return DigestFile(
+          period: 'day',
+          periodStart: dateString(d),
+          stats: f.stats,
+          entries: f.entries,
+        );
+      }
+
+      void addDays(Harness h, List<int> daysAgo) {
+        for (final n in daysAgo) {
+          final d = DateTime(fakeNow.year, fakeNow.month, fakeNow.day - n);
+          h.store.digestFiles['day|${dateString(d)}'] = dayAt(d);
+        }
+      }
+
+      String dayText(int n) =>
+          '見出し: ${dateString(DateTime(fakeNow.year, fakeNow.month, fakeNow.day - n))}の要点'
+              .substring(5);
+
+      bool enabled(WidgetTester tester, String tooltip) =>
+          tester
+              .widget<IconButton>(
+                find.widgetWithIcon(
+                  IconButton,
+                  tooltip == '前へ' ? Icons.chevron_left : Icons.chevron_right,
+                ),
+              )
+              .onPressed !=
+          null;
+
+      testWidgets('falls back to the newest earlier day with a note', (
+        tester,
+      ) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 3]));
+        expect(find.text(dayText(1)), findsOneWidget);
+        expect(find.text('10月14日(水)'), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsOneWidget);
+        expect(find.text('この期間のダイジェストはまだありません'), findsNothing);
+      });
+
+      testWidgets('no note when today exists', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [0, 1]));
+        expect(find.text(dayText(0)), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
+      });
+
+      testWidgets('previous and next skip gaps and disable at the ends', (
+        tester,
+      ) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
+        expect(find.text(dayText(1)), findsOneWidget);
+        expect(enabled(tester, '次へ'), isFalse);
+        expect(enabled(tester, '前へ'), isTrue);
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(4)), findsOneWidget);
+        expect(enabled(tester, '前へ'), isFalse);
+        expect(enabled(tester, '次へ'), isTrue);
+        await tester.tap(find.byTooltip('次へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+      });
+
+      testWidgets('switching period resets the selection', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(4)), findsOneWidget);
+        await tester.tap(find.text('週'));
+        await tester.pumpAndSettle();
+        expect(find.text('この期間のダイジェストはまだありません'), findsOneWidget);
+        await tester.tap(find.text('今日'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+      });
+
+      testWidgets('the title names the shown day, not today', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
+        expect(find.text('昨日のダイジェスト'), findsOneWidget);
+        expect(find.text('今日のダイジェスト'), findsNothing);
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text('10月11日のダイジェスト'), findsOneWidget);
+        expect(find.text('10月11日(日)'), findsOneWidget);
+      });
+
+      testWidgets('the title names past weeks and months', (tester) async {
+        DigestFile at(String period, String start) {
+          final f = digestFile(body: '見出し: $period $start');
+          return DigestFile(
+            period: period,
+            periodStart: start,
+            stats: f.stats,
+            entries: f.entries,
+          );
+        }
+
+        await pumpApp(
+          tester,
+          setup: (h) {
+            for (final (p, s) in [
+              ('week', '2026-10-05'),
+              ('week', '2026-09-28'),
+              ('month', '2026-09-01'),
+              ('month', '2025-12-01'),
+            ]) {
+              h.store.digestFiles['$p|$s'] = at(p, s);
+            }
+          },
+        );
+        await tester.tap(find.text('週'));
+        await tester.pumpAndSettle();
+        expect(find.text('先週のダイジェスト'), findsOneWidget);
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text('9月28日の週'), findsOneWidget);
+        expect(find.text('9月28日(月) 〜 10月4日(日)'), findsOneWidget);
+        await tester.tap(find.text('月'));
+        await tester.pumpAndSettle();
+        expect(find.text('先月のダイジェスト'), findsOneWidget);
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text('2025年12月のダイジェスト'), findsOneWidget);
+      });
+
+      testWidgets('the note shows whenever today has no digest yet', (
+        tester,
+      ) async {
+        await pumpApp(tester);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsOneWidget);
+      });
+
+      testWidgets('no note on a past day when today exists', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [0, 1]));
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
+      });
+
+      testWidgets('the title stays on one line on a phone', (tester) async {
+        await pumpApp(tester, setup: (h) => addDays(h, [0]));
+        final title = find.text('今日のダイジェスト');
+        expect(title, findsOneWidget);
+        // One line is 40 logical pixels; two would be 80.
+        expect(tester.getSize(title).height, lessThan(60));
+      });
+    });
+
     testWidgets('empty state and period switch', (tester) async {
       await pumpApp(tester);
       expect(find.text('今日のダイジェスト'), findsOneWidget);

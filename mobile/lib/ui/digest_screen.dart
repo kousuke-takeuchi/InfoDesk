@@ -85,6 +85,13 @@ class _DigestScreenState extends State<DigestScreen> {
   var _period = DigestPeriod.day;
   String _scope = 'all';
   DigestFile? _digest;
+
+  /// The start (YYYY-MM-DD) of the displayed digest; null until first load.
+  String? _selected;
+
+  /// Starts that have a digest for the period, up to today's start, oldest
+  /// first.
+  List<String> _starts = const [];
   MetaFile? _meta;
   Map<int, StoredItem> _refs = {};
   bool _loaded = false;
@@ -113,10 +120,30 @@ class _DigestScreenState extends State<DigestScreen> {
     if (c.revision != _seen) _reload();
   }
 
-  Future<void> _reload() async {
+  String get _todayStart => dateString(periodStart(_period, c.now()));
+
+  /// [keep] is the selection to hold on to when it still has a digest.
+  /// Otherwise: today's start, or the newest earlier start with a digest.
+  String _pick(String? keep, List<String> starts) {
+    if (keep != null && starts.contains(keep)) return keep;
+    final today = _todayStart;
+    if (starts.contains(today)) return today;
+    for (final s in starts.reversed) {
+      if (s.compareTo(today) < 0) return s;
+    }
+    return today;
+  }
+
+  Future<void> _reload({bool resetSelection = false}) async {
     _seen = c.revision;
     final mine = ++_load;
-    final start = dateString(periodStart(_period, c.now()));
+    final today = _todayStart;
+    final all = await c.store.digestStarts(_period.id);
+    final starts = [
+      for (final s in all)
+        if (s.compareTo(today) <= 0) s,
+    ];
+    final start = _pick(resetSelection ? null : _selected, starts);
     final digest = await c.store.digests(_period.id, start);
     final meta = await c.store.meta();
     final ids = <int>{
@@ -129,10 +156,23 @@ class _DigestScreenState extends State<DigestScreen> {
     if (!mounted || mine != _load) return;
     setState(() {
       _digest = digest;
+      _selected = start;
+      _starts = starts;
       _meta = meta;
       _refs = {for (final i in items) i.record.id: i};
       _loaded = true;
     });
+  }
+
+  void _step(int delta) {
+    final i = _starts.indexOf(_selected ?? '');
+    final j = i + delta;
+    if (i < 0 || j < 0 || j >= _starts.length) return;
+    setState(() {
+      _selected = _starts[j];
+      _scope = 'all';
+    });
+    _reload();
   }
 
   String _label(Object? scope) {
@@ -170,7 +210,19 @@ class _DigestScreenState extends State<DigestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final heading = periodHeading(_period, c.now());
+    final shownStart = _selected ?? _todayStart;
+    final heading = periodHeading(
+      _period,
+      DateTime.parse(shownStart),
+      now: c.now(),
+    );
+    final idx = _starts.indexOf(shownStart);
+    final canPrev = idx > 0;
+    final canNext = idx >= 0 && idx < _starts.length - 1;
+    final showTodayNote =
+        _loaded &&
+        _period == DigestPeriod.day &&
+        !_starts.contains(_todayStart);
     final entries = _digest?.entries ?? const <DigestRecord>[];
     final stats = _Stats.parse(_digest?.stats);
     final shown = [
@@ -192,12 +244,34 @@ class _DigestScreenState extends State<DigestScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        heading.range,
-                        style: const TextStyle(
-                          color: inkSecondary,
-                          fontSize: 15,
-                        ),
+                      // The arrows sit beside the date so the title keeps
+                      // the full width on a phone.
+                      Row(
+                        children: [
+                          IconButton(
+                            key: const Key('digest-prev'),
+                            tooltip: '前へ',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: canPrev ? () => _step(-1) : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Flexible(
+                            child: Text(
+                              heading.range,
+                              style: const TextStyle(
+                                color: inkSecondary,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: const Key('digest-next'),
+                            tooltip: '次へ',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: canNext ? () => _step(1) : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -224,6 +298,14 @@ class _DigestScreenState extends State<DigestScreen> {
                 ),
               ],
             ),
+            if (showTodayNote)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  '今日の分は明日の朝 7 時ごろにできます',
+                  style: TextStyle(color: inkSecondary, fontSize: 13),
+                ),
+              ),
             const SizedBox(height: 14),
             Segmented<DigestPeriod>(
               options: [for (final p in DigestPeriod.values) (p, p.label)],
@@ -232,8 +314,9 @@ class _DigestScreenState extends State<DigestScreen> {
                 setState(() {
                   _period = p;
                   _scope = 'all';
+                  _selected = null;
                 });
-                _reload();
+                _reload(resetSelection: true);
               },
             ),
             const SizedBox(height: 14),
