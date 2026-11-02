@@ -35,7 +35,7 @@ Digests are built in layers, so a long period reads from shorter ones.
 
 The provider for article summaries and for period digests are separate settings (`llm.items_provider`, `llm.digest_provider`), so you can use Ollama for the many article summaries and Claude for the digests.
 
-Today's digest is not built by collection: press **Generate** (or **Regenerate**) to make it. A day is finalized automatically only after it ends, at the daily time the next morning. When digests are generated is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
+Collection does not build digests. Today's digest is made automatically at the evening time (the evening edition, 夕刊), and the day is rebuilt and finalized at the daily time the next morning (the morning edition, 朝刊). Press **Generate** (or **Regenerate**) to make it at any other time. When digests are generated is described in [Sources and Topics](03-sources-and-topics.md#5-collection-schedule).
 
 ## 3. Category and topic digests
 

@@ -32,7 +32,7 @@
 *スケジュールタブ。モックしたバックエンドのサンプルデータです。*
 
 - 「収集」: 収集間隔 (メニューは1分、5分、15分、30分、1時間、3時間、6時間、12時間)、次回の収集時刻、「今すぐ収集」ボタン。
-- 「要約の生成」: 日次の時刻、週次の曜日と時刻、月次の時刻 (毎月1日)。日次の時刻に前日の日次要約を確定し、現在の週次と月次を作り直します。当日の日次要約は収集では作り直しません。「生成」または「再生成」で作ります。
+- 「要約の生成」: 夕刊の時刻、日次の時刻、週次の曜日と時刻、月次の時刻 (毎月1日)。夕刊の時刻に今日の日次要約を作ります (夕刊)。日次の時刻に前日の日次要約を作り直して確定し (朝刊)、現在の週次と月次を作り直します。収集では要約を作り直しません。「生成」または「再生成」で今日の要約をいつでも作れます。
 - 「起動」: ログイン時に起動、ウィンドウを閉じても常駐する。
 - 「保留中の要約」: 最後のエラーと、保留中または失敗した要約を再試行するボタン。保留中の要約は、他のジョブの有無にかかわらず、スケジューラーも15分に1回まで自動で再試行します。失敗になった要約は、このボタンかダイジェストのボタンでだけ再試行します。
 
@@ -59,7 +59,8 @@
 | `summary.top_n` | `20` | 収集のたびに記事要約を付ける、カテゴリーごとの上位の件数。設定画面には出ません。数値が必要です。 |
 | `schedule.collect_interval_minutes` | `180` | 収集の間隔 (分)。1〜10080の範囲外は丸めます。不正な値は180になります。 |
 | `schedule.collect_interval_hours` | `3` | 旧設定。分の設定がないときだけ読みます (1〜168時間に丸めます)。起動時に分の設定がなければ、この値から作ります。設定画面には出ません。 |
-| `schedule.daily_time` | `07:00` | 前日の日次要約を確定する時刻 (HH:MM)。 |
+| `schedule.daily_time` | `07:00` | 前日の日次要約を作り直して確定する時刻 (HH:MM)。朝刊。 |
+| `schedule.evening_time` | `17:00` | 今日の日次要約 (夕刊) を作る時刻 (HH:MM)。1日1回で、過ぎた分は補いません。 |
 | `schedule.weekly_day` | `mon` | 週次要約の曜日。`mon`、`tue`、`wed`、`thu`、`fri`、`sat`、`sun`。 |
 | `schedule.weekly_time` | `07:30` | 週次要約の時刻 (HH:MM)。 |
 | `schedule.monthly_time` | `08:00` | 月次要約の時刻 (HH:MM)。毎月1日。 |
@@ -73,7 +74,7 @@
 
 `claude_api` は、環境変数 `ANTHROPIC_API_KEY` のキーで Claude API を呼びます。画面なしのサーバー用で ([自宅サーバー](15-home-server.ja.md)を参照)、Mac のアプリの LLM タブには出ません。
 
-スケジューラーは、実行済みの記録として `schedule.last_collect_at`、`schedule.last_daily_for`、`schedule.last_weekly_for`、`schedule.last_monthly_for` も持ちます。編集しないでください。
+スケジューラーは、実行済みの記録として `schedule.last_collect_at`、`schedule.last_daily_for`、`schedule.last_evening_for`、`schedule.last_weekly_for`、`schedule.last_monthly_for` も持ちます。編集しないでください。
 
 同期も専用のキーを持ちます。`sync.device_name` (この Mac の名前。同期タブで編集)、`sync.device_id` (最初に既読かスターを変えたとき、または初回の同期の早いほうで作るランダムな id)、`sync.db_id` (初回の同期で作るランダムな id)、`sync.account_email`、`sync.last_sync_at`、`sync.last_compaction_at` です。読むだけのモードには、`sync.mode` (`writer` が既定、または `reader`。同期タブの「読むだけ」が切り替え、そのとき `sync.device_id` も作り直す)、`sync.reader.writer` と `sync.reader.written_at` (読むだけのモードで最後に読んだ manifest の書き手と書いた時刻) もあります。保存先の選択で、さらにキーが増えます。`sync.backend` (`gdrive` が既定、または `nas`。それ以外の値は `gdrive` として読む)、`sync.nas.url`、`sync.nas.user`、`sync.nas.password_set` (パスワードを保存したかどうかだけ)、`sync.reset_pending` (保存先が変わると立ち、次の同期が新しい保存先で最初からやり直す印) です。NAS のパスワード本体は macOS のキーチェーン (サービス `jp.infodesk.app.nas`)、Tailscale の状態はアプリのデータフォルダの `tailscale/` にあります。[NAS の準備](13-nas-setup.ja.md)を参照。普通の設定は `sync.enabled` だけで、ほかは同期タブが管理します。編集しないでください。Google の更新用トークンは DB ではなく macOS のキーチェーンにあります。
 
