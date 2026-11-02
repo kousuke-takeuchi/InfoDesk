@@ -9,6 +9,8 @@ use crate::period::period_start;
 pub struct ScheduleConfig {
     pub collect_interval: Duration,
     pub daily_time: NaiveTime,
+    /// 今日の日次要約 (夕刊) を作る時刻。
+    pub evening_time: NaiveTime,
     pub weekly_day: Weekday,
     pub weekly_time: NaiveTime,
     pub monthly_time: NaiveTime,
@@ -18,6 +20,7 @@ pub struct ScheduleConfig {
 pub struct LastRuns {
     pub collect_at: Option<DateTime<Utc>>,
     pub daily_for: Option<NaiveDate>,
+    pub evening_for: Option<NaiveDate>,
     pub weekly_for: Option<NaiveDate>,
     pub monthly_for: Option<NaiveDate>,
 }
@@ -25,8 +28,10 @@ pub struct LastRuns {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Job {
     Collect,
-    /// 対象日 (前日)。
+    /// 対象日 (前日)。夕刊があっても作り直す (朝刊)。
     Daily(NaiveDate),
+    /// 対象日 (今日)。夕刊。
+    Evening(NaiveDate),
     /// 対象週の月曜 (前週)。
     Weekly(NaiveDate),
     /// 対象月の1日 (前月)。
@@ -44,7 +49,7 @@ fn parse_weekday(s: Option<String>) -> Weekday {
 }
 
 impl ScheduleConfig {
-    /// 設定から読む。壊れた値や未設定は既定値 (3時間、7:00、月曜 7:30、1日 8:00)。
+    /// 設定から読む。壊れた値や未設定は既定値 (3時間、7:00、17:00、月曜 7:30、1日 8:00)。
     ///
     /// 収集間隔は `schedule.collect_interval_minutes` (1〜10080分) を優先し、なければ
     /// 旧設定 `schedule.collect_interval_hours` (1〜168時間) を分に直して使う。
@@ -57,6 +62,7 @@ impl ScheduleConfig {
         Self {
             collect_interval: Duration::minutes(minutes),
             daily_time: parse_time(get("schedule.daily_time"), (7, 0)),
+            evening_time: parse_time(get("schedule.evening_time"), (17, 0)),
             weekly_day: parse_weekday(get("schedule.weekly_day")),
             weekly_time: parse_time(get("schedule.weekly_time"), (7, 30)),
             monthly_time: parse_time(get("schedule.monthly_time"), (8, 0)),
@@ -83,6 +89,7 @@ pub fn next_collect_at(
 /// 対象の開始日が最後に生成した日付より後なら実行する。実行は1回で、遅れても
 /// 分単位に繰り返さない。週次と月次は、曜日や日にかかわらず、未実行の前期間を補う。
 /// ただし当日が実行日の場合は、その時刻までは出さない。
+/// 夕刊は evening_time 以降の最初の評価で今日を対象に1回だけ出す。過ぎた日の夕刊は補わない (翌朝の日次が作る)。
 pub fn due_jobs(now: DateTime<FixedOffset>, cfg: &ScheduleConfig, last: &LastRuns) -> Vec<Job> {
     let mut jobs = Vec::new();
     if next_collect_at(now, cfg, last) <= now.with_timezone(&Utc) {
@@ -100,6 +107,11 @@ pub fn due_jobs(now: DateTime<FixedOffset>, cfg: &ScheduleConfig, last: &LastRun
     let daily_target = daily_anchor - Duration::days(1);
     if last.daily_for.is_none_or(|d| d < daily_target) {
         jobs.push(Job::Daily(daily_target));
+    }
+
+    // 夕刊: 対象は今日だけ。前日分は補わない。
+    if time >= cfg.evening_time && last.evening_for.is_none_or(|d| d < today) {
+        jobs.push(Job::Evening(today));
     }
 
     // 週次: 対象は現在の週の前の週。今週の実行日時をまだ迎えていなければ、前週の実行分
@@ -170,14 +182,16 @@ fn previous_month(first_of_month: NaiveDate) -> NaiveDate {
 ///
 /// 日次の後は今日を含む週次と月次を作り直す。週次と月次のジョブは期間ごとに1回だけ
 /// 出るので、日次の作り直しで生成済みになった前期間も、最終日を含めて作り直す。
+/// 日次は夕刊が作った前日の要約を作り直す (force)。夕刊は今日の日次要約だけを作る。
 pub fn job_plan(job: &Job, today: NaiveDate) -> Vec<(Period, NaiveDate, bool)> {
     match job {
         Job::Collect => Vec::new(),
         Job::Daily(day) => vec![
-            (Period::Day, *day, false),
+            (Period::Day, *day, true),
             (Period::Week, today, true),
             (Period::Month, today, true),
         ],
+        Job::Evening(day) => vec![(Period::Day, *day, true)],
         Job::Weekly(start) => vec![(Period::Week, *start, true)],
         Job::Monthly(start) => vec![(Period::Month, *start, true)],
     }
@@ -192,6 +206,7 @@ impl LastRuns {
                 .and_then(|v| DateTime::parse_from_rfc3339(&v).ok())
                 .map(|d| d.with_timezone(&Utc)),
             daily_for: date("schedule.last_daily_for"),
+            evening_for: date("schedule.last_evening_for"),
             weekly_for: date("schedule.last_weekly_for"),
             monthly_for: date("schedule.last_monthly_for"),
         }
@@ -203,15 +218,17 @@ pub fn last_run_record(job: &Job) -> Option<(&'static str, String)> {
     match job {
         Job::Collect => None,
         Job::Daily(day) => Some(("schedule.last_daily_for", day.to_string())),
+        Job::Evening(day) => Some(("schedule.last_evening_for", day.to_string())),
         Job::Weekly(start) => Some(("schedule.last_weekly_for", start.to_string())),
         Job::Monthly(start) => Some(("schedule.last_monthly_for", start.to_string())),
     }
 }
 
-/// ジョブを実行済みとして記録するか。週次と月次は作り直し (force) なので保留の再試行では
-/// 補えない。1件でも生成に失敗したら記録せず、次の評価で再実行する。日次の失敗は保留の再試行で補う。
+/// ジョブを実行済みとして記録するか。日次・週次・月次は作り直し (force) なので保留の再試行では
+/// 補えない (生成済みの行は失敗で変わらない)。1件でも生成に失敗したら記録せず、次の評価で再実行する。
+/// 夕刊の失敗は保留の再試行で補うので記録する。
 pub fn should_record(job: &Job, generation_failed: bool) -> bool {
-    !(matches!(job, Job::Weekly(_) | Job::Monthly(_)) && generation_failed)
+    !(matches!(job, Job::Daily(_) | Job::Weekly(_) | Job::Monthly(_)) && generation_failed)
 }
 
 /// 全ソースが失敗したとき、次の収集までの待ち時間。
@@ -384,6 +401,7 @@ mod tests {
             daily_for: Some(d("2026-10-04")),
             weekly_for: Some(d("2026-09-21")),
             monthly_for: Some(d("2026-09-01")),
+            evening_for: None,
             collect_at: Some(early.with_timezone(&Utc)),
         };
         assert!(due_jobs(early, &cfg(), &last).is_empty());
@@ -396,7 +414,7 @@ mod tests {
         assert_eq!(
             job_plan(&Job::Daily(d("2026-10-05")), today),
             vec![
-                (Period::Day, d("2026-10-05"), false),
+                (Period::Day, d("2026-10-05"), true),
                 (Period::Week, today, true),
                 (Period::Month, today, true),
             ]
@@ -497,6 +515,7 @@ mod tests {
             daily_for: Some(d("2026-09-30")),
             weekly_for: Some(d("2026-09-21")),
             monthly_for: Some(d("2026-08-01")),
+            evening_for: None,
         };
         assert!(due_jobs(early, &cfg(), &last).is_empty());
         let at_time = jst("2026-10-01T08:00:00+09:00");
@@ -516,6 +535,7 @@ mod tests {
             daily_for: Some(d("2027-01-04")),
             weekly_for: Some(d("2026-12-28")),
             monthly_for: Some(d("2026-11-01")),
+            evening_for: None,
         };
         assert_eq!(
             due_jobs(jan, &cfg(), &last),
@@ -536,6 +556,7 @@ mod tests {
             daily_for: Some(d("2026-10-10")),
             weekly_for: Some(d("2026-09-21")),
             monthly_for: Some(d("2026-09-01")),
+            evening_for: None,
         };
         assert!(due_jobs(before, &sun_cfg, &last).is_empty());
         let after = jst("2026-10-11T07:30:00+09:00");
@@ -571,6 +592,7 @@ mod tests {
                 match k {
                     "schedule.last_collect_at" => "2026-10-06T07:00:00+09:00",
                     "schedule.last_daily_for" => "2026-10-05",
+                    "schedule.last_evening_for" => "2026-10-05",
                     "schedule.last_weekly_for" => "garbage",
                     _ => return None,
                 }
@@ -582,12 +604,13 @@ mod tests {
             Some(jst("2026-10-06T07:00:00+09:00").with_timezone(&Utc))
         );
         assert_eq!(r.daily_for, Some(d("2026-10-05")));
+        assert_eq!(r.evening_for, Some(d("2026-10-05")));
         assert_eq!(r.weekly_for, None);
         assert_eq!(r.monthly_for, None);
     }
 
     #[test]
-    fn finished_jobs_record_their_key_and_failed_weekly_or_monthly_do_not() {
+    fn finished_jobs_record_their_key_and_failed_daily_weekly_or_monthly_do_not() {
         assert_eq!(last_run_record(&Job::Collect), None);
         assert_eq!(
             last_run_record(&Job::Daily(d("2026-10-05"))),
@@ -601,7 +624,7 @@ mod tests {
             last_run_record(&Job::Monthly(d("2026-09-01"))),
             Some(("schedule.last_monthly_for", "2026-09-01".to_string()))
         );
-        assert!(should_record(&Job::Daily(d("2026-10-05")), true));
+        assert!(!should_record(&Job::Daily(d("2026-10-05")), true));
         assert!(!should_record(&Job::Weekly(d("2026-09-28")), true));
         assert!(!should_record(&Job::Monthly(d("2026-09-01")), true));
         assert!(should_record(&Job::Weekly(d("2026-09-28")), false));
@@ -616,5 +639,109 @@ mod tests {
         // 5分の間隔: 間隔どおり。未来にはならない。
         let base = all_failed_retry_base(now, Duration::minutes(5));
         assert_eq!(base, now);
+    }
+
+    #[test]
+    fn evening_time_defaults_to_17_and_tolerates_garbage() {
+        assert_eq!(
+            cfg().evening_time,
+            NaiveTime::from_hms_opt(17, 0, 0).unwrap()
+        );
+        let with = |v: &'static str| {
+            ScheduleConfig::from_settings(|k| (k == "schedule.evening_time").then(|| v.to_string()))
+                .evening_time
+        };
+        assert_eq!(with("18:30"), NaiveTime::from_hms_opt(18, 30, 0).unwrap());
+        assert_eq!(with("25:99"), NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+        assert_eq!(with(""), NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+    }
+
+    /// 2026-11-02 (月) の朝の分は済んでいる状態。収集も今済んだことにする。
+    fn morning_done(now: DateTime<FixedOffset>) -> LastRuns {
+        LastRuns {
+            collect_at: Some(now.with_timezone(&Utc)),
+            daily_for: Some(d("2026-11-01")),
+            weekly_for: Some(d("2026-10-26")),
+            monthly_for: Some(d("2026-10-01")),
+            evening_for: None,
+        }
+    }
+
+    #[test]
+    fn evening_runs_once_after_its_time() {
+        let before = jst("2026-11-02T16:59:00+09:00");
+        assert!(due_jobs(before, &cfg(), &morning_done(before)).is_empty());
+        let at = jst("2026-11-02T17:00:00+09:00");
+        assert_eq!(
+            due_jobs(at, &cfg(), &morning_done(at)),
+            vec![Job::Evening(d("2026-11-02"))]
+        );
+        let late = jst("2026-11-02T23:59:00+09:00");
+        let done = LastRuns {
+            evening_for: Some(d("2026-11-02")),
+            ..morning_done(late)
+        };
+        assert!(due_jobs(late, &cfg(), &done).is_empty());
+    }
+
+    #[test]
+    fn evening_is_for_today_only_and_not_made_up() {
+        // Review Focus 2: 前日の夕方に止まっていても、翌朝は日次だけ。夕刊は補わない。
+        let next = jst("2026-11-03T08:00:00+09:00");
+        let last = LastRuns {
+            evening_for: Some(d("2026-10-31")),
+            ..morning_done(next)
+        };
+        assert_eq!(
+            due_jobs(next, &cfg(), &last),
+            vec![Job::Daily(d("2026-11-02"))]
+        );
+        let evening = jst("2026-11-03T17:00:00+09:00");
+        let last = LastRuns {
+            daily_for: Some(d("2026-11-02")),
+            evening_for: Some(d("2026-11-02")),
+            ..morning_done(evening)
+        };
+        assert_eq!(
+            due_jobs(evening, &cfg(), &last),
+            vec![Job::Evening(d("2026-11-03"))]
+        );
+    }
+
+    #[test]
+    fn evening_comes_after_collect_and_daily() {
+        let now = jst("2026-11-02T17:00:00+09:00");
+        assert_eq!(
+            due_jobs(now, &cfg(), &LastRuns::default()),
+            vec![
+                Job::Collect,
+                Job::Daily(d("2026-11-01")),
+                Job::Evening(d("2026-11-02")),
+                Job::Weekly(d("2026-10-26")),
+                Job::Monthly(d("2026-10-01")),
+            ]
+        );
+    }
+
+    #[test]
+    fn evening_plan_record_and_retry_rule() {
+        let today = d("2026-11-02");
+        assert_eq!(
+            job_plan(&Job::Evening(today), today),
+            vec![(Period::Day, today, true)]
+        );
+        assert_eq!(
+            last_run_record(&Job::Evening(today)),
+            Some(("schedule.last_evening_for", "2026-11-02".to_string()))
+        );
+        // 夕刊の失敗は保留の再試行で補うので記録する。朝の作り直しの失敗は記録しない。
+        assert!(should_record(&Job::Evening(today), true));
+        assert!(!should_record(&Job::Daily(d("2026-11-01")), true));
+        assert!(should_record(&Job::Daily(d("2026-11-01")), false));
+    }
+
+    #[test]
+    fn evening_time_is_a_default_setting() {
+        assert!(crate::seed::DEFAULT_SETTINGS.contains(&("schedule.evening_time", "17:00")));
     }
 }

@@ -141,6 +141,7 @@ pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("schedule.collect_interval_hours", "3"),
     ("schedule.collect_interval_minutes", "180"),
     ("schedule.daily_time", "07:00"),
+    ("schedule.evening_time", "17:00"),
     ("schedule.weekly_day", "mon"),
     ("schedule.weekly_time", "07:30"),
     ("schedule.monthly_time", "08:00"),
