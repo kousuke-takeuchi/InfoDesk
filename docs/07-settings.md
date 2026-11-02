@@ -36,7 +36,7 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 - "起動": launch at login and stay resident.
 - "保留中の要約": the last error, and a button to retry digests that are pending or failed. The scheduler also retries pending digests on its own, at most once every 15 minutes, whether or not other jobs ran. Failed digests are retried only with this button or the one on the digest.
 
-A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake.
+A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake, except the evening edition, which is not made up.
 
 ## Settings keys
 

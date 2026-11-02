@@ -102,4 +102,4 @@ Collection runs on a timer and on demand.
 - **Weekly digest**: the previous week is generated on Monday at 07:30 (`schedule.weekly_day`, `schedule.weekly_time`).
 - **Monthly digest**: the previous month is generated on the 1st at 08:00 (`schedule.monthly_time`).
 
-Scheduled jobs that did not run (the Mac was asleep or the app was closed) are made up once, the next time the app starts or wakes. All times are your local time.
+Scheduled jobs that did not run (the Mac was asleep or the app was closed) are made up once, the next time the app starts or wakes, except the evening edition: a missed one is not made up. All times are your local time.
