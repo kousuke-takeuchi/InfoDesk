@@ -65,8 +65,9 @@ export function ScheduleTab({ status }: { status: AppStatus }) {
       </section>
       <section className="section">
         <h2>要約の生成</h2>
-        <p className="desc">日次の時刻に前日の日次要約を確定し、現在の週次と月次を作り直します。収集では要約を作り直しません。</p>
+        <p className="desc">夕刊の時刻に今日の日次要約を作ります (夕刊)。日次の時刻に前日の日次要約を一日分で作り直して確定し (朝刊)、現在の週次と月次を作り直します。収集では要約を作り直しません。</p>
         {timeField("daily-time", "日次要約の時刻", "schedule.daily_time", "HH:MM")}
+        {timeField("evening-time", "夕刊の時刻", "schedule.evening_time", "HH:MM。1日1回、過ぎた分は補いません")}
         <div className="setting-row">
           <div className="label"><label htmlFor="weekly-day">週次要約の曜日</label><span className="hint">日次要約から生成</span></div>
           <select id="weekly-day" className="field" style={{ width: 120 }} value={g("schedule.weekly_day")} onChange={(e) => save("schedule.weekly_day", e.target.value)}>

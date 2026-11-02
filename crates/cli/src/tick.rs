@@ -72,6 +72,7 @@ pub(crate) fn job_key(job: &Job) -> String {
     match job {
         Job::Collect => "collect".to_string(),
         Job::Daily(d) => format!("daily:{d}"),
+        Job::Evening(d) => format!("evening:{d}"),
         Job::Weekly(d) => format!("weekly:{d}"),
         Job::Monthly(d) => format!("monthly:{d}"),
     }
@@ -85,6 +86,7 @@ pub(crate) fn job_from_key(key: &str) -> Option<Job> {
     let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     match kind {
         "daily" => Some(Job::Daily(date)),
+        "evening" => Some(Job::Evening(date)),
         "weekly" => Some(Job::Weekly(date)),
         "monthly" => Some(Job::Monthly(date)),
         _ => None,
@@ -325,7 +327,7 @@ impl Runner {
         Ok(out)
     }
 
-    /// 日次・週次・月次のジョブ。アプリの `run_job` と同じ規則。何か生成したら真。
+    /// 日次・夕刊・週次・月次のジョブ。アプリの `run_job` と同じ規則。何か生成したら真。
     async fn digest_job(&self, job: &Job, today: NaiveDate, log: &mut Log<'_>) -> bool {
         let label = label(job);
         let mut plan = job_plan(job, today).into_iter();
@@ -713,17 +715,124 @@ mod tests {
         );
     }
 
+    /// 応答を途中で変えられる LLM。
+    fn switchable_llm() -> (Arc<Mutex<std::result::Result<String, String>>>, LlmFactory) {
+        let reply = Arc::new(Mutex::new(Ok("夕刊の要約".to_string())));
+        let shared = reply.clone();
+        let llm: LlmFactory = Box::new(move |_, _| {
+            Ok(Box::new(Reply(shared.lock().unwrap().clone())) as Box<dyn LlmProvider>)
+        });
+        (reply, llm)
+    }
+
+    /// 今日 (2026-11-02) の記事を1件置き、その scope を返す。
+    fn today_item(r: &Runner) -> DigestScope {
+        let s = r.store.lock().unwrap();
+        let source = s.list_sources().unwrap().remove(0);
+        let scope = DigestScope::Category(source.category);
+        add_item(&s, source, "2026-11-02T10:00:00+09:00");
+        scope
+    }
+
+    fn day_body(r: &Runner, scope: &DigestScope) -> Option<String> {
+        r.store
+            .lock()
+            .unwrap()
+            .get_digest(
+                Period::Day,
+                NaiveDate::from_ymd_opt(2026, 11, 2).unwrap(),
+                scope,
+            )
+            .unwrap()
+            .map(|d| d.body)
+    }
+
+    fn next_morning(h: u32, m: u32) -> DateTime<FixedOffset> {
+        jst().with_ymd_and_hms(2026, 11, 3, h, m, 0).unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_evening_run_makes_todays_digest_and_the_next_morning_rebuilds_it() {
+        let (reply, llm) = switchable_llm();
+        let r = runner(llm);
+        let scope = today_item(&r);
+        let log = r.run(at(16, 59)).await.unwrap();
+        assert!(!has(&log, "digest evening"), "{log:?}");
+        assert_eq!(day_body(&r, &scope), None);
+
+        let log = r.run(at(17, 2)).await.unwrap();
+        let evening = log
+            .iter()
+            .position(|l| l == "digest evening 2026-11-02: done")
+            .unwrap_or_else(|| panic!("{log:?}"));
+        let last_sync = log.iter().rposition(|l| l.starts_with("sync:")).unwrap();
+        assert!(
+            evening < last_sync,
+            "the evening edition is synced: {log:?}"
+        );
+        assert_eq!(day_body(&r, &scope).as_deref(), Some("夕刊の要約"));
+        assert_eq!(
+            setting(&r, "schedule.last_evening_for").as_deref(),
+            Some("2026-11-02")
+        );
+        let log = r.run(at(17, 20)).await.unwrap();
+        assert!(!has(&log, "digest evening"), "once a day: {log:?}");
+
+        *reply.lock().unwrap() = Ok("朝刊の要約".to_string());
+        let log = r.run(next_morning(7, 0)).await.unwrap();
+        assert!(has(&log, "digest daily 2026-11-02: done"), "{log:?}");
+        assert_eq!(day_body(&r, &scope).as_deref(), Some("朝刊の要約"));
+        assert_eq!(
+            setting(&r, "schedule.last_daily_for").as_deref(),
+            Some("2026-11-02")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_morning_rebuild_keeps_the_evening_edition_and_retries() {
+        // Review Focus 1
+        let (reply, llm) = switchable_llm();
+        let r = runner(llm);
+        let scope = today_item(&r);
+        r.run(at(17, 0)).await.unwrap();
+        assert_eq!(day_body(&r, &scope).as_deref(), Some("夕刊の要約"));
+
+        *reply.lock().unwrap() = Err("down".to_string());
+        let log = r.run(next_morning(7, 0)).await.unwrap();
+        assert!(
+            has(&log, "digest daily 2026-11-02: failed, will retry"),
+            "{log:?}"
+        );
+        assert_eq!(day_body(&r, &scope).as_deref(), Some("夕刊の要約"));
+        assert_eq!(
+            setting(&r, "schedule.last_daily_for").as_deref(),
+            Some("2026-11-01")
+        );
+        let log = r.run(next_morning(7, 5)).await.unwrap();
+        assert!(!has(&log, "digest daily"), "{log:?}");
+
+        *reply.lock().unwrap() = Ok("朝刊の要約".to_string());
+        let log = r.run(next_morning(7, 16)).await.unwrap();
+        assert!(has(&log, "digest daily 2026-11-02: done"), "{log:?}");
+        assert_eq!(day_body(&r, &scope).as_deref(), Some("朝刊の要約"));
+    }
+
     #[test]
     fn job_keys_round_trip() {
         let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
         for job in [
             Job::Collect,
             Job::Daily(d("2026-11-01")),
+            Job::Evening(d("2026-11-02")),
             Job::Weekly(d("2026-10-26")),
             Job::Monthly(d("2026-10-01")),
         ] {
             assert_eq!(job_from_key(&job_key(&job)), Some(job.clone()), "{job:?}");
         }
+        assert_eq!(
+            job_key(&Job::Evening(d("2026-11-02"))),
+            "evening:2026-11-02"
+        );
         assert_eq!(job_from_key("weekly:garbage"), None);
         assert_eq!(job_from_key("other"), None);
     }

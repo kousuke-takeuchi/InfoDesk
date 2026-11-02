@@ -6,7 +6,7 @@ import { setupIpc } from "../../test/ipc";
 import type { AppStatus } from "../../types";
 
 const settings = {
-  "schedule.collect_interval_minutes": "180", "schedule.daily_time": "07:00", "schedule.weekly_day": "mon",
+  "schedule.collect_interval_minutes": "180", "schedule.daily_time": "07:00", "schedule.evening_time": "17:00", "schedule.weekly_day": "mon",
   "schedule.weekly_time": "07:30", "schedule.monthly_time": "08:00", "app.launch_at_login": "false", "app.stay_resident": "true",
 };
 const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: "2026-10-06T03:00:00Z", last_error: null, reader_mode: false };
@@ -52,7 +52,18 @@ describe("ScheduleTab", () => {
     expect(ipc.count("retry_pending_digests")).toBe(1);
   });
 
-  it.each([["日次要約の時刻"], ["週次要約の時刻"], ["月次要約の時刻 (毎月1日)"]])("rejects a malformed time in %s without calling a command", async (label) => {
+  it("saves the evening edition time", async () => {
+    const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined });
+    render(<ScheduleTab status={status} />);
+    const evening = await screen.findByLabelText("夕刊の時刻");
+    expect(evening).toHaveValue("17:00");
+    await userEvent.clear(evening);
+    await userEvent.type(evening, "18:30{enter}");
+    expect(ipc.last("set_setting")).toEqual({ key: "schedule.evening_time", value: "18:30" });
+    expect(screen.getByText(/夕刊の時刻に今日の日次要約を作ります/)).toBeInTheDocument();
+  });
+
+  it.each([["夕刊の時刻"], ["日次要約の時刻"], ["週次要約の時刻"], ["月次要約の時刻 (毎月1日)"]])("rejects a malformed time in %s without calling a command", async (label) => {
     const ipc = setupIpc({ get_settings: () => settings, set_setting: () => undefined });
     render(<ScheduleTab status={status} />);
     const field = await screen.findByLabelText(label);

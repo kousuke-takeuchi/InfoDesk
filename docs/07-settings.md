@@ -32,11 +32,11 @@ Open Settings from the sidebar, or from the menu bar item "設定…" (Cmd+,). S
 *The Schedule tab. Sample data from a mocked backend.*
 
 - "収集": the collection interval (1, 5, 15 or 30 minutes, or 1, 3, 6 or 12 hours, in the menu), the next collection time, and a "collect now" button.
-- "要約の生成": the daily time, the weekly day and time, and the monthly time (on the 1st). At the daily time the previous day's digest is finalized and the current week and month are rebuilt. Today's daily digest is not rebuilt by collection; make it with **Generate** or **Regenerate**.
+- "要約の生成": the evening edition time, the daily time, the weekly day and time, and the monthly time (on the 1st). At the evening time today's digest is made (the evening edition). At the daily time the previous day's digest is rebuilt and finalized (the morning edition) and the current week and month are rebuilt. Collection does not rebuild digests; **Generate** or **Regenerate** makes today's digest at any time.
 - "起動": launch at login and stay resident.
 - "保留中の要約": the last error, and a button to retry digests that are pending or failed. The scheduler also retries pending digests on its own, at most once every 15 minutes, whether or not other jobs ran. Failed digests are retried only with this button or the one on the digest.
 
-A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake.
+A job that did not run (the Mac was asleep, or the app was closed) is made up once at the next start or wake, except the evening edition, which is not made up.
 
 ## Settings keys
 
@@ -59,7 +59,8 @@ All settings are stored in the app database as text. Defaults are written on fir
 | `summary.top_n` | `20` | How many top articles per category get an article summary after each collection. Not shown in Settings. Must be a number. |
 | `schedule.collect_interval_minutes` | `180` | Minutes between collections. Values outside 1 to 10080 are clamped. An invalid value falls back to 180. |
 | `schedule.collect_interval_hours` | `3` | Legacy. Read only when the minutes key is missing (clamped to 1 to 168 hours). On launch, a missing minutes key is seeded from this value. Not shown in Settings. |
-| `schedule.daily_time` | `07:00` | Time (HH:MM) to finalize the previous day's digest. |
+| `schedule.daily_time` | `07:00` | Time (HH:MM) to rebuild and finalize the previous day's digest (the morning edition). |
+| `schedule.evening_time` | `17:00` | Time (HH:MM) to make today's digest (the evening edition). Once a day; a missed evening is not made up. |
 | `schedule.weekly_day` | `mon` | Day of the weekly digest: `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun`. |
 | `schedule.weekly_time` | `07:30` | Time (HH:MM) of the weekly digest. |
 | `schedule.monthly_time` | `08:00` | Time (HH:MM) of the monthly digest, on the 1st of the month. |
@@ -73,7 +74,7 @@ An invalid time or weekday value is ignored and the default is used.
 
 `claude_api` calls the Claude API with the key in the environment variable `ANTHROPIC_API_KEY`. It is for the headless server (see [Home Server](15-home-server.md)) and is not offered in the Mac app's LLM tab.
 
-The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
+The scheduler also keeps its own bookkeeping keys: `schedule.last_collect_at`, `schedule.last_daily_for`, `schedule.last_evening_for`, `schedule.last_weekly_for` and `schedule.last_monthly_for`. They record what already ran. Do not edit them.
 
 Sync keeps its own keys too: `sync.device_name` (the name of this Mac, edited in the Sync tab), `sync.device_id` (a random id made on the first read or star change, or on the first sync, whichever comes first), `sync.db_id` (a random id made on the first sync), `sync.account_email`, `sync.last_sync_at` and `sync.last_compaction_at`. `sync.mode` (`writer`, the default, or `reader`; set by 読むだけ in the Sync tab, which also makes a new `sync.device_id`), `sync.reader.writer` and `sync.reader.written_at` (the writer name and write time of the last manifest a reader read) belong to reader mode. The storage choice adds more keys: `sync.backend` (`gdrive`, the default, or `nas`; any other value is read as `gdrive`), `sync.nas.url`, `sync.nas.user`, `sync.nas.password_set` (only records that a password was saved) and `sync.reset_pending` (set when the storage changes, so the next sync starts over on the new storage). The NAS password itself is in the macOS Keychain (service `jp.infodesk.app.nas`), and the Tailscale state is in the `tailscale/` folder of the app data directory. See [NAS Setup](13-nas-setup.md). Only `sync.enabled` is a plain setting; the Sync tab manages the others. Do not edit them. The Google refresh token is not in the database; it is in the macOS Keychain.
 

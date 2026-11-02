@@ -43,7 +43,8 @@ async fn run_job(state: &AppState, job: &Job, today: NaiveDate) {
         }
     };
     // 週次と月次は作り直し (force) なので、保留の再試行では補えない。1件でも生成に
-    // 失敗したら記録せず、次の評価で再実行する。日次の失敗は保留の再試行で補う。
+    // 失敗したら記録せず、次の評価で再実行する。日次 (朝刊) も強制の作り直しなので同じで、
+    // 失敗しても夕刊の本文は残り、15分後に再実行する。
     let generation_failed = outcomes
         .iter()
         .any(|(_, o)| o.as_ref().is_some_and(|o| o.error.is_some()));
@@ -156,6 +157,58 @@ mod tests {
             Some(t("2026-11-01T09:50:00Z")),
             now
         ));
+    }
+
+    #[tokio::test]
+    async fn the_evening_edition_is_rebuilt_by_the_next_daily_run() {
+        use infodesk_core::model::{Category, DigestScope, NewItem, Period};
+        let (mut state, _) = crate::state::test_state();
+        let fetched: DateTime<Utc> = "2026-10-05T03:00:00Z".parse().unwrap();
+        let day = fetched.with_timezone(&state.tz).date_naive();
+        state
+            .with_store(|s| {
+                let src = s
+                    .list_sources()?
+                    .into_iter()
+                    .find(|x| x.category == Category::Medcare)
+                    .unwrap();
+                let item = NewItem {
+                    url: "https://e.com/1".into(),
+                    title: "認知症の新薬".into(),
+                    excerpt: String::new(),
+                    author: None,
+                    published_at: None,
+                    score: None,
+                    image_url: None,
+                };
+                s.upsert_items(&src, &[item], &fetched).map(|_| ())
+            })
+            .unwrap();
+        let body = |state: &crate::state::AppState| {
+            state
+                .with_store(|s| {
+                    s.get_digest(Period::Day, day, &DigestScope::Category(Category::Medcare))
+                })
+                .unwrap()
+                .map(|d| d.body)
+        };
+        state.llm = std::sync::Arc::new(|_, _| {
+            Ok(Box::new(FixedLlm(Ok("夕刊"))) as Box<dyn infodesk_core::llm::LlmProvider>)
+        });
+        run_job(&state, &Job::Evening(day), day).await;
+        assert_eq!(body(&state).as_deref(), Some("夕刊"));
+        assert_eq!(
+            state
+                .with_store(|s| s.get_setting("schedule.last_evening_for"))
+                .unwrap(),
+            Some(day.to_string())
+        );
+
+        state.llm = std::sync::Arc::new(|_, _| {
+            Ok(Box::new(FixedLlm(Ok("朝刊"))) as Box<dyn infodesk_core::llm::LlmProvider>)
+        });
+        run_job(&state, &Job::Daily(day), day + chrono::Duration::days(1)).await;
+        assert_eq!(body(&state).as_deref(), Some("朝刊"));
     }
 
     #[tokio::test]
