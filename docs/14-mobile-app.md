@@ -19,7 +19,7 @@ Four tabs sit under a floating bar: ダイジェスト (digest), フィード (f
 
 ### Digest
 
-Switch between 今日 (today), 週 (week) and 月 (month). Each digest shows the period overview (count per category and topic strength), the headline, numbered points with image cards, and the source articles ("根拠記事"). Pull down to sync. A sync button sits at the top right.
+Switch between 今日 (today), 週 (week) and 月 (month). On 今日 the newest edition is shown. Today's digest made in the evening is the evening edition (「11月2日 夕刊」, with the time it covers, for example 「11月2日 17時までの記事」). After the day ends the server rebuilds it from the whole day; that version is the next day's morning edition (「11月3日 朝刊」, 「11月2日の記事」). Use the arrows beside the date to step through earlier editions, weeks and months. While the newest one is shown, a sync that brings a new edition switches to it; after you step back to an older one, the tab stays there. Each digest shows the period overview (count per category and topic strength), the headline, numbered points with image cards, and the source articles ("根拠記事"). Pull down to sync. A sync button sits at the top right.
 
 ![The digest (design mockup)](../design/exports/m1-mobile-digest.png)
 
