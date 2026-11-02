@@ -42,14 +42,32 @@ function dateJa(d: Date, withYear: boolean): string {
   return `${y}${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAYS[d.getDay()]})`;
 }
 
-export function periodHeading(period: Period, d: Date): { title: string; range: string } {
-  const start = periodStart(period, d);
-  if (period === "day") return { title: "今日のダイジェスト", range: dateJa(start, true) };
+/** YYYY-MM-DD をローカルの 0:00 として読む。 */
+export function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** `shown` を含む期間の見出し。`now` から見た言い方 (今日 / 昨日 / 10月1日、今週 / 先週 / 9月21日の週、今月 / 先月 / 2025年12月)。 */
+export function periodHeading(period: Period, shown: Date, now: Date = shown): { title: string; range: string } {
+  const start = periodStart(period, shown);
+  const current = periodStart(period, now);
+  const y = start.getFullYear() === current.getFullYear() ? "" : `${start.getFullYear()}年`;
+  const md = `${y}${start.getMonth() + 1}月${start.getDate()}日`;
+  if (period === "day") {
+    const yesterday = addDays(current, -1);
+    const name = start >= current ? "今日" : start.getTime() === yesterday.getTime() ? "昨日" : md;
+    return { title: `${name}のダイジェスト`, range: dateJa(start, true) };
+  }
   if (period === "week") {
     const last = addDays(periodEnd("week", start), -1);
-    return { title: "今週のダイジェスト", range: `${dateJa(start, true)} 〜 ${dateJa(last, false)}` };
+    const prev = addDays(current, -7);
+    const title = start >= current ? "今週のダイジェスト" : start.getTime() === prev.getTime() ? "先週のダイジェスト" : `${md}の週`;
+    return { title, range: `${dateJa(start, true)} 〜 ${dateJa(last, false)}` };
   }
-  return { title: "今月のダイジェスト", range: `${start.getFullYear()}年${start.getMonth() + 1}月` };
+  const prev = new Date(current.getFullYear(), current.getMonth() - 1, 1);
+  const name = start >= current ? "今月" : start.getTime() === prev.getTime() ? "先月" : `${y}${start.getMonth() + 1}月`;
+  return { title: `${name}のダイジェスト`, range: `${start.getFullYear()}年${start.getMonth() + 1}月` };
 }
 
 export function relativeTime(iso: string, now: Date): string {

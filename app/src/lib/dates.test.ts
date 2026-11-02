@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, localDateString, periodEnd, periodHeading, periodStart, relativeTime, startOfLocalDay } from "./dates";
+import { addDays, localDateString, parseLocalDate, periodEnd, periodHeading, periodStart, relativeTime, startOfLocalDay } from "./dates";
 
 const at = (s: string) => new Date(s);
 
@@ -31,6 +31,21 @@ describe("dates", () => {
     expect(periodHeading("day", d)).toEqual({ title: "今日のダイジェスト", range: "2026年10月6日(火)" });
     expect(periodHeading("week", d)).toEqual({ title: "今週のダイジェスト", range: "2026年10月5日(月) 〜 10月11日(日)" });
     expect(periodHeading("month", d)).toEqual({ title: "今月のダイジェスト", range: "2026年10月" });
+  });
+
+  it("words a shown period relative to now", () => {
+    const now = new Date(2026, 9, 6, 9, 0);
+    expect(periodHeading("day", new Date(2026, 9, 5), now).title).toBe("昨日のダイジェスト");
+    expect(periodHeading("day", new Date(2026, 9, 1), now)).toEqual({ title: "10月1日のダイジェスト", range: "2026年10月1日(木)" });
+    expect(periodHeading("week", new Date(2026, 8, 28), now).title).toBe("先週のダイジェスト");
+    expect(periodHeading("week", new Date(2026, 8, 21), now).title).toBe("9月21日の週");
+    expect(periodHeading("month", new Date(2026, 8, 1), now).title).toBe("先月のダイジェスト");
+    expect(periodHeading("month", new Date(2025, 11, 1), now).title).toBe("2025年12月のダイジェスト");
+    expect(periodHeading("day", new Date(2025, 11, 31), now).title).toBe("2025年12月31日のダイジェスト");
+  });
+
+  it("parses YYYY-MM-DD as local midnight", () => {
+    expect(parseLocalDate("2026-10-05")).toEqual(new Date(2026, 9, 5));
   });
 
   it("formats relative time", () => {
