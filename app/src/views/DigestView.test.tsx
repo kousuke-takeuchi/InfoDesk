@@ -13,12 +13,12 @@ const WEEK_STATS: DigestStats = {
   topics: [{ topic_id: 1, name: "認知症", count: 3, prev_count: 1 }],
 };
 /** どのテストでも概観の取得が呼ばれるので、既定の digest_stats を足す。 */
-const setupIpc = (handlers: IpcHandlers) => baseSetupIpc({ digest_stats: () => EMPTY_STATS, ...handlers });
+const setupIpc = (handlers: IpcHandlers) => baseSetupIpc({ digest_stats: () => EMPTY_STATS, list_digest_starts: () => [], ...handlers });
 
 const status: AppStatus = { collecting: false, summarizing: false, digesting: false, last_collect_at: null, next_collect_at: null, last_error: null, reader_mode: false };
 const digest = (over: Partial<Digest>): Digest => ({
   id: 1, period: "day", period_start: "2026-10-06", scope: { category: "github" }, body: "- 一つ目。\n- 二つ目。\n全体の傾向。",
-  item_ids: [11, 12], provider: "ollama:gemma4:26b", status: "done", attempts: 0, created_at: "2026-10-06T00:00:00Z", last_error: null, ...over,
+  item_ids: [11, 12], provider: "ollama:gemma4:26b", status: "done", attempts: 0, created_at: new Date(2026, 9, 6, 8, 0).toISOString(), last_error: null, ...over,
 });
 const views: DV[] = [
   { scope: { category: "github" }, label: "GitHub", digest: digest({}), item_count: 2 },
@@ -48,8 +48,8 @@ describe("DigestView", () => {
       regenerate_digest: () => undefined, retry_pending_digests: () => undefined, open_item: () => undefined,
     });
     renderAll();
-    expect(await screen.findByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
-    expect(screen.getByText("2026年10月6日(火)")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+    expect(screen.getByText("10月6日 8時までの記事")).toBeInTheDocument();
     expect(ipc.last("get_digests")).toEqual({ period: "day", date: "2026-10-06", topicId: null });
 
     expect(await screen.findByText("一つ目。")).toBeInTheDocument();
@@ -75,14 +75,14 @@ describe("DigestView", () => {
     await userEvent.click(screen.getByRole("button", { name: "週" }));
     expect(await screen.findByRole("heading", { name: "今週のダイジェスト" })).toBeInTheDocument();
     expect(screen.getByText("2026年10月5日(月) 〜 10月11日(日)")).toBeInTheDocument();
-    expect(ipc.last("get_digests")).toEqual({ period: "week", date: "2026-10-06", topicId: 2 });
+    expect(ipc.last("get_digests")).toEqual({ period: "week", date: "2026-10-05", topicId: 2 });
   });
 
   it("filters to one category when a category is selected and reports errors", async () => {
     setupIpc({ get_digests: () => views, get_item: () => null });
     render(<DigestView selection={{ kind: "category", category: "medcare" }} topics={[]} status={status} view="digest" onSwitchView={() => {}} {...CHAT} />);
     expect(await screen.findByRole("heading", { name: "医療介護" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "GitHub" })).not.toBeInTheDocument();
 
     setupIpc({ get_digests: () => { throw { message: "unknown period 'year'" }; } });
@@ -102,7 +102,7 @@ describe("DigestView", () => {
     renderAll();
     await screen.findByRole("group", { name: /カテゴリー別の記事数/ });
     await userEvent.click(screen.getByRole("button", { name: "週" }));
-    await waitFor(() => expect(ipc.last("digest_stats")).toEqual({ period: "week", date: "2026-10-06", topicId: null }));
+    await waitFor(() => expect(ipc.last("digest_stats")).toEqual({ period: "week", date: "2026-10-05", topicId: null }));
     const before = ipc.count("digest_stats");
     await emitEvent(EVENTS.items);
     await waitFor(() => expect(ipc.count("digest_stats")).toBe(before + 1));
@@ -118,7 +118,7 @@ describe("DigestView", () => {
   it("refetches digests when digests-changed fires", async () => {
     const ipc = setupIpc({ get_digests: () => views, get_item: () => null });
     renderAll();
-    expect(await screen.findByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
     await waitFor(() => expect(ipc.count("get_digests")).toBe(1));
     await emitEvent(EVENTS.digests);
     await waitFor(() => expect(ipc.count("get_digests")).toBe(2));
@@ -513,7 +513,7 @@ describe("DigestView", () => {
     expect(onPeriodChange).toHaveBeenCalledTimes(1);
     expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "day", date: "2026-10-06" });
     await userEvent.click(screen.getByRole("button", { name: "週" }));
-    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "week", date: "2026-10-06" });
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "week", date: "2026-10-05" });
     expect(onPeriodChange).toHaveBeenCalledTimes(2);
   });
 
@@ -524,5 +524,116 @@ describe("DigestView", () => {
     expect(screen.queryByRole("button", { name: "再生成" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "今すぐ再試行" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
+  });
+});
+
+const editionViews = (date: string): DV[] => {
+  const [y, m, d] = date.split("-").map(Number);
+  // 今日 (10/6) は 8 時の夕刊、前の日は翌朝 7 時の朝刊。
+  const made = date === "2026-10-06" ? new Date(y, m - 1, d, 8) : new Date(y, m - 1, d + 1, 7);
+  return [{ scope: { category: "github" }, label: "GitHub", digest: digest({ period_start: date, created_at: made.toISOString(), body: `- ${date}の要点。` }), item_count: 2 }];
+};
+
+describe("DigestView editions", () => {
+  it("shows today's evening edition and steps back to a morning edition", async () => {
+    const onAskChat = vi.fn();
+    const onPeriodChange = vi.fn();
+    const ipc = setupIpc({
+      list_digest_starts: () => ["2026-10-04", "2026-10-05", "2026-10-06"],
+      get_digests: (a) => editionViews(a.date), get_item: () => null, regenerate_digest: () => undefined,
+    });
+    renderAll(status, { onAskChat, onPeriodChange });
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+    expect(screen.getByText("10月6日 8時までの記事")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "次へ" })).toBeDisabled();
+    expect(ipc.last("list_digest_starts")).toEqual({ period: "day", topicId: null });
+
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    expect(screen.getByText("10月5日の記事")).toBeInTheDocument();
+    expect(await screen.findByText("2026-10-05の要点。")).toBeInTheDocument();
+    expect(ipc.last("get_digests")).toEqual({ period: "day", date: "2026-10-05", topicId: null });
+    await waitFor(() => expect(ipc.last("digest_stats")).toEqual({ period: "day", date: "2026-10-05", topicId: null }));
+    expect(onPeriodChange).toHaveBeenLastCalledWith({ view: "digest", period: "day", date: "2026-10-05" });
+    await userEvent.click(screen.getByRole("button", { name: "再生成" }));
+    expect(ipc.last("regenerate_digest")).toEqual({ period: "day", date: "2026-10-05", scopes: [{ category: "github" }] });
+    await userEvent.click(screen.getByRole("button", { name: "GitHubの要約についてチャットで質問" }));
+    expect(onAskChat).toHaveBeenCalledWith({ type: "digest", period: "day", date: "2026-10-05", scope: "category:github", label: "GitHub" });
+
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "10月5日 朝刊" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "前へ" })).toBeDisabled();
+  });
+
+  it("opens on the newest earlier edition when today has none, and today stays reachable", async () => {
+    const ipc = setupIpc({
+      list_digest_starts: () => ["2026-10-05"],
+      get_digests: (a) => a.date === "2026-10-05" ? editionViews(a.date) : [{ scope: { category: "github" }, label: "GitHub", digest: null, item_count: 3 }],
+      get_item: () => null,
+    });
+    renderAll();
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "次へ" }));
+    expect(await screen.findByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
+    expect(screen.getByText("2026年10月6日(火)")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "生成" })).toBeInTheDocument();
+    expect(ipc.last("get_digests")).toEqual({ period: "day", date: "2026-10-06", topicId: null });
+  });
+
+  it("browses stored weeks and asks for the shown week", async () => {
+    const ipc = setupIpc({
+      list_digest_starts: (a) => a.period === "week" ? ["2026-09-21", "2026-09-28", "2026-10-05"] : [],
+      get_digests: () => fresh(views), get_item: () => null,
+    });
+    renderAll();
+    await screen.findByText("一つ目。");
+    await userEvent.click(screen.getByRole("button", { name: "週" }));
+    expect(await screen.findByRole("heading", { name: "今週のダイジェスト" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "前へ" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "先週のダイジェスト" })).toBeInTheDocument();
+    expect(screen.getByText("2026年9月28日(月) 〜 10月4日(日)")).toBeInTheDocument();
+    await waitFor(() => expect(ipc.last("get_digests")).toEqual({ period: "week", date: "2026-09-28", topicId: null }));
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "9月21日の週" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "今日" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+  });
+
+  it("follows a new edition until the reader steps", async () => {
+    let stored = ["2026-10-05"];
+    setupIpc({ list_digest_starts: () => stored, get_digests: (a) => editionViews(a.date), get_item: () => null });
+    renderAll();
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    stored = ["2026-10-05", "2026-10-06"];
+    await emitEvent(EVENTS.digests);
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    await emitEvent(EVENTS.digests);
+    await settle();
+    expect(screen.getByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+  });
+
+  it("resumes following when the reader steps forward to the newest edition", async () => {
+    let stored = ["2026-10-04", "2026-10-05", "2026-10-06"];
+    setupIpc({ list_digest_starts: () => stored, get_digests: (a) => editionViews(a.date), get_item: () => null });
+    renderAll();
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "次へ" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+    // 日が変わるなどで最新の開始が変わると、追従して新しい版に移る (固定されていない)。
+    stored = ["2026-10-04", "2026-10-05"];
+    await emitEvent(EVENTS.digests);
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+  });
+
+  it("reports a failure to list starts and still shows today", async () => {
+    setupIpc({ list_digest_starts: () => { throw { message: "db locked" }; }, get_digests: () => fresh(views), get_item: () => null });
+    renderAll();
+    expect(await screen.findByText("db locked")).toBeInTheDocument();
+    expect(await screen.findByText("一つ目。")).toBeInTheDocument();
   });
 });

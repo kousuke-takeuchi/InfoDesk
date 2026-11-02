@@ -1,4 +1,4 @@
-import { CircleAlert, Hourglass, Inbox, Loader, MessageSquarePlus, RotateCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, Hourglass, Inbox, Loader, MessageSquarePlus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, EVENTS } from "../api";
 import { ChatToggle } from "../components/ChatToggle";
@@ -8,7 +8,9 @@ import type { Selection, View } from "../components/Sidebar";
 import type { ViewActionsRef } from "../hooks/useShortcuts";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import type { ChatAttachment, ChatPeriod } from "../chat/context";
-import { localDateString, periodHeading } from "../lib/dates";
+import { localDateString, parseLocalDate, periodHeading, periodStart } from "../lib/dates";
+import { editionHeading, editionOf } from "../lib/editions";
+import { browseStarts, pickStart } from "../lib/browse";
 import { digestDisplay, parseDigestBody } from "../lib/digest";
 import { ImageCards, cardItems } from "./digest/ImageCards";
 import { Overview } from "./digest/Overview";
@@ -98,20 +100,34 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
   const latestStats = useRef(0);
   // 完了通知による再取得が、応答を反映する前に別の再取得に追い越されても、依頼中の印を外し損ねないよう覚えておく。
   const settlePending = useRef(false);
+  // 保存済みの期間の開始 (古い順)。どの条件のものかを一緒に持つ。
+  const [starts, setStarts] = useState<{ key: string; list: string[] } | null>(null);
+  const [startsError, setStartsError] = useState<string | null>(null);
+  // 矢印で選んだ開始。null か別の期間のものなら、最新の版に追従する。
+  const [pinned, setPinned] = useState<{ period: Period; start: string } | null>(null);
+  const latestStarts = useRef(0);
   const today = new Date();
-  const date = localDateString(today);
+  const current = localDateString(periodStart(period, today));
   const topicId = selection.kind === "topic" ? selection.topicId : null;
+  const startsKey = `${period}|${topicId ?? ""}|${current}`;
+  const stored = starts && starts.key === startsKey ? starts.list : null;
+  const keep = pinned && pinned.period === period ? pinned.start : null;
+  // 保存済みの開始が届くまでは取らない (今日を取ってから前の日に切り替えないため)。
+  const date = stored === null ? null : pickStart(stored, current, keep);
+  const walk = stored === null ? [] : browseStarts(stored, current);
+  const index = date === null ? -1 : walk.indexOf(date);
   // 親が毎回新しい関数を渡しても、期間か日付が変わったときだけ通知する。
   const periodChange = useRef(onPeriodChange);
   periodChange.current = onPeriodChange;
-  useEffect(() => { periodChange.current({ view: "digest", period, date }); }, [period, date]);
-  const loadKey = `${period}|${date}|${topicId ?? ""}`;
+  useEffect(() => { if (date !== null) periodChange.current({ view: "digest", period, date }); }, [period, date]);
+  const loadKey = `${period}|${date ?? ""}|${topicId ?? ""}`;
   const context = `${loadKey}|${selectionKey(selection)}`;
   const views = loaded && loaded.key === loadKey ? loaded.views : null;
   const requested = requests.context === context ? requests.keys : NO_KEYS;
 
   /** `finished`: 生成ジョブの完了通知による再取得。結果を反映するときに依頼中の印を外す。 */
   const load = useCallback((finished: boolean) => {
+    if (date === null) return;
     const mine = ++latestLoad.current;
     if (finished) settlePending.current = true;
     const settle = () => {
@@ -136,11 +152,33 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
 
   /** 概観の統計。要約とは別に取り、最新の要求だけを反映する。 */
   const loadStats = useCallback(() => {
+    if (date === null) return;
     const mine = ++latestStats.current;
     api.digestStats(period, date, topicId)
       .then((v) => { if (latestStats.current === mine) setStats({ key: loadKey, value: v, error: null }); })
       .catch((e) => { if (latestStats.current === mine) setStats({ key: loadKey, value: null, error: errorMessage(e) }); });
   }, [period, date, topicId, loadKey]);
+
+  /** 保存済みの期間の開始。失敗したら今の期間だけで続ける。 */
+  const loadStarts = useCallback(() => {
+    const mine = ++latestStarts.current;
+    api.listDigestStarts(period, topicId)
+      .then((list) => {
+        if (latestStarts.current !== mine) return;
+        setStarts({ key: startsKey, list });
+        setStartsError(null);
+      })
+      .catch((e) => {
+        if (latestStarts.current !== mine) return;
+        setStarts({ key: startsKey, list: [] });
+        setStartsError(errorMessage(e));
+      });
+  }, [period, topicId, startsKey]);
+
+  useEffect(() => {
+    loadStarts();
+    return () => { latestStarts.current++; };
+  }, [loadStarts, refreshTick]);
 
   // 条件 (日付を含む) が変わったときと refreshTick が増えたときに取り直す。
   // 日付の変化は refreshTick と同じ描画で届くので、一つの effect にまとめて二重に取らない。
@@ -156,20 +194,22 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
     return () => { latestLoad.current++; };
   }, [load, refreshTick]);
   // status は prop で届く。再取得は完了通知 (digests-changed) と記事の増減 (items-changed) のとき。
-  useTauriEvent(EVENTS.digests, () => load(true));
+  useTauriEvent(EVENTS.digests, () => { loadStarts(); load(true); });
   // 収集で item_count が変わる。生成ジョブの完了ではないので、依頼中の印は外さない。
   useTauriEvent(EVENTS.items, () => { load(false); loadStats(); });
   useEffect(() => {
     if (!actions) return;
     actions.current = {
-      periodDay: () => setPeriod("day"), periodWeek: () => setPeriod("week"), periodMonth: () => setPeriod("month"),
+      periodDay: () => { setPeriod("day"); setPinned(null); },
+      periodWeek: () => { setPeriod("week"); setPinned(null); },
+      periodMonth: () => { setPeriod("month"); setPinned(null); },
     };
     return () => { actions.current = {}; };
   }, [actions]);
 
   const fail = (e: unknown) => setError(errorMessage(e));
   const request = (scopes: DigestScope[]) => {
-    if (scopes.length === 0) return;
+    if (scopes.length === 0 || date === null) return;
     const keys = scopes.map(scopeKey);
     const at = context;
     setRequests((prev) => ({ context: at, keys: new Set([...(prev.context === at ? prev.keys : []), ...keys]) }));
@@ -182,7 +222,16 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
     });
   };
 
-  const heading = periodHeading(period, today);
+  const step = (delta: number) => {
+    const next = walk[index + delta];
+    if (index < 0 || next === undefined) return;
+    // 最新の版に戻ったら、また新しい版に追従する。
+    const newest = index + delta === walk.length - 1 && pickStart(stored ?? [], current, null) === next;
+    setPinned(newest ? null : { period, start: next });
+  };
+  // 今日のタブでは、保存済みの日次要約を版として見せる (「11月2日 夕刊」)。
+  const edition = period === "day" && date !== null && views !== null ? editionOf(date, views.map((v) => v.digest)) : null;
+  const heading = edition ? editionHeading(edition, today) : periodHeading(period, date === null ? today : parseLocalDate(date), today);
   const canGenerate = !status.reader_mode;
   const shown = (views ?? []).filter((v) => sameScope(v.scope, selection));
   const scopeNote = selection.kind === "topic" ? topics.find((t) => t.id === selection.topicId)?.name ?? null : null;
@@ -192,14 +241,17 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
       <div className="toolbar">
         <ViewSwitch view={view} onChange={onSwitchView} />
         <div className="spacer" />
-        <Segmented options={PERIODS} value={period} onChange={setPeriod} ariaLabel="期間" />
+        <Segmented options={PERIODS} value={period} onChange={(p) => { setPeriod(p); setPinned(null); }} ariaLabel="期間" />
         <ChatToggle open={chatOpen} onToggle={onToggleChat} />
       </div>
       <div className="view">
         <ErrorLine message={error} />
+        <ErrorLine message={startsError} />
         <div className="view-header">
+          <button className="btn btn-ghost" aria-label="前へ" disabled={index <= 0} onClick={() => step(-1)}><ChevronLeft size={14} /></button>
           <h1>{heading.title}</h1>
           <span className="text-secondary">{heading.range}</span>
+          <button className="btn btn-ghost" aria-label="次へ" disabled={index < 0 || index >= walk.length - 1} onClick={() => step(1)}><ChevronRight size={14} /></button>
           {scopeNote && <span className="text-secondary">· {scopeNote}</span>}
           <div className="spacer" />
           {canGenerate && (
@@ -226,7 +278,7 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
                 {display.kind === "done" && display.regenerating && <span className="text-tertiary tiny">再生成中…</span>}
                 {display.kind === "done" && (
                   <button className="row-actions-btn" aria-label={`${v.label}の要約についてチャットで質問`}
-                    onClick={() => onAskChat({ type: "digest", period, date, scope: "category" in v.scope ? `category:${v.scope.category}` : `topic:${v.scope.topic}`, label: v.label })}>
+                    onClick={() => onAskChat({ type: "digest", period, date: date ?? current, scope: "category" in v.scope ? `category:${v.scope.category}` : `topic:${v.scope.topic}`, label: v.label })}>
                     <MessageSquarePlus size={14} />
                   </button>
                 )}
