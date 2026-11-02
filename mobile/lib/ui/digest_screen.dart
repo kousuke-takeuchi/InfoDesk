@@ -90,8 +90,8 @@ class _DigestScreenState extends State<DigestScreen> {
   /// The start (YYYY-MM-DD) of the displayed digest; null until first load.
   String? _selected;
 
-  /// True once the reader stepped with the arrows. Until then the tab
-  /// follows the newest edition, so a sync that brings one shows it.
+  /// True while the reader has stepped back with the arrows. Otherwise the
+  /// tab follows the newest edition, so a sync that brings one shows it.
   bool _pinned = false;
 
   /// Starts that have a digest for the period, up to today's start, oldest
@@ -161,6 +161,8 @@ class _DigestScreenState extends State<DigestScreen> {
         : await c.store.items(filter: ItemFilter(ids: ids));
     if (!mounted || mine != _load) return;
     setState(() {
+      // A different digest may lack the chosen scope; show all of it.
+      if (start != _selected) _scope = 'all';
       _digest = digest;
       _selected = start;
       _starts = starts;
@@ -176,7 +178,8 @@ class _DigestScreenState extends State<DigestScreen> {
     if (i < 0 || j < 0 || j >= _starts.length) return;
     setState(() {
       _selected = _starts[j];
-      _pinned = true;
+      // Back on the newest one, the tab follows new editions again.
+      _pinned = j < _starts.length - 1;
       _scope = 'all';
     });
     _reload();

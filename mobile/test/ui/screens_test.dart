@@ -316,6 +316,60 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(dayText(3)), findsOneWidget);
       });
+
+      testWidgets('stepping back to the newest edition follows again', (
+        tester,
+      ) async {
+        final h = await pumpApp(tester, setup: (h) => addDays(h, [1, 3]));
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('次へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(1)), findsOneWidget);
+        addDays(h, [0]);
+        await h.controller.sync();
+        await tester.pumpAndSettle();
+        expect(find.text('10月15日 夕刊'), findsOneWidget);
+        expect(find.text(dayText(0)), findsOneWidget);
+      });
+
+      testWidgets('following a new edition clears the scope filter', (
+        tester,
+      ) async {
+        final h = await pumpApp(
+          tester,
+          setup: (h) {
+            addDays(h, [1]);
+            final key = 'day|${dateString(DateTime(2026, 10, 14))}';
+            final f = h.store.digestFiles[key]!;
+            final e = f.entries.first;
+            h.store.digestFiles[key] = DigestFile(
+              period: f.period,
+              periodStart: f.periodStart,
+              stats: f.stats,
+              entries: [
+                e,
+                DigestRecord(
+                  scope: {'topic': 9},
+                  body: '見出し: 話題の要点',
+                  status: 'done',
+                  itemIds: const [],
+                  provider: e.provider,
+                  createdAt: e.createdAt,
+                ),
+              ],
+            );
+          },
+        );
+        await tester.tap(find.text('#9').first);
+        await tester.pumpAndSettle();
+        expect(find.text('話題の要点'), findsOneWidget);
+        addDays(h, [0]);
+        await h.controller.sync();
+        await tester.pumpAndSettle();
+        expect(find.text('10月15日 夕刊'), findsOneWidget);
+        expect(find.text(dayText(0)), findsOneWidget);
+      });
     });
 
     testWidgets('empty state and period switch', (tester) async {
