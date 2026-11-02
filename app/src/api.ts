@@ -51,6 +51,9 @@ export const api = {
     invoke<DigestView[]>("get_digests", { period, date, topicId }),
   digestStats: (period: Period, date: string, topicId: number | null) =>
     invoke<DigestStats>("digest_stats", { period, date, topicId }),
+  /** 完了した要約がある期間の開始 (YYYY-MM-DD、古い順)。 */
+  listDigestStarts: (period: Period, topicId: number | null) =>
+    invoke<string[]>("list_digest_starts", { period, topicId }),
   /** 指定した scope を1つのジョブで順に再生成する。 */
   regenerateDigest: (period: Period, date: string, scopes: DigestScope[]) =>
     invoke<void>("regenerate_digest", { period, date, scopes }),

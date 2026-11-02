@@ -13,7 +13,7 @@ A digest is a Japanese summary of one period. Open it with the **Digest** switch
 
 ## 1. Periods
 
-Use the segmented control in the toolbar to choose **Today**, **Week** or **Month**. The screen always shows the current period, and the heading shows its dates.
+Use the segmented control in the toolbar to choose **Today**, **Week** or **Month**. Today opens on the newest edition: today's digest made in the evening is the evening edition (「11月2日 夕刊」, with the time it covers, for example 「11月2日 17時までの記事」); after the day ends it is rebuilt from the whole day and becomes the next day's morning edition (「11月3日 朝刊」, 「11月2日の記事」). If today has no digest yet, the newest earlier edition is shown. The arrows beside the heading step through earlier days, weeks or months that have a digest; the current period is always reachable, so you can generate it. Until you step, the screen moves to a new edition when one is made or synced. The overview, Regenerate and chat use the period shown.
 
 | Period | Starts | Ends (exclusive) |
 |---|---|---|
