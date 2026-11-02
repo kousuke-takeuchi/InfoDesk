@@ -160,6 +160,29 @@ impl Store {
         Ok(rows)
     }
 
+    /// 完了した要約がある期間の開始 (古い順)。`topic_id` がなければカテゴリー別、あればそのトピック。
+    pub fn done_digest_starts(
+        &self,
+        period: Period,
+        topic_id: Option<i64>,
+    ) -> Result<Vec<NaiveDate>> {
+        let scope = match topic_id {
+            Some(id) => DigestScope::Topic(id).key(),
+            None => "category:%".to_string(),
+        };
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT period_start FROM digests \
+             WHERE period = ?1 AND status = 'done' AND scope LIKE ?2 \
+             ORDER BY period_start",
+        )?;
+        let rows = stmt
+            .query_map(params![period.as_str(), scope], |r| {
+                col_parse(r, 0, parse_date)
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     pub fn pending_digests(&self) -> Result<Vec<Digest>> {
         let mut stmt = self.conn.prepare(&format!(
             "SELECT {DIGEST_COLS} FROM digests WHERE status = 'pending' ORDER BY period_start, scope"
@@ -202,6 +225,50 @@ mod tests {
             item_ids: ids.to_vec(),
             provider: "mock".to_string(),
         }
+    }
+
+    #[test]
+    fn done_digest_starts_lists_finished_starts_per_scope_kind() {
+        let store = Store::open_in_memory().unwrap();
+        let now = at("2026-10-06T00:00:00Z");
+        let github = DigestScope::Category(Category::Github);
+        for (period, start, scope) in [
+            (Period::Day, "2026-10-05", github.clone()),
+            (Period::Day, "2026-10-03", github.clone()),
+            (
+                Period::Day,
+                "2026-10-05",
+                DigestScope::Category(Category::Arxiv),
+            ),
+            (Period::Day, "2026-10-04", DigestScope::Topic(7)),
+            (Period::Week, "2026-09-28", github.clone()),
+        ] {
+            store
+                .save_digest_done(&nd(period, start, scope, "b", &[]), &now)
+                .unwrap();
+        }
+        // 保留だけの日は入れない。
+        store
+            .mark_digest_attempt_failed(Period::Day, d("2026-10-06"), &github, "down", &now)
+            .unwrap();
+        assert_eq!(
+            store.done_digest_starts(Period::Day, None).unwrap(),
+            vec![d("2026-10-03"), d("2026-10-05")]
+        );
+        assert_eq!(
+            store.done_digest_starts(Period::Day, Some(7)).unwrap(),
+            vec![d("2026-10-04")]
+        );
+        assert!(
+            store
+                .done_digest_starts(Period::Day, Some(70))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            store.done_digest_starts(Period::Week, None).unwrap(),
+            vec![d("2026-09-28")]
+        );
     }
 
     #[test]

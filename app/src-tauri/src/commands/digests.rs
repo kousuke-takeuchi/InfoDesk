@@ -166,6 +166,29 @@ pub fn retry_pending_digests(app: AppHandle) -> AppResult<()> {
     Ok(())
 }
 
+/// 完了した要約がある期間の開始 (YYYY-MM-DD、古い順)。画面の前後の移動に使う。
+pub fn digest_starts_for(
+    state: &AppState,
+    period: &str,
+    topic_id: Option<i64>,
+) -> AppResult<Vec<String>> {
+    let period = parse_period(period)?;
+    let starts = state.with_store(|s| s.done_digest_starts(period, topic_id))?;
+    Ok(starts
+        .into_iter()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .collect())
+}
+
+#[tauri::command]
+pub fn list_digest_starts(
+    state: State<'_, AppState>,
+    period: String,
+    topic_id: Option<i64>,
+) -> AppResult<Vec<String>> {
+    digest_starts_for(&state, &period, topic_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +273,37 @@ mod tests {
         assert_eq!(views[0].item_count, 1);
         let views = digests_for(&state, "day", &before, Some(topic)).unwrap();
         assert_eq!(views[0].item_count, 0);
+    }
+
+    #[test]
+    fn list_digest_starts_returns_finished_starts_as_strings() {
+        use infodesk_core::store::NewDigest;
+        let (state, _) = test_state();
+        let now: chrono::DateTime<chrono::Utc> = "2026-10-06T00:00:00Z".parse().unwrap();
+        state
+            .with_store(|s| {
+                for day in ["2026-10-05", "2026-10-04"] {
+                    s.save_digest_done(
+                        &NewDigest {
+                            period: Period::Day,
+                            period_start: NaiveDate::parse_from_str(day, "%Y-%m-%d").unwrap(),
+                            scope: DigestScope::Category(Category::Github),
+                            body: "b".into(),
+                            item_ids: vec![],
+                            provider: "mock".into(),
+                        },
+                        &now,
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            digest_starts_for(&state, "day", None).unwrap(),
+            vec!["2026-10-04", "2026-10-05"]
+        );
+        assert!(digest_starts_for(&state, "week", None).unwrap().is_empty());
+        assert!(digest_starts_for(&state, "year", None).is_err());
     }
 
     #[test]

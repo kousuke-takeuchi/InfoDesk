@@ -9,6 +9,7 @@ describe("api", () => {
       list_items: () => [],
       count_items: () => 7,
       get_digests: () => [],
+      list_digest_starts: () => ["2026-10-05"],
       regenerate_digest: () => undefined,
       digest_stats: () => ({ period: "week", period_start: "2026-10-05", total: 0, categories: [], topics: [] }),
       add_rss_source: (a) => ({ id: 1, kind: "rss", name: a.name ?? "t", category: a.category, config: a.url, enabled: true, last_fetched_at: null, last_error: null }),
@@ -27,6 +28,9 @@ describe("api", () => {
 
     await api.digestStats("week", "2026-10-08", 3);
     expect(ipc.last("digest_stats")).toEqual({ period: "week", date: "2026-10-08", topicId: 3 });
+
+    expect(await api.listDigestStarts("week", 3)).toEqual(["2026-10-05"]);
+    expect(ipc.last("list_digest_starts")).toEqual({ period: "week", topicId: 3 });
 
     await api.regenerateDigest("week", "2026-10-06", [{ category: "github" }, { topic: 3 }]);
     expect(ipc.last("regenerate_digest")).toEqual({ period: "week", date: "2026-10-06", scopes: [{ category: "github" }, { topic: 3 }] });
