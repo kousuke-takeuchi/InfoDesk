@@ -211,12 +211,18 @@ class _DigestScreenState extends State<DigestScreen> {
   @override
   Widget build(BuildContext context) {
     final shownStart = _selected ?? _todayStart;
-    final heading = periodHeading(_period, DateTime.parse(shownStart));
+    final heading = periodHeading(
+      _period,
+      DateTime.parse(shownStart),
+      now: c.now(),
+    );
     final idx = _starts.indexOf(shownStart);
     final canPrev = idx > 0;
     final canNext = idx >= 0 && idx < _starts.length - 1;
     final showTodayNote =
-        _loaded && _period == DigestPeriod.day && shownStart != _todayStart;
+        _loaded &&
+        _period == DigestPeriod.day &&
+        !_starts.contains(_todayStart);
     final entries = _digest?.entries ?? const <DigestRecord>[];
     final stats = _Stats.parse(_digest?.stats);
     final shown = [
@@ -234,22 +240,38 @@ class _DigestScreenState extends State<DigestScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                IconButton(
-                  key: const Key('digest-prev'),
-                  tooltip: '前へ',
-                  onPressed: canPrev ? () => _step(-1) : null,
-                  icon: const Icon(Icons.chevron_left),
-                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        heading.range,
-                        style: const TextStyle(
-                          color: inkSecondary,
-                          fontSize: 15,
-                        ),
+                      // The arrows sit beside the date so the title keeps
+                      // the full width on a phone.
+                      Row(
+                        children: [
+                          IconButton(
+                            key: const Key('digest-prev'),
+                            tooltip: '前へ',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: canPrev ? () => _step(-1) : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Flexible(
+                            child: Text(
+                              heading.range,
+                              style: const TextStyle(
+                                color: inkSecondary,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: const Key('digest-next'),
+                            tooltip: '次へ',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: canNext ? () => _step(1) : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -261,12 +283,6 @@ class _DigestScreenState extends State<DigestScreen> {
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  key: const Key('digest-next'),
-                  tooltip: '次へ',
-                  onPressed: canNext ? () => _step(1) : null,
-                  icon: const Icon(Icons.chevron_right),
                 ),
                 IconButton(
                   key: const Key('digest-sync'),

@@ -34,19 +34,40 @@ DateTime periodStart(DigestPeriod p, DateTime now) {
 String _dateJa(DateTime d, {required bool year}) =>
     '${year ? '${d.year}年' : ''}${d.month}月${d.day}日(${_weekdays[d.weekday - 1]})';
 
-({String title, String range}) periodHeading(DigestPeriod p, DateTime now) {
-  final start = periodStart(p, now);
+/// The heading for the period containing [shown], worded relative to [now]:
+/// 今日 / 昨日 / 10月11日, 今週 / 先週 / 9月28日の週, 今月 / 先月 / 7月.
+({String title, String range}) periodHeading(
+  DigestPeriod p,
+  DateTime shown, {
+  required DateTime now,
+}) {
+  final start = periodStart(p, shown);
+  final current = periodStart(p, now);
+  final y = start.year == current.year ? '' : '${start.year}年';
+  final md = '$y${start.month}月${start.day}日';
   switch (p) {
     case DigestPeriod.day:
-      return (title: '今日のダイジェスト', range: _dateJa(start, year: false));
+      final yesterday = DateTime(current.year, current.month, current.day - 1);
+      final name = !start.isBefore(current)
+          ? '今日'
+          : (start == yesterday ? '昨日' : md);
+      return (title: '$nameのダイジェスト', range: _dateJa(start, year: false));
     case DigestPeriod.week:
       final last = DateTime(start.year, start.month, start.day + 6);
+      final prev = DateTime(current.year, current.month, current.day - 7);
+      final title = !start.isBefore(current)
+          ? '今週のダイジェスト'
+          : (start == prev ? '先週のダイジェスト' : '$mdの週');
       return (
-        title: '今週のダイジェスト',
+        title: title,
         range: '${_dateJa(start, year: false)} 〜 ${_dateJa(last, year: false)}',
       );
     case DigestPeriod.month:
-      return (title: '今月のダイジェスト', range: '${start.year}年${start.month}月');
+      final prev = DateTime(current.year, current.month - 1, 1);
+      final name = !start.isBefore(current)
+          ? '今月'
+          : (start == prev ? '先月' : '$y${start.month}月');
+      return (title: '$nameのダイジェスト', range: '${start.year}年${start.month}月');
   }
 }
 
