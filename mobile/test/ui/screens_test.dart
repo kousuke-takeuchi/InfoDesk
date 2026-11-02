@@ -64,7 +64,7 @@ DigestFile digestFile({String body = ''}) => DigestFile(
       status: 'done',
       itemIds: [1],
       provider: 'claude',
-      createdAt: '2026-10-15T00:00:00.000Z',
+      createdAt: DateTime(2026, 10, 15, 9).toUtc().toIso8601String(),
     ),
   ],
 );
@@ -103,7 +103,8 @@ void main() {
         },
       );
       expect(h.controller.ready, isTrue);
-      expect(find.text('今日のダイジェスト'), findsOneWidget);
+      expect(find.text('10月15日 夕刊'), findsOneWidget);
+      expect(find.text('10月15日 9時までの記事'), findsOneWidget);
       expect(find.text('期間の概観'), findsOneWidget);
       expect(find.text('156件'), findsOneWidget);
       expect(find.text('arXiv'), findsWidgets);
@@ -125,11 +126,26 @@ void main() {
     group('browsing past digests', () {
       DigestFile dayAt(DateTime d) {
         final f = digestFile(body: '見出し: ${dateString(d)}の要点');
+        // Past days carry their morning edition (07:00 the next day); today
+        // carries an evening edition made at 09:00.
+        final made = d.isBefore(dayOnly(fakeNow))
+            ? DateTime(d.year, d.month, d.day + 1, 7)
+            : DateTime(d.year, d.month, d.day, 9);
         return DigestFile(
           period: 'day',
           periodStart: dateString(d),
           stats: f.stats,
-          entries: f.entries,
+          entries: [
+            for (final e in f.entries)
+              DigestRecord(
+                scope: e.scope,
+                body: e.body,
+                status: e.status,
+                itemIds: e.itemIds,
+                provider: e.provider,
+                createdAt: made.toUtc().toIso8601String(),
+              ),
+          ],
         );
       }
 
@@ -155,20 +171,22 @@ void main() {
               .onPressed !=
           null;
 
-      testWidgets('falls back to the newest earlier day with a note', (
+      testWidgets('falls back to the newest earlier day as its morning edition', (
         tester,
       ) async {
         await pumpApp(tester, setup: (h) => addDays(h, [1, 3]));
         expect(find.text(dayText(1)), findsOneWidget);
-        expect(find.text('10月14日(水)'), findsOneWidget);
-        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsOneWidget);
+        expect(find.text('10月15日 朝刊'), findsOneWidget);
+        expect(find.text('10月14日の記事'), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
         expect(find.text('この期間のダイジェストはまだありません'), findsNothing);
       });
 
-      testWidgets('no note when today exists', (tester) async {
+      testWidgets('today\'s evening edition comes first', (tester) async {
         await pumpApp(tester, setup: (h) => addDays(h, [0, 1]));
         expect(find.text(dayText(0)), findsOneWidget);
-        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
+        expect(find.text('10月15日 夕刊'), findsOneWidget);
+        expect(find.text('10月15日 9時までの記事'), findsOneWidget);
       });
 
       testWidgets('previous and next skip gaps and disable at the ends', (
@@ -201,14 +219,13 @@ void main() {
         expect(find.text(dayText(1)), findsOneWidget);
       });
 
-      testWidgets('the title names the shown day, not today', (tester) async {
+      testWidgets('each edition is named after its issue day', (tester) async {
         await pumpApp(tester, setup: (h) => addDays(h, [1, 4]));
-        expect(find.text('昨日のダイジェスト'), findsOneWidget);
-        expect(find.text('今日のダイジェスト'), findsNothing);
+        expect(find.text('10月15日 朝刊'), findsOneWidget);
         await tester.tap(find.byTooltip('前へ'));
         await tester.pumpAndSettle();
-        expect(find.text('10月11日のダイジェスト'), findsOneWidget);
-        expect(find.text('10月11日(日)'), findsOneWidget);
+        expect(find.text('10月12日 朝刊'), findsOneWidget);
+        expect(find.text('10月11日の記事'), findsOneWidget);
       });
 
       testWidgets('the title names past weeks and months', (tester) async {
@@ -250,27 +267,54 @@ void main() {
         expect(find.text('2025年12月のダイジェスト'), findsOneWidget);
       });
 
-      testWidgets('the note shows whenever today has no digest yet', (
+      testWidgets('an empty day tab keeps the plain heading and has no note', (
         tester,
       ) async {
         await pumpApp(tester);
-        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsOneWidget);
+        expect(find.text('今日のダイジェスト'), findsOneWidget);
+        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
       });
 
-      testWidgets('no note on a past day when today exists', (tester) async {
+      testWidgets('yesterday after today\'s evening edition is its morning edition', (
+        tester,
+      ) async {
         await pumpApp(tester, setup: (h) => addDays(h, [0, 1]));
         await tester.tap(find.byTooltip('前へ'));
         await tester.pumpAndSettle();
         expect(find.text(dayText(1)), findsOneWidget);
-        expect(find.text('今日の分は明日の朝 7 時ごろにできます'), findsNothing);
+        expect(find.text('10月15日 朝刊'), findsOneWidget);
+        expect(find.text('10月14日の記事'), findsOneWidget);
       });
 
       testWidgets('the title stays on one line on a phone', (tester) async {
         await pumpApp(tester, setup: (h) => addDays(h, [0]));
-        final title = find.text('今日のダイジェスト');
+        final title = find.text('10月15日 夕刊');
         expect(title, findsOneWidget);
         // One line is 40 logical pixels; two would be 80.
         expect(tester.getSize(title).height, lessThan(60));
+      });
+
+      testWidgets('a sync that brings today\'s evening edition shows it', (
+        tester,
+      ) async {
+        final h = await pumpApp(tester, setup: (h) => addDays(h, [1]));
+        expect(find.text('10月15日 朝刊'), findsOneWidget);
+        addDays(h, [0]);
+        await h.controller.sync();
+        await tester.pumpAndSettle();
+        expect(find.text('10月15日 夕刊'), findsOneWidget);
+        expect(find.text(dayText(0)), findsOneWidget);
+      });
+
+      testWidgets('a stepped selection stays after a sync', (tester) async {
+        final h = await pumpApp(tester, setup: (h) => addDays(h, [1, 3]));
+        await tester.tap(find.byTooltip('前へ'));
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(3)), findsOneWidget);
+        addDays(h, [0]);
+        await h.controller.sync();
+        await tester.pumpAndSettle();
+        expect(find.text(dayText(3)), findsOneWidget);
       });
     });
 

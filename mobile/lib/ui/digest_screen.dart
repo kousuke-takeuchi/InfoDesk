@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/controller.dart';
 import '../app/dates.dart';
 import '../app/digest_text.dart';
+import '../app/editions.dart';
 import '../app/theme.dart';
 import '../data/local_store.dart';
 import '../sync/format.dart';
@@ -89,6 +90,10 @@ class _DigestScreenState extends State<DigestScreen> {
   /// The start (YYYY-MM-DD) of the displayed digest; null until first load.
   String? _selected;
 
+  /// True once the reader stepped with the arrows. Until then the tab
+  /// follows the newest edition, so a sync that brings one shows it.
+  bool _pinned = false;
+
   /// Starts that have a digest for the period, up to today's start, oldest
   /// first.
   List<String> _starts = const [];
@@ -143,7 +148,8 @@ class _DigestScreenState extends State<DigestScreen> {
       for (final s in all)
         if (s.compareTo(today) <= 0) s,
     ];
-    final start = _pick(resetSelection ? null : _selected, starts);
+    final keep = resetSelection || !_pinned ? null : _selected;
+    final start = _pick(keep, starts);
     final digest = await c.store.digests(_period.id, start);
     final meta = await c.store.meta();
     final ids = <int>{
@@ -170,6 +176,7 @@ class _DigestScreenState extends State<DigestScreen> {
     if (i < 0 || j < 0 || j >= _starts.length) return;
     setState(() {
       _selected = _starts[j];
+      _pinned = true;
       _scope = 'all';
     });
     _reload();
@@ -211,18 +218,20 @@ class _DigestScreenState extends State<DigestScreen> {
   @override
   Widget build(BuildContext context) {
     final shownStart = _selected ?? _todayStart;
-    final heading = periodHeading(
-      _period,
-      DateTime.parse(shownStart),
-      now: c.now(),
-    );
+    final digest = _digest;
+    // On the day tab a stored digest reads as an edition: 「11月2日 夕刊」.
+    final edition =
+        _period == DigestPeriod.day &&
+            digest != null &&
+            digest.periodStart == shownStart
+        ? editionOf(shownStart, digest.entries)
+        : null;
+    final heading = edition != null
+        ? editionHeading(edition, now: c.now())
+        : periodHeading(_period, DateTime.parse(shownStart), now: c.now());
     final idx = _starts.indexOf(shownStart);
     final canPrev = idx > 0;
     final canNext = idx >= 0 && idx < _starts.length - 1;
-    final showTodayNote =
-        _loaded &&
-        _period == DigestPeriod.day &&
-        !_starts.contains(_todayStart);
     final entries = _digest?.entries ?? const <DigestRecord>[];
     final stats = _Stats.parse(_digest?.stats);
     final shown = [
@@ -298,14 +307,6 @@ class _DigestScreenState extends State<DigestScreen> {
                 ),
               ],
             ),
-            if (showTodayNote)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  '今日の分は明日の朝 7 時ごろにできます',
-                  style: TextStyle(color: inkSecondary, fontSize: 13),
-                ),
-              ),
             const SizedBox(height: 14),
             Segmented<DigestPeriod>(
               options: [for (final p in DigestPeriod.values) (p, p.label)],
@@ -315,6 +316,7 @@ class _DigestScreenState extends State<DigestScreen> {
                   _period = p;
                   _scope = 'all';
                   _selected = null;
+                  _pinned = false;
                 });
                 _reload(resetSelection: true);
               },
