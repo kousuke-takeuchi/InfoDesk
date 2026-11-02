@@ -225,9 +225,9 @@ export function DigestView({ selection, topics, status, view, onSwitchView, acti
   const step = (delta: number) => {
     const next = walk[index + delta];
     if (index < 0 || next === undefined) return;
-    // 最新の版に戻ったら、また新しい版に追従する。
-    const newest = index + delta === walk.length - 1 && pickStart(stored ?? [], current, null) === next;
-    setPinned(newest ? null : { period, start: next });
+    // 最新の版 (矢印なしで開く開始) に戻ったら、また新しい版に追従する (iPhone と同じ)。
+    // 今日に要約がまだないときの最新は前の日の版。要約のない今日へ移ったときは今日に留まる。
+    setPinned(pickStart(stored ?? [], current, null) === next ? null : { period, start: next });
   };
   // 今日のタブでは、保存済みの日次要約を版として見せる (「11月2日 夕刊」)。
   const edition = period === "day" && date !== null && views !== null ? editionOf(date, views.map((v) => v.digest)) : null;

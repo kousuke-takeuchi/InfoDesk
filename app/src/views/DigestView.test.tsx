@@ -630,6 +630,34 @@ describe("DigestView editions", () => {
     expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
   });
 
+  it("resumes following on the newest earlier edition when today has none yet", async () => {
+    // 朝 8 時: 今日の要約はまだない。前へ戻ってから昨日の版 (最新) に戻ると、夕刊ができたときにそちらへ移る (iPhone と同じ)。
+    let stored = ["2026-10-04", "2026-10-05"];
+    setupIpc({ list_digest_starts: () => stored, get_digests: (a) => editionViews(a.date), get_item: () => null });
+    renderAll();
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "前へ" }));
+    expect(await screen.findByRole("heading", { name: "10月5日 朝刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "次へ" }));
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    stored = ["2026-10-04", "2026-10-05", "2026-10-06"];
+    await emitEvent(EVENTS.digests);
+    expect(await screen.findByRole("heading", { name: "10月6日 夕刊" })).toBeInTheDocument();
+  });
+
+  it("stays on today once the reader steps to it before it has a digest", async () => {
+    let stored = ["2026-10-05"];
+    setupIpc({ list_digest_starts: () => stored, get_digests: (a) => a.date === "2026-10-05" ? editionViews(a.date) : [{ scope: { category: "github" }, label: "GitHub", digest: null, item_count: 3 }], get_item: () => null });
+    renderAll();
+    expect(await screen.findByRole("heading", { name: "10月6日 朝刊" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "次へ" }));
+    expect(await screen.findByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
+    stored = ["2026-10-05"];
+    await emitEvent(EVENTS.digests);
+    await settle();
+    expect(screen.getByRole("heading", { name: "今日のダイジェスト" })).toBeInTheDocument();
+  });
+
   it("reports a failure to list starts and still shows today", async () => {
     setupIpc({ list_digest_starts: () => { throw { message: "db locked" }; }, get_digests: () => fresh(views), get_item: () => null });
     renderAll();
