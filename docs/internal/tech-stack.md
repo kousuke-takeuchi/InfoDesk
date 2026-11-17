@@ -56,7 +56,7 @@
 | @testing-library/react / user-event / jest-dom | ^16.3.3 / ^14.6.7 / ^7.0.1 | |
 | @tauri-apps/api / plugin-opener | ^2 | `invoke` とイベント |
 | @tauri-apps/cli | ^2 | `npm run tauri` |
-| lucide-react | ^1.52.0 | アイコン(`design.pen` のlucide名と対応) |
+| lucide-react | ^1.52.0 | アイコン(デザインのlucide名と対応) |
 | @assistant-ui/react | 0.15.25 | チャットUI部品(ストリーミング、Markdown、スレッド) |
 | @assistant-ui/react-ai-sdk | 1.4.16 | AI SDKとのアダプター |
 | @assistant-ui/react-markdown | 0.14.19 | 回答のMarkdown描画 |

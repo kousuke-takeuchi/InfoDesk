@@ -108,7 +108,7 @@ CLI             →  infodesk-core
 
 ## コントリビュート
 
-このプロジェクトは、仕様先行、デザイン先行 (`design.pen`)、TDD で進めます。まず [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を読んでください。[行動規範](CODE_OF_CONDUCT.md)はすべてのプロジェクトの場に適用され、脆弱性の報告方法は [SECURITY.md](SECURITY.md) にあります。ドキュメントは英語が正本で、日本語版は `*.ja.md` として用意しています。
+このプロジェクトは、仕様先行、デザイン先行 (`design/opendesign/`)、TDD で進めます。まず [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を読んでください。[行動規範](CODE_OF_CONDUCT.md)はすべてのプロジェクトの場に適用され、脆弱性の報告方法は [SECURITY.md](SECURITY.md) にあります。ドキュメントは英語が正本で、日本語版は `*.ja.md` として用意しています。
 
 ## ライセンス
 

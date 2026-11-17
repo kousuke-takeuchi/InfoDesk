@@ -7,7 +7,7 @@ InfoDeskを開発するコントリビュータ向けの内部ドキュメント
 | [architecture.md](architecture.md) | システム設計書: 構成図・ファイルマップ・データフロー・ジョブとスケジューラー・チャットのサイドカー・**変更レシピ** |
 | [data-model.md](data-model.md) | データ設計書: SQLiteスキーマ(`user_version` 1〜5)・テーブルと主な列・設定キー・FTS5 |
 | [tech-stack.md](tech-stack.md) | 技術スタック: `Cargo.toml` / `package.json` / `Cargo.lock` から読んだバージョンと選定理由 |
-| [design-system.md](design-system.md) | デザインシステム: `theme.css` のトークン・コンポーネント規約・`design.pen` と `design/exports/` |
+| [design-system.md](design-system.md) | デザインシステム: `theme.css` のトークン・コンポーネント規約・`design/opendesign/` と `design/exports/` |
 | [feature-inventory.md](feature-inventory.md) | 機能インベントリ: 設計書の節ごとに実装済み/未実装を棚卸し |
 | [testing.md](testing.md) | テスト: 各スイートの実行方法・フィクスチャ・モックバックエンドによるスクリーンショット |
 | [../superpowers/specs/](../superpowers/specs/) | 設計書(マスタースペック): 設計判断の記録。節番号は feature-inventory.md が参照する |

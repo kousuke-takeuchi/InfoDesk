@@ -108,7 +108,7 @@ The `infodesk-core` library does the work, the `infodesk` CLI and the Tauri app 
 
 ## Contributing
 
-The project follows a spec-first, design-first (`design.pen`), TDD workflow. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The [code of conduct](CODE_OF_CONDUCT.md) applies to every project space, and [SECURITY.md](SECURITY.md) says how to report a vulnerability. English is canonical for documentation; Japanese versions are provided as `*.ja.md`.
+The project follows a spec-first, design-first (`design/opendesign/`), TDD workflow. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The [code of conduct](CODE_OF_CONDUCT.md) applies to every project space, and [SECURITY.md](SECURITY.md) says how to report a vulnerability. English is canonical for documentation; Japanese versions are provided as `*.ja.md`.
 
 ## License
 

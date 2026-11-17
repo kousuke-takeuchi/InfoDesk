@@ -7,7 +7,7 @@ Thanks for your interest. InfoDesk is a local-first desktop reader (Tauri 2 + Re
 ## Ground rules
 
 1. **Spec and plans first.** The master design is `docs/superpowers/specs/2026-10-06-infodesk-design.md`. Plans live in `docs/superpowers/plans/` (date-prefixed). If behavior changes, update the spec first.
-2. **Design before UI.** Screens are designed in Pencil (`design.pen`, with exports in `design/exports/`) before they are implemented. Reuse existing tokens and components, and add new ones to the design first. Do not read `design.pen` as text; it is only accessible through the Pencil tools.
+2. **Design before UI.** Screens are designed in OpenDesign (`design/opendesign/`, one HTML file per screen plus `tokens.css`) before they are implemented. Reuse existing tokens and components, and add new ones to the design first. `design.pen` is the archived Pencil file the screens were migrated from; do not edit it.
 3. **TDD.** Write a failing test, make it pass, then refactor. Behavior without a test does not exist.
 4. **Unit tests never touch the network.** Use fixtures (`crates/core/tests/fixtures/`), a mock HTTP server or injected clients. Real responses for fixtures are refreshed on purpose with `cargo run -p infodesk-core --example fetch_fixtures`.
 5. **The UI is Japanese and there is no i18n.** Japanese UI strings are written directly in the React components. Do not add a message-catalog layer as part of an unrelated change.
@@ -44,7 +44,7 @@ Besides Rust and Node, building the app needs **Go** on your PATH, because the i
 | Tauri shell: commands, reader window, jobs, scheduler | `app/src-tauri` |
 | React UI | `app/src` |
 | Chat agent (Node sidecar) | `agent/` |
-| Design and exports | `design.pen`, `design/exports/` |
+| Design and exports | `design/opendesign/`, `design/exports/` |
 | Spec and plans | `docs/superpowers/` |
 
 ## Reporting problems
