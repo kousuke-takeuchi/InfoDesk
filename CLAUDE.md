@@ -8,4 +8,4 @@
 - 片方を変えたら、もう片方へ同期してからコミットする。OpenDesign のフォルダは `~/Library/Application Support/Open Design/namespaces/release-stable/data/projects/infodesk/`(OpenDesign の `get_project` が返す `resolvedDir` で確かめる)。
   - OpenDesign からリポジトリへ: `rsync -a "<resolvedDir>/" design/opendesign/`
   - リポジトリから OpenDesign へ: `rsync -a design/opendesign/ "<resolvedDir>/"`
-- 詳しくは ��
+- 詳しくは `docs/internal/design-system.md`。
