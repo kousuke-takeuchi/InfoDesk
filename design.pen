@@ -1,5 +1,5 @@
 {
-  "version": "2.17",
+  "version": "2.21",
   "children": [
     {
       "type": "frame",
@@ -33220,7 +33220,7 @@
                             "type": "image",
                             "enabled": true,
                             "url": "https://images.unsplash.com/photo-1583088580067-16d1109aeacb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyMzV8&ixlib=rb-4.1.0&q=80&w=1080",
-                            "mode": "fill"
+                            "mode": "cover"
                           }
                         },
                         {
@@ -33287,7 +33287,7 @@
                             "type": "image",
                             "enabled": true,
                             "url": "https://images.unsplash.com/photo-1543333995-a78aea2eee50?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyMzV8&ixlib=rb-4.1.0&q=80&w=1080",
-                            "mode": "fill"
+                            "mode": "cover"
                           }
                         },
                         {
@@ -34013,7 +34013,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "https://images.unsplash.com/photo-1581159186721-b68b78da4ec9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyNzN8&ixlib=rb-4.1.0&q=80&w=1080",
-                        "mode": "fill"
+                        "mode": "cover"
                       },
                       "cornerRadius": 8
                     }
@@ -34148,7 +34148,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "https://images.unsplash.com/photo-1679001976061-43be2417a90e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyNzN8&ixlib=rb-4.1.0&q=80&w=1080",
-                        "mode": "fill"
+                        "mode": "cover"
                       },
                       "cornerRadius": 8
                     }
@@ -34377,7 +34377,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "https://images.unsplash.com/photo-1583911860367-8b9fa77c6f4c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyNzR8&ixlib=rb-4.1.0&q=80&w=1080",
-                        "mode": "fill"
+                        "mode": "cover"
                       },
                       "cornerRadius": 8
                     }
@@ -34502,7 +34502,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "https://images.unsplash.com/photo-1691935443554-03e6abf3a173?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyNzV8&ixlib=rb-4.1.0&q=80&w=1080",
-                        "mode": "fill"
+                        "mode": "cover"
                       },
                       "cornerRadius": 8
                     }
@@ -34882,7 +34882,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "https://images.unsplash.com/photo-1734607402840-902613545974?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTE4NTYyOTl8&ixlib=rb-4.1.0&q=80&w=1080",
-                "mode": "fill"
+                "mode": "cover"
               },
               "cornerRadius": 14
             },
@@ -38627,6 +38627,2074 @@
                       "fontWeight": "600"
                     }
                   ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "UeCwe",
+      "x": 22450,
+      "y": 0,
+      "name": "アプリアイコン案 (D〜F: AI要約 + 新聞)",
+      "width": 1200,
+      "fill": "#FFFFFF",
+      "layout": "vertical",
+      "gap": 40,
+      "padding": 64,
+      "children": [
+        {
+          "type": "text",
+          "id": "SmUqj",
+          "name": "Title",
+          "fill": "#1D1D1F",
+          "content": "アプリアイコン案",
+          "fontFamily": "Inter",
+          "fontSize": 32,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "DlZ5W",
+          "name": "Proposals",
+          "width": "fill_container",
+          "gap": 48,
+          "children": [
+            {
+              "type": "frame",
+              "id": "dfdJJ",
+              "name": "Proposal A",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "gyS1A",
+                  "name": "Proposal A Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#2F86FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#0A5BD6",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "sp9WC",
+                      "x": 45,
+                      "y": 45,
+                      "name": "Newspaper Mark",
+                      "clip": true,
+                      "width": 210,
+                      "height": 210,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "sakyj",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "#ffffff52",
+                          "width": 210,
+                          "height": 210
+                        },
+                        {
+                          "type": "path",
+                          "id": "m2yFR",
+                          "x": 51.8963,
+                          "y": 55.7982,
+                          "geometry": "M94.89374 11.53304c-2.31 0-3.885 1.81126-3.885 4.095l0-10.99874c0-2.9925-2.70375-5.0925-5.59124-4.54125l-81.87375 16.85249c-2.1 0.39375-3.54375 2.1525-3.54375 4.27876l0 67.54124c0 5.19749 3.91125 9.10875 8.9775 9.45l78.19874 5.27626c10.36876 0.70876 18.795-7.6125 18.795-18.06001l0-64.07624c0-5.46-5.17125-9.81751-11.0775-9.81751z m0.07876 83.47502c0 1.15498-0.8925 2.12624-2.04751 2.12623-1.12874 0-1.91625-0.97125-1.91625-2.12623l0-79.38002c0-2.28375 1.86375-4.095 3.885-4.095l0.07876 0 0 83.47502z",
+                          "fill": "#fffffff5",
+                          "width": 105.9712,
+                          "height": 103.5289
+                        },
+                        {
+                          "type": "path",
+                          "id": "mZmCI",
+                          "x": 63.4725,
+                          "y": 115.0781,
+                          "geometry": "M30.21375 27.74818l-27.8775 0c-1.365 0-2.33625-1.12875-2.33625-2.415l0-21.91875c0-1.33875 0.97125-2.415 2.28375-2.49375l27.87749-0.91875c1.39126-0.05251 2.70376 0.97124 2.70376 2.38875l0 22.9425c0 1.28624-1.26 2.41499-2.65125 2.415z",
+                          "fill": "#036BFD",
+                          "width": 32.865,
+                          "height": 27.7482
+                        },
+                        {
+                          "type": "path",
+                          "id": "lXv5Z",
+                          "x": 63.444,
+                          "y": 78.8419,
+                          "geometry": "M2.10226 11.24809c-1.2075 0-2.0475-0.81375-2.1-2.15249-0.0525-1.33875 0.81375-2.41499 2.0475-2.54625l64.28625-6.53625c1.3125-0.13126 2.54625 0.73499 2.70375 2.1 0.1575 1.39125-0.84 2.625-2.17875 2.78249l-64.54875 6.32626c-0.07875 0.02625-0.13125 0.02625-0.21 0.02624z",
+                          "fill": "#036BFD",
+                          "width": 69.0561,
+                          "height": 11.2481
+                        },
+                        {
+                          "type": "path",
+                          "id": "v2tC6e",
+                          "x": 63.4441,
+                          "y": 90.4752,
+                          "geometry": "M2.10214 9.64233c-1.2075 0-2.0475-0.91875-2.1-2.23124-0.0525-1.33875 0.86625-2.31001 2.1-2.41501l60.08625-4.9875c1.33874-0.105 2.46749 0.76125 2.5725 2.15251 0.105 1.365-0.86626 2.625-2.205 2.73l-60.27 4.75124c-0.05251 0-0.105 0-0.18375 0z",
+                          "fill": "#036BFD",
+                          "width": 64.7687,
+                          "height": 9.6423
+                        },
+                        {
+                          "type": "path",
+                          "id": "MBYbt",
+                          "x": 63.4441,
+                          "y": 102.2915,
+                          "geometry": "M2.10214 7.64346c-1.23375 0-2.0475-0.8925-2.1-2.17876-0.0525-1.33875 0.86625-2.3625 2.1-2.44125l48.2475-3.01875c1.28626-0.07875 2.415 0.84 2.49375 2.205 0.07876 1.36501-0.8925 2.625-2.205 2.73l-48.405 2.70376c-0.0525 0-0.07875 0-0.13125 0z",
+                          "fill": "#036BFD",
+                          "width": 52.8479,
+                          "height": 7.6435
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "r1tQN",
+                  "name": "Proposal A Label",
+                  "fill": "#1D1D1F",
+                  "content": "A. 折りたたんだ新聞",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "qzBud",
+                  "name": "Proposal A Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "朝刊・夕刊の「新聞」をそのまま。白地に青の紙面。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Z3i3mm",
+              "name": "Proposal B",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "LobkC",
+                  "name": "Proposal B Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#0E1B33",
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "T5EF0K",
+                      "x": 55,
+                      "y": 55,
+                      "name": "Sun Moon Mark",
+                      "clip": true,
+                      "width": 190,
+                      "height": 190,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "KOI1m",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "#ffffff99",
+                          "width": 190,
+                          "height": 190
+                        },
+                        {
+                          "type": "path",
+                          "id": "Yh0ia",
+                          "x": 24.6525,
+                          "y": 22.3013,
+                          "geometry": "M70.3475 0c-38.40376 0-70.3475 31.70625-70.3475 71.41625 0 39.18749 31.61125 71.345 70.3475 71.345l0-142.76125z",
+                          "fill": "#FDA813",
+                          "width": 70.3475,
+                          "height": 142.7612
+                        },
+                        {
+                          "type": "path",
+                          "id": "E9BEK",
+                          "x": 95,
+                          "y": 22.3013,
+                          "geometry": "M0 0l0 142.76125 2.28 0c37.38251 0 68.18625-32.7275 68.18625-71.55875 0-39.4725-31.16-71.2025-70.46625-71.2025z",
+                          "fill": "#8FBAFE",
+                          "width": 70.4662,
+                          "height": 142.7612
+                        },
+                        {
+                          "type": "ellipse",
+                          "id": "QWyVR",
+                          "x": 48.3721,
+                          "y": 74.5539,
+                          "fill": "#ffffff",
+                          "width": 35.6222,
+                          "height": 35.6222
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.8764,
+                          "id": "Ap3vp",
+                          "x": 63.5847,
+                          "y": 53.3169,
+                          "fill": "#ffffff",
+                          "width": 5.7528,
+                          "height": 16.4423
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.8764,
+                          "id": "YSVeE",
+                          "x": 63.5847,
+                          "y": 115.0531,
+                          "fill": "#ffffff",
+                          "width": 5.7528,
+                          "height": 16.2408
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.7875,
+                          "id": "UHrCl",
+                          "x": 30.0632,
+                          "y": 94.9489,
+                          "rotation": 90,
+                          "fill": "#ffffff",
+                          "width": 5.575,
+                          "height": 14.6353
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.7223,
+                          "id": "H3JWY",
+                          "x": 40.4306,
+                          "y": 68.1212,
+                          "rotation": 45,
+                          "fill": "#ffffff",
+                          "width": 5.4446,
+                          "height": 12.9234
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.6828,
+                          "id": "hj6Ay",
+                          "x": 79.0569,
+                          "y": 110.5071,
+                          "rotation": 45,
+                          "fill": "#ffffff",
+                          "width": 5.3657,
+                          "height": 12.9234
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.7223,
+                          "id": "j4SjWW",
+                          "x": 49.6361,
+                          "y": 106.5226,
+                          "rotation": -45,
+                          "fill": "#ffffff",
+                          "width": 5.4446,
+                          "height": 12.9234
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 2.6828,
+                          "id": "xTwKO",
+                          "x": 88.151,
+                          "y": 64.2224,
+                          "rotation": -45,
+                          "fill": "#ffffff",
+                          "width": 5.3657,
+                          "height": 12.9234
+                        },
+                        {
+                          "type": "path",
+                          "id": "R26yT",
+                          "x": 100.9263,
+                          "y": 59.7596,
+                          "geometry": "M36.22995 0.85038c0.4275-0.285 0.19-0.59375-0.40375-0.7125-13.13375-1.68625-34.84125 12.23125-35.815 34.2475-0.59375 24.5575 22.53876 38.09501 40.89751 32.32375 1.28249-0.475 1.44875-1.045 0.78373-1.425-13.84624-4.60751-23.37-16.98125-23.36999-31.9675 0-13.58499 7.74251-25.57875 17.9075-32.46625z",
+                          "fill": "#ffffff",
+                          "width": 42.0749,
+                          "height": 68.032
+                        },
+                        {
+                          "type": "path",
+                          "id": "StuYO",
+                          "x": 138.6521,
+                          "y": 68.2397,
+                          "geometry": "M8.00412 0.23157c0.1425-0.30875 0.47501-0.30875 0.61749 0l2.4225 5.69999 5.27251 2.44625c0.285 0.14251 0.285 0.47501 0 0.59375l-5.27251 2.54126-2.375 5.96125c-0.14249 0.35625-0.52249 0.35625-0.66499 0l-2.1375-5.91376-5.65249-2.58875c-0.30876-0.11874-0.26126-0.47499 0-0.59375l5.65249-2.49375 2.1375-5.65249z",
+                          "fill": "#ffffff",
+                          "width": 16.5304,
+                          "height": 17.7413
+                        },
+                        {
+                          "type": "path",
+                          "id": "Vyduu",
+                          "x": 139.3976,
+                          "y": 99.1859,
+                          "geometry": "M7.3062 0.23157c0.11874-0.30875 0.45125-0.30875 0.56999 0l2.28001 5.41499 4.79749 2.39876c0.285 0.11874 0.26126 0.45125 0 0.56999l-4.86874 2.25626-2.185 5.48625c-0.1425 0.3325-0.47501 0.3325-0.59375 0l-2.01875-5.43875-5.08251-2.30376c-0.28499-0.11874-0.26125-0.45125 0-0.56999l5.035-2.39876 2.06626-5.41499z",
+                          "fill": "#ffffff",
+                          "width": 15.1586,
+                          "height": 16.6072
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Z04asn",
+                  "name": "Proposal B Label",
+                  "fill": "#1D1D1F",
+                  "content": "B. 朝と夕",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "vg1fc",
+                  "name": "Proposal B Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "太陽と月を半分ずつ。1 日 2 回の版を表す。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "J0vNn",
+              "name": "Proposal C",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "afpOp",
+                  "name": "Proposal C Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#0A6CFF",
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 17,
+                      "id": "gGcIa",
+                      "x": 52,
+                      "y": 70,
+                      "name": "Line",
+                      "fill": "#FFFFFF",
+                      "width": 196,
+                      "height": 34
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 11,
+                      "id": "SU8xs",
+                      "x": 52,
+                      "y": 134,
+                      "name": "Line",
+                      "fill": "#FFFFFFCC",
+                      "width": 150,
+                      "height": 22
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 11,
+                      "id": "G626rF",
+                      "x": 52,
+                      "y": 176,
+                      "name": "Line",
+                      "fill": "#FFFFFFCC",
+                      "width": 196,
+                      "height": 22
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 11,
+                      "id": "GfAk4",
+                      "x": 52,
+                      "y": 218,
+                      "name": "Line",
+                      "fill": "#FFFFFFCC",
+                      "width": 120,
+                      "height": 22
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "qdgL1",
+                      "x": 218,
+                      "y": 214,
+                      "name": "Dot",
+                      "fill": "#FFC22E",
+                      "width": 30,
+                      "height": 30
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "vn4hZ",
+                  "name": "Proposal C Label",
+                  "fill": "#1D1D1F",
+                  "content": "C. 見出しの束",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "gTDe7",
+                  "name": "Proposal C Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "ダイジェストの見出しを線で。いちばん簡素で小さくても読める。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "sh08K",
+          "name": "Proposals AI News",
+          "width": "fill_container",
+          "gap": 48,
+          "children": [
+            {
+              "type": "frame",
+              "id": "xw6HV",
+              "name": "Proposal D",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "s8TxH",
+                  "name": "Proposal D Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#2F86FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#0A5BD6",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "H9zSO",
+                      "x": 62,
+                      "y": 58,
+                      "name": "Page",
+                      "width": 176,
+                      "height": 196,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 22,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 9,
+                          "id": "A1D4HV",
+                          "x": 26,
+                          "y": 30,
+                          "name": "Line",
+                          "fill": "#0A6CFF",
+                          "width": 112,
+                          "height": 18
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "OBKlk",
+                          "x": 26,
+                          "y": 66,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 124,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "uAqRw",
+                          "x": 26,
+                          "y": 88,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 124,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "I3CaL",
+                          "x": 26,
+                          "y": 110,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 90,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "zMcms",
+                          "x": 26,
+                          "y": 140,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 124,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "VAr4T",
+                          "x": 26,
+                          "y": 162,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 70,
+                          "height": 10
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon",
+                      "id": "FKeET",
+                      "x": 190,
+                      "y": 22,
+                      "name": "Sparkle",
+                      "width": 84,
+                      "height": 84,
+                      "icon": "sparkles",
+                      "library": "lucide",
+                      "fill": "#FFC22E"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "nR2ca",
+                  "name": "Proposal D Label",
+                  "fill": "#1D1D1F",
+                  "content": "D. 紙面 + きらめき",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "eoTnI",
+                  "name": "Proposal D Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "白い紙面に見出しの線、右上に AI のきらめき。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ub51h",
+              "name": "Proposal E",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "k6q6e",
+                  "name": "Proposal E Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 66,
+                  "stroke": "#E0E0E3",
+                  "strokeWidth": 2,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 15,
+                      "id": "Y1lDb",
+                      "x": 54,
+                      "y": 92,
+                      "name": "Line",
+                      "fill": "#0A6CFF",
+                      "width": 150,
+                      "height": 30
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 9,
+                      "id": "K2oWo",
+                      "x": 54,
+                      "y": 146,
+                      "name": "Line",
+                      "fill": "#0A6CFF66",
+                      "width": 192,
+                      "height": 18
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 9,
+                      "id": "fCZXK",
+                      "x": 54,
+                      "y": 182,
+                      "name": "Line",
+                      "fill": "#0A6CFF66",
+                      "width": 170,
+                      "height": 18
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 9,
+                      "id": "qyHN7",
+                      "x": 54,
+                      "y": 218,
+                      "name": "Line",
+                      "fill": "#0A6CFF66",
+                      "width": 120,
+                      "height": 18
+                    },
+                    {
+                      "type": "icon",
+                      "id": "V0afP",
+                      "x": 214,
+                      "y": 58,
+                      "name": "Sparkle",
+                      "width": 64,
+                      "height": 64,
+                      "icon": "sparkle",
+                      "library": "lucide",
+                      "fill": "#FFB020"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "YbfN5",
+                  "name": "Proposal E Label",
+                  "fill": "#1D1D1F",
+                  "content": "E. 見出し + きらめき",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "TYG0I",
+                  "name": "Proposal E Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "白地に青の見出し線と、黄色のきらめき 1 つ。いちばん簡素。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PUWOn",
+              "name": "Proposal F",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "fgXc7",
+                  "name": "Proposal F Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#0E1B33",
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "PBqbU",
+                      "x": 50,
+                      "y": 50,
+                      "name": "Newspaper AI Mark",
+                      "clip": true,
+                      "width": 200,
+                      "height": 200,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iVV7C",
+                          "x": 0,
+                          "y": 0,
+                          "opacity": 0.07,
+                          "fill": "#000000",
+                          "width": 200,
+                          "height": 200
+                        },
+                        {
+                          "type": "path",
+                          "id": "W6X49R",
+                          "x": 39.2023,
+                          "y": 80.1,
+                          "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                          "fill": "#ffffff",
+                          "width": 35.2227,
+                          "height": 76.7968
+                        },
+                        {
+                          "type": "path",
+                          "id": "mctr2",
+                          "x": 57.5646,
+                          "y": 57.457,
+                          "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                          "fill": "#ffffff",
+                          "width": 102.1211,
+                          "height": 99.3435
+                        },
+                        {
+                          "type": "path",
+                          "id": "mVS3E",
+                          "x": 49.326,
+                          "y": 91.525,
+                          "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                          "fill": "#D3DAE8",
+                          "width": 21.5312,
+                          "height": 57.0084
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 4.6023,
+                          "id": "dlocH",
+                          "x": 80.0635,
+                          "y": 85.9815,
+                          "rotation": 6.738619999999999,
+                          "fill": "#9FC8FF",
+                          "width": 60.311,
+                          "height": 9.2046
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 4.5455,
+                          "id": "icKg7",
+                          "x": 81.1962,
+                          "y": 102.046,
+                          "rotation": 6.565259999999999,
+                          "fill": "#9FC8FF",
+                          "width": 60.9545,
+                          "height": 9.0909
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 4.4693,
+                          "id": "l8Owe",
+                          "x": 82.5365,
+                          "y": 118.037,
+                          "rotation": 6.565259999999999,
+                          "fill": "#9FC8FF",
+                          "width": 43.8678,
+                          "height": 8.9386
+                        },
+                        {
+                          "type": "path",
+                          "id": "K8MAB",
+                          "x": 132.7406,
+                          "y": 44.8375,
+                          "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                          "fill": "#FFC634",
+                          "width": 30.1252,
+                          "height": 32.1625
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "BmLJQ",
+                  "name": "Proposal F Label",
+                  "fill": "#1D1D1F",
+                  "content": "F. 新聞のマーク",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "UcS3e",
+                  "name": "Proposal F Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "新聞を簡素な線画にし、AI のきらめきを添えた生成案。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "b56agB",
+          "name": "Proposals AI Circuit",
+          "width": "fill_container",
+          "gap": 48,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XRZzI",
+              "name": "Proposal G",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "lGrNg",
+                  "name": "Proposal G Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#2F86FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#0A5BD6",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "vy77Z",
+                      "x": 50,
+                      "y": 48,
+                      "name": "Page",
+                      "width": 176,
+                      "height": 196,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 22,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 9,
+                          "id": "XjwHE",
+                          "x": 26,
+                          "y": 30,
+                          "name": "Line",
+                          "fill": "#0A6CFF",
+                          "width": 112,
+                          "height": 18
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "YjcBt",
+                          "x": 26,
+                          "y": 66,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 124,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "UmGnV",
+                          "x": 26,
+                          "y": 88,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 124,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "iJqKB",
+                          "x": 26,
+                          "y": 110,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 90,
+                          "height": 10
+                        },
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 5,
+                          "id": "Ow8Eq",
+                          "x": 26,
+                          "y": 140,
+                          "name": "Line",
+                          "fill": "#B8C7DD",
+                          "width": 70,
+                          "height": 10
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Unvr2",
+                      "x": 168,
+                      "y": 166,
+                      "name": "Badge",
+                      "width": 96,
+                      "height": 96,
+                      "fill": "#FFC22E",
+                      "cornerRadius": 48,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "FQoz4",
+                          "name": "Brain Circuit",
+                          "width": 60,
+                          "height": 60,
+                          "icon": "brain-circuit",
+                          "library": "lucide",
+                          "fill": "#0E1B33"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "hW5Fg",
+                  "name": "Proposal G Label",
+                  "fill": "#1D1D1F",
+                  "content": "G. 紙面 + 回路の頭脳",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "dbTNX",
+                  "name": "Proposal G Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "紙面の右下に、回路の入った頭脳のバッジ。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "TSU3s",
+              "name": "Proposal H",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Bexd5",
+                  "name": "Proposal H Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#0E1B33",
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 11,
+                      "id": "Qdcwx",
+                      "x": 48,
+                      "y": 78,
+                      "name": "Line",
+                      "fill": "#FFFFFF",
+                      "width": 120,
+                      "height": 22
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7,
+                      "id": "CZebf",
+                      "x": 48,
+                      "y": 126,
+                      "name": "Line",
+                      "fill": "#FFFFFF99",
+                      "width": 96,
+                      "height": 14
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7,
+                      "id": "Ou20d",
+                      "x": 48,
+                      "y": 160,
+                      "name": "Line",
+                      "fill": "#FFFFFF99",
+                      "width": 110,
+                      "height": 14
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7,
+                      "id": "x0eivj",
+                      "x": 48,
+                      "y": 194,
+                      "name": "Line",
+                      "fill": "#FFFFFF99",
+                      "width": 80,
+                      "height": 14
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 2,
+                      "id": "cpQbR",
+                      "x": 168,
+                      "y": 87,
+                      "name": "Line",
+                      "fill": "#4DA3FF",
+                      "width": 46,
+                      "height": 4
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 2,
+                      "id": "vo2GL",
+                      "x": 144,
+                      "y": 131,
+                      "name": "Line",
+                      "fill": "#4DA3FF",
+                      "width": 40,
+                      "height": 4
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 2,
+                      "id": "I1Aj6",
+                      "x": 158,
+                      "y": 165,
+                      "name": "Line",
+                      "fill": "#4DA3FF",
+                      "width": 26,
+                      "height": 4
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 2,
+                      "id": "UeNze",
+                      "x": 128,
+                      "y": 199,
+                      "name": "Line",
+                      "fill": "#4DA3FF",
+                      "width": 56,
+                      "height": 4
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 2,
+                      "id": "P2fQuD",
+                      "x": 212,
+                      "y": 87,
+                      "name": "Line",
+                      "fill": "#4DA3FF",
+                      "width": 4,
+                      "height": 116
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "EgI64",
+                      "x": 205,
+                      "y": 80,
+                      "name": "Node",
+                      "fill": "#4DA3FF",
+                      "width": 18,
+                      "height": 18
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "AeoLO",
+                      "x": 180,
+                      "y": 126,
+                      "name": "Node",
+                      "fill": "#4DA3FF",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "KKJU9",
+                      "x": 180,
+                      "y": 160,
+                      "name": "Node",
+                      "fill": "#4DA3FF",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "XXXn2",
+                      "x": 180,
+                      "y": 194,
+                      "name": "Node",
+                      "fill": "#4DA3FF",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "Xy8KC",
+                      "x": 224,
+                      "y": 120,
+                      "name": "Node",
+                      "fill": "#FFC22E",
+                      "width": 44,
+                      "height": 44
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "EQSgE",
+                  "name": "Proposal H Label",
+                  "fill": "#1D1D1F",
+                  "content": "H. 見出しが回路になる",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "W2ZFG",
+                  "name": "Proposal H Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "見出しの線の先がノードでつながり、要約が生まれる様子。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "oOT8q",
+              "name": "Proposal I",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "U9Mqs",
+                  "name": "Proposal I Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#2F86FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#0A5BD6",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "OkBYD",
+                      "x": 40,
+                      "y": 46,
+                      "name": "Newspaper",
+                      "width": 170,
+                      "height": 170,
+                      "icon": "newspaper",
+                      "library": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h50s9",
+                      "x": 170,
+                      "y": 168,
+                      "name": "Chip Badge",
+                      "width": 96,
+                      "height": 96,
+                      "fill": "#0E1B33",
+                      "cornerRadius": 24,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "u1FyxR",
+                          "name": "Cpu",
+                          "width": 62,
+                          "height": 62,
+                          "icon": "cpu",
+                          "library": "lucide",
+                          "fill": "#FFC22E"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "IMTeX",
+                  "name": "Proposal I Label",
+                  "fill": "#1D1D1F",
+                  "content": "I. 新聞 + チップ",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "uDbLF",
+                  "name": "Proposal I Note",
+                  "fill": "#6E6E73",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "新聞のアイコンに、AI のチップを重ねた案。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "C8Lmnw",
+          "name": "Proposal F Large Row",
+          "width": "fill_container",
+          "gap": 48,
+          "children": [
+            {
+              "type": "frame",
+              "id": "AkG77",
+              "name": "Proposal F2",
+              "width": 300,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oUPWa",
+                  "name": "Proposal F2 Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": "#0E1B33",
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "Z7kJ6",
+                      "x": 41.85402500000001,
+                      "y": 114.29999999999998,
+                      "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                      "fill": "#ffffff",
+                      "width": 61.639725000000006,
+                      "height": 134.39440000000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "IxeEe",
+                      "x": 73.98805,
+                      "y": 74.67475,
+                      "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                      "fill": "#ffffff",
+                      "width": 178.711925,
+                      "height": 173.85112500000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "HvhMZ",
+                      "x": 59.570499999999996,
+                      "y": 134.29375000000002,
+                      "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                      "fill": "#D3DAE8",
+                      "width": 37.67959999999999,
+                      "height": 99.7647
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 8.054025,
+                      "id": "EnZ9E",
+                      "x": 113.36112500000002,
+                      "y": 124.592625,
+                      "rotation": 6.738619999999999,
+                      "fill": "#9FC8FF",
+                      "width": 105.54425,
+                      "height": 16.10805
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.954624999999999,
+                      "id": "pGN8r",
+                      "x": 115.34335000000002,
+                      "y": 152.7055,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 106.670375,
+                      "height": 15.909075
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.821274999999999,
+                      "id": "RvV9r",
+                      "x": 117.68887500000001,
+                      "y": 180.68975,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 76.76865000000001,
+                      "height": 15.642549999999998
+                    },
+                    {
+                      "type": "path",
+                      "id": "kCVY7",
+                      "x": 205.54605,
+                      "y": 52.590625,
+                      "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                      "fill": "#FFC634",
+                      "width": 52.7191,
+                      "height": 56.284375000000004
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "jXHps",
+                  "name": "Proposal F2 Label",
+                  "fill": "#1D1D1F",
+                  "content": "F'. 新聞のマーク (大)",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HVdqD",
+              "name": "F'-1 青",
+              "width": 300,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ANob1",
+                  "name": "F'-1 青 Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#4FA3FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#0A6CFF",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "N3eWV",
+                      "x": 41.85402500000001,
+                      "y": 114.29999999999998,
+                      "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                      "fill": "#ffffff",
+                      "width": 61.639725000000006,
+                      "height": 134.39440000000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "O1vHxw",
+                      "x": 73.98805,
+                      "y": 74.67475,
+                      "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                      "fill": "#ffffff",
+                      "width": 178.711925,
+                      "height": 173.85112500000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "WjYoR",
+                      "x": 59.570499999999996,
+                      "y": 134.29375000000002,
+                      "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                      "fill": "#D3DAE8",
+                      "width": 37.67959999999999,
+                      "height": 99.7647
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 8.054025,
+                      "id": "m0HTz",
+                      "x": 113.36112500000002,
+                      "y": 124.592625,
+                      "rotation": 6.738619999999999,
+                      "fill": "#9FC8FF",
+                      "width": 105.54425,
+                      "height": 16.10805
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.954624999999999,
+                      "id": "GPlIx",
+                      "x": 115.34335000000002,
+                      "y": 152.7055,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 106.670375,
+                      "height": 15.909075
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.821274999999999,
+                      "id": "moa5t",
+                      "x": 117.68887500000001,
+                      "y": 180.68975,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 76.76865000000001,
+                      "height": 15.642549999999998
+                    },
+                    {
+                      "type": "path",
+                      "id": "uUJgh",
+                      "x": 205.54605,
+                      "y": 52.590625,
+                      "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                      "fill": "#FFC634",
+                      "width": 52.7191,
+                      "height": 56.284375000000004
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "JxDoR",
+                  "name": "F'-1 青 Label",
+                  "fill": "#1D1D1F",
+                  "content": "F'-1 青",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dx87V",
+              "name": "F'-2 空色",
+              "width": 300,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "G6Ch7",
+                  "name": "F'-2 空色 Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#7FD3FF",
+                        "position": 0
+                      },
+                      {
+                        "color": "#2E9BFF",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "e02nxE",
+                      "x": 41.85402500000001,
+                      "y": 114.29999999999998,
+                      "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                      "fill": "#ffffff",
+                      "width": 61.639725000000006,
+                      "height": 134.39440000000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "h8biu",
+                      "x": 73.98805,
+                      "y": 74.67475,
+                      "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                      "fill": "#ffffff",
+                      "width": 178.711925,
+                      "height": 173.85112500000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "BRaxA",
+                      "x": 59.570499999999996,
+                      "y": 134.29375000000002,
+                      "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                      "fill": "#D3DAE8",
+                      "width": 37.67959999999999,
+                      "height": 99.7647
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 8.054025,
+                      "id": "uHALp",
+                      "x": 113.36112500000002,
+                      "y": 124.592625,
+                      "rotation": 6.738619999999999,
+                      "fill": "#9FC8FF",
+                      "width": 105.54425,
+                      "height": 16.10805
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.954624999999999,
+                      "id": "ufRoE",
+                      "x": 115.34335000000002,
+                      "y": 152.7055,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 106.670375,
+                      "height": 15.909075
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.821274999999999,
+                      "id": "GGsY3",
+                      "x": 117.68887500000001,
+                      "y": 180.68975,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 76.76865000000001,
+                      "height": 15.642549999999998
+                    },
+                    {
+                      "type": "path",
+                      "id": "bfvcm",
+                      "x": 205.54605,
+                      "y": 52.590625,
+                      "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                      "fill": "#FFC634",
+                      "width": 52.7191,
+                      "height": 56.284375000000004
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "gTryh",
+                  "name": "F'-2 空色 Label",
+                  "fill": "#1D1D1F",
+                  "content": "F'-2 空色",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ESgI8",
+              "name": "F'-3 朝日",
+              "width": 300,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "smxRr",
+                  "name": "F'-3 朝日 Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#FFD36B",
+                        "position": 0
+                      },
+                      {
+                        "color": "#FF9F43",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "H8IiQ",
+                      "x": 41.85402500000001,
+                      "y": 114.29999999999998,
+                      "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                      "fill": "#ffffff",
+                      "width": 61.639725000000006,
+                      "height": 134.39440000000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "s5u3vi",
+                      "x": 73.98805,
+                      "y": 74.67475,
+                      "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                      "fill": "#ffffff",
+                      "width": 178.711925,
+                      "height": 173.85112500000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "HTLQb",
+                      "x": 59.570499999999996,
+                      "y": 134.29375000000002,
+                      "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                      "fill": "#D3DAE8",
+                      "width": 37.67959999999999,
+                      "height": 99.7647
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 8.054025,
+                      "id": "VcvkF",
+                      "x": 113.36112500000002,
+                      "y": 124.592625,
+                      "rotation": 6.738619999999999,
+                      "fill": "#9FC8FF",
+                      "width": 105.54425,
+                      "height": 16.10805
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.954624999999999,
+                      "id": "O6d3kn",
+                      "x": 115.34335000000002,
+                      "y": 152.7055,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 106.670375,
+                      "height": 15.909075
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.821274999999999,
+                      "id": "T13uW",
+                      "x": 117.68887500000001,
+                      "y": 180.68975,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 76.76865000000001,
+                      "height": 15.642549999999998
+                    },
+                    {
+                      "type": "path",
+                      "id": "Dehw8",
+                      "x": 205.54605,
+                      "y": 52.590625,
+                      "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                      "fill": "#FFFFFF",
+                      "width": 52.7191,
+                      "height": 56.284375000000004
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "SRApk",
+                  "name": "F'-3 朝日 Label",
+                  "fill": "#1D1D1F",
+                  "content": "F'-3 朝日",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QiabE",
+              "name": "F'-4 若葉",
+              "width": 300,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "L23OU",
+                  "name": "F'-4 若葉 Tile",
+                  "clip": true,
+                  "width": 300,
+                  "height": 300,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#7EE0B5",
+                        "position": 0
+                      },
+                      {
+                        "color": "#22B07D",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 66,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "c4KXM",
+                      "x": 41.85402500000001,
+                      "y": 114.29999999999998,
+                      "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                      "fill": "#ffffff",
+                      "width": 61.639725000000006,
+                      "height": 134.39440000000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "usK80",
+                      "x": 73.98805,
+                      "y": 74.67475,
+                      "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                      "fill": "#ffffff",
+                      "width": 178.711925,
+                      "height": 173.85112500000002
+                    },
+                    {
+                      "type": "path",
+                      "id": "OozbX",
+                      "x": 59.570499999999996,
+                      "y": 134.29375000000002,
+                      "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                      "fill": "#D3DAE8",
+                      "width": 37.67959999999999,
+                      "height": 99.7647
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 8.054025,
+                      "id": "QNXmQ",
+                      "x": 113.36112500000002,
+                      "y": 124.592625,
+                      "rotation": 6.738619999999999,
+                      "fill": "#9FC8FF",
+                      "width": 105.54425,
+                      "height": 16.10805
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.954624999999999,
+                      "id": "J7JNM",
+                      "x": 115.34335000000002,
+                      "y": 152.7055,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 106.670375,
+                      "height": 15.909075
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 7.821274999999999,
+                      "id": "O3jg2I",
+                      "x": 117.68887500000001,
+                      "y": 180.68975,
+                      "rotation": 6.565259999999999,
+                      "fill": "#9FC8FF",
+                      "width": 76.76865000000001,
+                      "height": 15.642549999999998
+                    },
+                    {
+                      "type": "path",
+                      "id": "F9Lkv",
+                      "x": 205.54605,
+                      "y": 52.590625,
+                      "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                      "fill": "#FFC634",
+                      "width": 52.7191,
+                      "height": 56.284375000000004
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "b8yjX",
+                  "name": "F'-4 若葉 Label",
+                  "fill": "#1D1D1F",
+                  "content": "F'-4 若葉",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "wg0hm",
+          "name": "Final Icon Master",
+          "width": "fill_container",
+          "gap": 48,
+          "children": [
+            {
+              "type": "frame",
+              "id": "oVdX1",
+              "name": "App Icon iOS (full bleed)",
+              "clip": true,
+              "width": 300,
+              "height": 300,
+              "fill": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 180,
+                "size": {
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "#4FA3FF",
+                    "position": 0
+                  },
+                  {
+                    "color": "#0A6CFF",
+                    "position": 1
+                  }
+                ]
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "path",
+                  "id": "tc0Ui",
+                  "x": 41.85402500000001,
+                  "y": 114.29999999999998,
+                  "geometry": "M0.07274 8.75c-0.475-2.92501 1.425-5.65001 4.275-6.075l18.1-2.675 3.825 7.22499 8.95 48.05-7.9 21.34999c-8.45 1.25-16.325-4.45-17.6-12.92498l-9.65-54.95z",
+                  "fill": "#ffffff",
+                  "width": 61.639725000000006,
+                  "height": 134.39440000000002
+                },
+                {
+                  "type": "path",
+                  "id": "Z1APh",
+                  "x": 73.98805,
+                  "y": 74.67475,
+                  "geometry": "M0.03537 15.218c-0.325-2.9 1.625-5.375 4.4-5.675l79.3-9.45c6.25-0.75 10.47499 3.1 11.175 9.24999l7.05 57.35c1.4 11.45001-6.50001 21.22501-17.6 22.42501l-75.4 10.14999c-3.85 0.55-6.9-1.95-7.375-6.075l-1.55-77.97499z",
+                  "fill": "#ffffff",
+                  "width": 178.711925,
+                  "height": 173.85112500000002
+                },
+                {
+                  "type": "path",
+                  "id": "KdzkD",
+                  "x": 59.570499999999996,
+                  "y": 134.29375000000002,
+                  "geometry": "M0.04896 5.64999c-0.325-2.1 1-4.05 3.025-4.375l10.575-1.27499 7.8 48.925c0.6 4.05-2.15 7.77501-6.125 8.07499-3.625 0.175-6.925-2.39999-7.425-6.14999l-7.85-45.20001z",
+                  "fill": "#D3DAE8",
+                  "width": 37.67959999999999,
+                  "height": 99.7647
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8.054025,
+                  "id": "cVdMa",
+                  "x": 113.36112500000002,
+                  "y": 124.592625,
+                  "rotation": 6.738619999999999,
+                  "fill": "#9FC8FF",
+                  "width": 105.54425,
+                  "height": 16.10805
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 7.954624999999999,
+                  "id": "GEkqm",
+                  "x": 115.34335000000002,
+                  "y": 152.7055,
+                  "rotation": 6.565259999999999,
+                  "fill": "#9FC8FF",
+                  "width": 106.670375,
+                  "height": 15.909075
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 7.821274999999999,
+                  "id": "Jyxxf",
+                  "x": 117.68887500000001,
+                  "y": 180.68975,
+                  "rotation": 6.565259999999999,
+                  "fill": "#9FC8FF",
+                  "width": 76.76865000000001,
+                  "height": 15.642549999999998
+                },
+                {
+                  "type": "path",
+                  "id": "bPMag",
+                  "x": 205.54605,
+                  "y": 52.590625,
+                  "geometry": "M13.70941 1.0125c0.37498-1.35 2.19998-1.35 2.59999 0 2.52499 9.275 4.59999 11.32501 12.825 13.7 1.35001 0.375 1.29999 2.2-0.02501 2.55-8.39999 2.4-10.49998 5.35-12.72499 13.925-0.35001 1.3-2.325 1.3-2.64999 0-2.20001-8.925-4.625-11.65-12.70002-13.975-1.375-0.375-1.375-2.175-0.02499-2.575 8.59999-2.625 10.52499-4.875 12.70001-13.625z",
+                  "fill": "#FFC634",
+                  "width": 52.7191,
+                  "height": 56.284375000000004
                 }
               ]
             }
