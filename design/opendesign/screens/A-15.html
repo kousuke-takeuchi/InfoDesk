@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A-15 NAS の準備 (案内)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP%3Awght%40100..900&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      *, ::before, ::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      data-pencil-name="A-15 NAS の準備 (案内)"
+      style="align-items: center; background-color: #00000059; box-sizing: border-box; display: flex; flex-direction: column; gap: 0px; height: 1020px; justify-content: center; width: 1200px"
+    >
+      <div
+        data-pencil-name="Dialog"
+        style="align-items: flex-start; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 12px 40px #00000040; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 18px; height: fit-content; justify-content: flex-start; padding: 28px; width: 680px"
+      >
+        <div
+          data-pencil-name="Head"
+          style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: space-between; width: 100%"
+        >
+          <div
+            data-pencil-name="Title"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 4px; height: fit-content; justify-content: flex-start; width: fit-content"
+          >
+            <div
+              data-pencil-name="title"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 20px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              NAS の準備
+            </div>
+            <div
+              data-pencil-name="sub"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              Synology NAS を InfoDesk の保存先にします。最初の1回だけ行います。
+            </div>
+          </div>
+          <svg
+            data-pencil-name="x"
+            viewBox="0 0 18 18"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="x"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 18px; overflow: visible; width: 18px"
+          >
+            <path
+              d="M4.302 3.779q-.325 .11-.488 .396-.052 .11-.052 .325 0 .215 .052 .325 .058 .106 2.088 2.14l2.035 2.035-2.035 2.035q-2.03 2.034-2.088 2.144-.052 .106-.052 .303 0 .198 .044 .308 .048 .106 .171 .233 .128 .123 .233 .171 .11 .044 .308 .044 .197 0 .303-.052 .11-.058 2.144-2.088l2.035-2.035 2.035 2.035q2.034 2.03 2.14 2.088 .11 .052 .307 .052 .198 0 .304-.044 .11-.048 .233-.171 .127-.127 .171-.233 .048-.11 .048-.308 0-.197-.057-.303-.053-.11-2.083-2.144l-2.034-2.035 2.034-2.035q2.03-2.034 2.083-2.14 .057-.11 .057-.325 0-.215-.052-.325-.128-.216-.361-.343-.074-.035-.127-.053-.053-.017-.198-.017-.145 0-.198 .017-.052 .018-.145 .053-.127 .075-2.14 2.092l-2.017 2.013-3.634-3.617q-.4-.378-.541-.488-.11-.07-.255-.07h-.035q-.18 0-.233 .017z"
+              fill="#6e6e73"
+            />
+          </svg>
+        </div>
+        <div
+          data-pencil-name="Step 1"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 14px; height: fit-content; justify-content: flex-start; width: 100%"
+        >
+          <div
+            data-pencil-name="num"
+            style="align-items: center; background-color: #0A6CFF1F; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+          >
+            <div
+              data-pencil-name="n"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              1
+            </div>
+          </div>
+          <div
+            data-pencil-name="body"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="title row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="package"
+                viewBox="0 0 14 14"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="package"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+              >
+                <path
+                  d="M6.651 .615q-.225 .058-.434 .154-.14 .072-2.163 1.234-2.024 1.162-2.109 1.217-.588 .393-.742 1.076-.027 .113-.027 .493v2.211 2.143q0 .434 .027 .53 .072 .352 .267 .639 .195 .287 .489 .482 .184 .113 2.197 1.268 2.017 1.155 2.13 1.196 .194 .082 .348 .12 .158 .034 .373 .034 .219 0 .393-.041 .174-.044 .383-.154 .154-.071 2.126-1.196 1.975-1.128 2.115-1.227 .312-.195 .506-.482 .195-.287 .267-.639 .027-.096 .027-.53v-2.143-2.143q0-.434-.027-.53-.072-.325-.26-.619-.188-.293-.454-.475-.127-.082-2.157-1.244-2.03-1.162-2.184-1.234-.181-.082-.322-.116-.14-.037-.379-.037-.28 0-.39 .013zM7.226 1.805q.095 .044 1.965 1.107 1.87 1.063 1.87 1.077 0 .013-.708 .413-.707 .4-.735 .4-.027 0-2.037-1.148-2.01-1.149-2.01-1.162 0-.014 .482-.287 .486-.274 .639-.356 .127-.072 .182-.085 .058-.014 .174 0 .12 .013 .178 .041zM6.412 4.327q2.03 1.162 2.024 1.169-.007 .007-.708 .414-.448 .263-.588 .335-.14 .068-.174 .054-.034-.013-2.03-1.155-1.997-1.142-1.997-1.148 0-.007 .715-.417 .714-.414 .714-.414zM4.382 6.173l2.044 1.162v2.338q0 2.338-.014 2.324l-1.917-1.09q-1.918-1.094-1.983-1.156-.061-.064-.119-.174l-.055-.113v-2.225q-.014-2.242 0-2.242 .014 0 2.044 1.176zM11.662 7.239v2.225l-.055 .113q-.058 .11-.123 .174-.061 .062-1.979 1.156l-1.917 1.09q-.014 .014-.014-2.324v-2.338l3.152-1.805q.922-.519 .936-.526 .014-.007 0 2.235z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="t"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                DSM で WebDAV Server を入れる
+              </div>
+            </div>
+            <div
+              data-pencil-name="b"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left; width: 100%'
+            >
+              パッケージセンターで「WebDAV Server」を入れ、HTTP (ポート 5005) を有効にします。
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Step 2"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 14px; height: fit-content; justify-content: flex-start; width: 100%"
+        >
+          <div
+            data-pencil-name="num"
+            style="align-items: center; background-color: #0A6CFF1F; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+          >
+            <div
+              data-pencil-name="n"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              2
+            </div>
+          </div>
+          <div
+            data-pencil-name="body"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="title row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="folder-plus"
+                viewBox="0 0 14 14"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="folder-plus"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+              >
+                <path
+                  d="M1.976 1.203q-.479 .099-.838 .444-.355 .342-.495 .804-.041 .14-.041 .348-.014 .267-.028 1.135l.014 6.231q.014 .615 .027 .697 .14 .547 .516 .906 .38 .356 .913 .455 .167 .027 4.956 .027 4.789 0 4.956-.027 .533-.099 .916-.455 .386-.359 .513-.906 .013-.082 .027-.57v-2.591q.014-3.039 0-3.206-.072-.506-.348-.882-.366-.475-.968-.646l-.14-.041-5.041-.014-.096-.041q-.113-.058-.171-.113-.055-.054-.335-.475-.222-.325-.349-.478-.126-.154-.253-.25-.112-.085-.266-.174-.154-.092-.263-.12-.212-.072-.431-.078-.215-.007-1.278-.007h-1.162q-.24 .013-.335 .027zM4.857 2.379q.113 .058 .174 .13 .065 .068 .339 .475 .273 .403 .441 .571 .335 .338 .796 .478l.14 .041h2.523q2.519 .014 2.573 .034 .058 .021 .14 .079 .086 .055 .127 .099 .041 .041 .085 .137l.041 .099v6.132l-.041 .099q-.112 .208-.324 .294l-.096 .027h-9.55l-.096-.027q-.212-.086-.324-.294l-.041-.099v-7.882l.041-.099q.058-.127 .167-.216 .113-.092 .253-.105 .099-.014 1.302-.014h1.221zM6.86 5.264q-.127 .027-.239 .133-.11 .106-.168 .232-.014 .069-.02 .175-.007 .106-.007 .553v.643l-1.33 .014-.099 .041q-.267 .126-.314 .42-.048 .294 .147 .506 .085 .082 .181 .14l.113 .041 1.302 .014v.629q0 .406 0 .533 .013 .167 .041 .239 .031 .069 .113 .154 .181 .181 .42 .181 .239 0 .42-.181 .082-.085 .11-.154 .031-.072 .044-.239 0-.127 0-.533v-.629l1.303-.014 .112-.041q.209-.113 .291-.321 .085-.212 .007-.421-.076-.212-.284-.324l-.099-.041-1.33-.014v-.643q0-.447-.007-.553-.006-.106-.02-.175-.086-.198-.284-.3-.195-.106-.403-.065z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="t"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                共有フォルダを作る
+              </div>
+            </div>
+            <div
+              data-pencil-name="b"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left; width: 100%'
+            >
+              コントロールパネル → 共有フォルダで「infodesk」を作ります。
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Step 3"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 14px; height: fit-content; justify-content: flex-start; width: 100%"
+        >
+          <div
+            data-pencil-name="num"
+            style="align-items: center; background-color: #0A6CFF1F; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+          >
+            <div
+              data-pencil-name="n"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              3
+            </div>
+          </div>
+          <div
+            data-pencil-name="body"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="title row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="user-plus"
+                viewBox="0 0 14 14"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="user-plus"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+              >
+                <path
+                  d="M4.843 1.203q-.81 .113-1.428 .619-.616 .502-.896 1.244-.181 .489-.181 1.022 0 .28 .041 .506 .044 .222 .14 .489 .154 .461 .468 .847 .318 .383 .722 .636 .365 .226 .734 .325 .373 .095 .807 .095 .226 0 .362-.013 .14-.014 .352-.058 .602-.154 1.104-.558 .506-.406 .8-.981 .195-.393 .267-.881 .027-.141 .027-.407 0-.267-.027-.407-.099-.656-.465-1.203-.362-.547-.937-.896-.434-.266-.981-.365-.153-.028-.454-.034-.301-.007-.455 .02zM5.445 2.352q.407 .027 .783 .287 .379 .259 .581 .659 .205 .397 .184 .882-.02 .482-.287 .861-.154 .236-.379 .414-.222 .174-.462 .27-.195 .058-.287 .079-.089 .02-.328 .02-.239 0-.332-.02-.088-.021-.283-.079-.393-.14-.68-.468-.288-.328-.4-.735-.11-.461 .013-.909 .127-.448 .455-.769 .332-.325 .793-.451 .085-.028 .246-.048 .161-.021 .215-.007zM10.975 4.102q-.126 .013-.246 .106-.116 .088-.174 .215l-.041 .099-.014 1.302h-.574q-.574 0-.687 .028-.25 .027-.383 .232-.133 .202-.099 .434 .034 .229 .246 .369 .109 .086 .229 .099 .12 .014 .639 .014h.629v.629q0 .519 .014 .639 .013 .12 .099 .229 .154 .226 .417 .246 .266 .021 .465-.174 .126-.113 .153-.267 .028-.154 .028-.714v-.588l1.302-.014 .099-.041q.082-.044 .157-.112 .079-.072 .113-.141 .038-.071 .051-.181 .042-.198-.051-.365-.089-.168-.283-.267l-.1-.041-1.288-.014v-.588q0-.574-.028-.673-.041-.236-.232-.369-.188-.133-.441-.092zM3.093 8.203q-.964 .14-1.651 .827-.546 .547-.755 1.316-.072 .239-.085 .441-.014 .202-.014 .82v.769l.041 .113q.058 .096 .14 .181 .212 .195 .506 .147 .294-.047 .42-.314l.041-.099 .014-.797q.014-.618 .027-.772 .014-.154 .072-.349 .14-.379 .468-.68 .329-.301 .735-.413 .154-.041 .537-.055 .386-.014 1.661-.014 1.275 0 1.658 .014 .386 .014 .54 .055 .42 .112 .755 .43 .339 .315 .462 .718 .058 .168 .065 .325 .006 .154 .02 .741l.014 .797 .041 .099q.126 .267 .42 .314 .294 .048 .506-.147 .082-.085 .14-.181l.041-.113v-.769q0-.618-.014-.82-.013-.202-.085-.441-.082-.321-.236-.615-.266-.52-.738-.902-.468-.387-1.025-.54l-.045-.014q-.167-.058-.294-.072-.154-.014-.56-.014l-1.61-.013q-2.058 0-2.212 .027z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="t"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                InfoDesk 用のユーザーを作る
+              </div>
+            </div>
+            <div
+              data-pencil-name="b"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left; width: 100%'
+            >
+              コントロールパネル → ユーザーで新しいユーザーを作り、infodesk
+              だけ「読み取り/書き込み」、ほかの共有フォルダは「アクセス不可」にします。
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Step 4"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 14px; height: fit-content; justify-content: flex-start; width: 100%"
+        >
+          <div
+            data-pencil-name="num"
+            style="align-items: center; background-color: #0A6CFF1F; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+          >
+            <div
+              data-pencil-name="n"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              4
+            </div>
+          </div>
+          <div
+            data-pencil-name="body"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="title row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="network"
+                viewBox="0 0 14 14"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="network"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+              >
+                <path
+                  d="M5.698 .588q-.209 .027-.373 .113-.16 .082-.314 .235-.154 .154-.222 .281v.031q-.072 .123-.086 .208-.027 .113-.027 .42v.995l.013 1.302q0 .181 .028 .264 .085 .266 .287 .471 .205 .202 .472 .287 .095 .028 .171 .034 .078 .007 .372 .021h.407v1.176h-2.745q-.335 0-.475 .027-.085 .014-.208 .072l-.018 .014q-.14 .068-.293 .222-.124 .126-.188 .232-.062 .106-.12 .26-.027 .082-.034 .202-.007 .119-.007 .608l-.014 .687h-.335q-.307 0-.454 .021-.147 .02-.305 .099-.153 .075-.293 .215-.223 .226-.308 .506l-.041 .126v2.533q.014 .226 .027 .294 .086 .308 .308 .533 .225 .222 .533 .308 .068 .013 .294 .027h2.546l.141-.041q.225-.085 .406-.246 .181-.161 .281-.355h.013q.058-.141 .072-.226 .027-.126 .041-.42v-1.036q0-1.275-.014-1.384-.041-.24-.181-.434-.072-.1-.198-.212-.127-.113-.222-.168-.168-.085-.28-.106-.113-.02-.448-.034h-.407v-1.176h7v1.176h-.407q-.335 .014-.447 .034-.113 .021-.281 .106-.126 .055-.28 .209-.154 .153-.208 .28l-.014 .044q-.058 .11-.079 .202-.02 .092-.02 .342l-.014 2.129q.014 .308 .027 .434 .028 .099 .086 .222l.014 .018q.099 .194 .28 .355 .181 .161 .407 .246l.14 .041h2.546q.226-.014 .294-.027 .308-.086 .53-.308 .225-.225 .311-.533 .013-.068 .027-.294v-2.546l-.041-.141q-.085-.225-.246-.406-.161-.181-.355-.281-.158-.085-.305-.105-.147-.021-.454-.021h-.335l-.014-.687q0-.489-.007-.608-.007-.12-.034-.202-.058-.154-.123-.26-.061-.106-.184-.232-.154-.154-.294-.222l-.018-.014q-.123-.058-.208-.072-.14-.027-.475-.027h-2.745v-1.176h.407q.294-.014 .369-.021 .079-.006 .174-.034 .267-.085 .469-.287 .205-.205 .29-.471 .028-.083 .028-.264l.013-1.206v-1.091q0-.307-.027-.42-.014-.085-.086-.208v-.031q-.068-.127-.222-.281-.154-.153-.294-.222l-.03-.013q-.123-.058-.195-.086-.113-.013-.38-.027h-1.005q-1.261 0-1.387 0zM8.176 2.912v1.162h-2.352v-2.324h2.352zM4.074 11.088v1.162h-2.324v-2.324h2.324zM12.25 11.088v1.162h-2.324v-2.324h2.324z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="t"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                NAS に Tailscale を入れる
+              </div>
+            </div>
+            <div
+              data-pencil-name="b"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left; width: 100%'
+            >
+              パッケージセンターで「Tailscale」を入れてログインし、NAS の名前 (例: takeuchi-nas)
+              を控えます。
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Step 5"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 14px; height: fit-content; justify-content: flex-start; width: 100%"
+        >
+          <div
+            data-pencil-name="num"
+            style="align-items: center; background-color: #0A6CFF1F; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+          >
+            <div
+              data-pencil-name="n"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 700; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              5
+            </div>
+          </div>
+          <div
+            data-pencil-name="body"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="title row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="plug"
+                viewBox="0 0 14 14"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="plug"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+              >
+                <path
+                  d="M5.151 .602q-.096 .013-.174 .051-.076 .034-.154 .126-.075 .089-.113 .168-.034 .075-.034 .283v2.844l-.393 .014q-.322 0-.448 .02-.126 .021-.273 .1-.147 .075-.301 .229-.154 .153-.222 .28v.031q-.072 .123-.086 .208-.027 .113-.027 .407v1.104q0 1.374 .027 1.541 .154 .968 .841 1.651 .434 .434 .967 .633 .308 .123 .578 .167 .273 .041 .707 .041h.38v2.297q0 .181 .034 .267 .038 .082 .12 .167 .085 .082 .188 .133 .106 .048 .232 .048 .126 0 .229-.048 .106-.051 .188-.133 .085-.085 .12-.167 .037-.086 .037-.267v-2.297h.38q.43 0 .704-.041 .273-.044 .581-.167 .533-.199 .967-.633 .687-.683 .841-1.651 .027-.167 .027-1.541v-1.104q0-.294-.027-.407-.014-.085-.086-.208v-.018q-.068-.14-.222-.293-.154-.154-.3-.229-.147-.079-.274-.1-.126-.02-.448-.02l-.393-.014v-2.844q0-.208-.037-.283-.035-.079-.113-.168-.075-.092-.157-.136-.113-.055-.267-.055-.154 0-.267 .055-.082 .044-.16 .136-.075 .089-.113 .168-.034 .075-.034 .283v2.844h-2.352v-2.813q0-.239-.027-.294-.072-.198-.253-.301-.181-.105-.393-.064zM9.926 6.385q0 1.135-.028 1.329-.027 .349-.167 .643-.167 .325-.448 .564-.28 .236-.646 .349l-.154 .054h-2.966l-.154-.054q-.366-.113-.646-.349-.28-.239-.448-.564-.14-.294-.167-.629-.028-.181-.028-1.33v-1.148h5.852z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="t"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 14px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                InfoDesk でつなぐ
+              </div>
+            </div>
+            <div
+              data-pencil-name="b"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left; width: 100%'
+            >
+              保存先に「NAS (WebDAV)」を選び、Tailscale にログイン (NAS と同じアカウント)。URL に
+              http://NAS
+              の名前:5005/infodesk/、ユーザー名とパスワードを入れて「確かめる」を押します。
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Tip"
+          style="align-items: flex-start; background-color: #F5F5F7; border-radius: 10px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; padding: 14px; width: 100%"
+        >
+          <svg
+            data-pencil-name="shield-check"
+            viewBox="0 0 16 16"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="shield-check"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 16px; overflow: visible; width: 16px"
+          >
+            <path
+              d="M7.824 .687q-.398 .032-.785 .352-.59 .481-1.144 .801-.551 .32-1.161 .543-.351 .129-.671 .195-.321 .063-.766 .094-.274 .015-.418 .082-.223 .078-.434 .254-.207 .176-.3 .398l-.016 .035q-.082 .145-.098 .254-.015 .176-.031 .688v2.035q0 2.574 .016 2.812 .16 1.891 1.265 3.297 .16 .192 .496 .528 .336 .336 .559 .511 1.055 .848 2.609 1.457 .528 .207 .75 .274 .274 .062 .496 .016 .192-.032 .61-.176 1.551-.594 2.605-1.375 .434-.305 .817-.692 1.57-1.566 1.761-3.855 .016-.27 .016-2.813 0-2.547-.031-2.691-.082-.367-.363-.645-.278-.281-.629-.363-.114-.031-.434-.047-.559-.031-1.102-.207-.929-.304-1.777-.883-.305-.207-.734-.558-.481-.383-1.106-.321zM8.32 2.223q.735 .593 1.52 .992 1.391 .707 2.574 .785h.242l-.015 4.93q0 .383-.032 .574-.257 1.535-1.304 2.601-1.047 1.063-3.047 1.797l-.242 .098-.207-.062q-2.657-.977-3.696-2.547-.547-.817-.722-1.871-.032-.207-.032-.575l-.015-4.945h.222q.993-.063 2.114-.551 1.121-.488 2.097-1.289 .192-.16 .223-.16 .031 0 .32 .223zM9.84 6.016q-.078 .031-.145 .058-.062 .024-1.214 1.172l-1.137 1.137-.465-.461q-.305-.305-.414-.387-.145-.129-.227-.16-.078-.031-.222-.031-.145 0-.192 .015-.047 .016-.113 .047-.207 .114-.32 .305-.047 .098-.047 .289v.016q0 .16 .039 .242 .043 .078 .203 .254 .109 .129 .559 .578l.046 .047q.481 .48 .633 .625 .153 .14 .231 .176 .16 .078 .336 .062 .175-.016 .32-.113 .082-.063 1.473-1.453 .992-.993 1.199-1.215 .211-.227 .242-.309 .109-.316-.066-.598-.176-.281-.512-.296-.145-.016-.207 0z"
+              fill="#1e9e48"
+            />
+          </svg>
+          <div
+            data-pencil-name="t"
+            style='box-sizing: border-box; color: #6E6E73; flex: 1 1 0; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 19px; text-align: left'
+          >
+            Mac や iPhone に Tailscale のアプリは要りません。InfoDesk の中で Tailscale
+            を使うので、ルーターのポートを開けず、ほかのアプリの通信にも影響しません。
+          </div>
+        </div>
+        <div
+          data-pencil-name="Footer"
+          style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: space-between; width: 100%"
+        >
+          <div
+            data-pencil-name="doc link"
+            style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 6px; height: fit-content; justify-content: flex-start; width: fit-content"
+          >
+            <svg
+              data-pencil-name="external-link"
+              viewBox="0 0 13 13"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="external-link"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 13px; overflow: visible; width: 13px"
+            >
+              <path
+                d="M7.982 1.104q-.105 .026-.203 .112-.095 .085-.143 .171-.044 .082-.044 .238 0 .155 .038 .228 .041 .07 .117 .15 .08 .076 .143 .117l.08 .038h2.091l-2.549 2.561q-1.726 1.73-2.142 2.159-.416 .428-.444 .479-.102 .222-.013 .432 .092 .206 .298 .298 .21 .089 .432-.013 .051-.028 .479-.444 .429-.416 2.159-2.142l2.561-2.549v2.092l.038 .079q.041 .063 .117 .143 .08 .076 .15 .117 .073 .038 .228 .038 .156 0 .225-.038 .073-.041 .15-.117 .079-.08 .12-.143l.038-.079v-3.574l-.038-.08q-.041-.063-.114-.133-.07-.073-.133-.114l-.08-.038h-1.768q-1.755 0-1.793 .012zM2.418 2.742q-.469 .08-.815 .406-.343 .324-.473 .803-.026 .08-.026 .546l-.012 2.822 .012 2.809q0 .466 .026 .546 .13 .453 .435 .761 .308 .305 .761 .435 .08 .026 .546 .026l2.809 .012 2.822-.012q.466 0 .546-.026 .911-.247 1.196-1.171 .026-.079 .026-.324l.012-3.434-.025-.089q-.079-.196-.273-.301-.067-.026-.105-.032-.038-.006-.13-.006-.143 0-.222 .035-.076 .031-.156 .111-.076 .076-.117 .152l-.038 .092-.013 3.51-.038 .092q-.13 .257-.403 .311-.092 .026-3.075 .026-2.984 0-3.076-.026-.273-.054-.403-.311l-.038-.092v-6.201l.038-.092q.092-.194 .286-.286l.092-.038 3.51-.013 .092-.038q.076-.041 .152-.117 .08-.08 .118-.162 .041-.086 .035-.222-.007-.137-.048-.219-.038-.086-.124-.162-.082-.08-.162-.111-.076-.035-.323-.035h-1.546q-1.768 0-1.873 .025z"
+                fill="#0a6cff"
+              />
+            </svg>
+            <div
+              data-pencil-name="l"
+              style='box-sizing: border-box; color: #0A6CFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              詳しい手順 (docs/13-nas-setup)
+            </div>
+          </div>
+          <div
+            data-pencil-name="Button 閉じる"
+            style="align-items: flex-start; background-color: #0A6CFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; padding: 7px 16px; width: fit-content"
+          >
+            <div
+              data-pencil-name="l"
+              style='box-sizing: border-box; color: #FFFFFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              閉じる
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

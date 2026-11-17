@@ -1,13 +1,14 @@
 # デザインシステム
 
-実装の正は `app/src/styles/theme.css`(トークンと基本部品)。ビジュアルの元は `design.pen` と、その書き出し `design/exports/`。値は2026-10-11時点の `theme.css` から読んだ。
+実装の正は `app/src/styles/theme.css`(トークンと基本部品)。ビジュアルの元は OpenDesign のプロジェクト `design/opendesign/` と、旧 `design.pen` からのPNG書き出し `design/exports/`。値は2026-10-11時点の `theme.css` から読んだ。
 
 ## 1. 元データ
 
 | 物 | 内容 | 扱い方 |
 |---|---|---|
-| `design.pen` | Pencilのデザインファイル(リポジトリ直下) | 暗号化されているため、`Read` や `grep` で開かない。PencilのMCPツール経由でだけ読み書きする |
-| `design/exports/` | `design.pen` の各フレームのPNG | 画面の確認と実装の参照用(下表) |
+| `design/opendesign/` | OpenDesign のプロジェクト。`screens/` に画面ごとのHTML(ファイル名は画面番号、例 `A-1.html`、ダークは `-dark`)、`tokens.css` にトークン、`index.html` に画面一覧 | デザインの正。普通のHTMLなので `Read` や `grep` で読める。編集は OpenDesign で行い、リポジトリと同期する(6節) |
+| `design.pen` | 移行元のPencilファイル(リポジトリ直下) | 2026-11-17に `design/opendesign/` へ移行済み。保存用で、編集しない。暗号化されているため `Read` や `grep` で開かない |
+| `design/exports/` | 旧 `design.pen` の各フレームのPNG | 画面の確認と実装の参照用(下表) |
 | `docs/images/` | 公開ドキュメント用のスクリーンショット | 実装を撮ったもの(サンプルデータ)。デザインの元ではない |
 
 `design/exports/` の対応(設計書7節の画面番号):
@@ -54,7 +55,7 @@
 | `--radius-md` | `7px` | (同じ) | ボタン、入力欄 |
 | `--font` | `-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif` | (同じ) | |
 
-設計書7節のトークン名(`bg-window` など)は `design.pen` の変数名で、CSSでは先頭に `--` を付けた同名にしてある。
+設計書7節のトークン名(`bg-window` など)は `design/opendesign/tokens.css`(旧 `design.pen` の変数)の名前で、CSSでは先頭に `--` を付けた同名にしてある。
 
 文字の大きさ: 本文13px(`body`)、補足は12px(`.small`)と11px(`.tiny`)、画面の見出し22px(`.view-header h1`)、節の見出し15px、フィードの記事タイトル14px、ダイジェストの見出し16px。書体はシステムフォント。
 
@@ -117,6 +118,6 @@
 
 ## 6. デザインを変えるとき
 
-1. 変更が見た目だけなら、まず `design.pen` をPencilのMCP経由で直し、`design/exports/` を書き出し直す。
+1. 変更が見た目だけなら、まず OpenDesign の InfoDesk プロジェクトで `design/opendesign/` の画面を直す。OpenDesign 側で直した場合は、プロジェクトのフォルダ(OpenDesign の `get_project` が返す `resolvedDir`)から `rsync -a <resolvedDir>/ design/opendesign/` でリポジトリへ戻す。逆向きは `rsync -a design/opendesign/ <resolvedDir>/`。
 2. `theme.css` のトークンを更新する(ライトとダークの両方)。設計書7節のトークン一覧も合わせる。
 3. コンポーネントとCSSを直し、最小サイズとダークで撮って確かめる。

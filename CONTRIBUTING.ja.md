@@ -7,7 +7,7 @@
 ## 基本ルール
 
 1. **仕様と計画が先。** 全体設計は `docs/superpowers/specs/2026-10-06-infodesk-design.md` です。計画は `docs/superpowers/plans/` に日付付きで置きます。挙動を変えるときは、先に仕様を更新します。
-2. **UI の前にデザイン。** 画面は Pencil (`design.pen`、書き出しは `design/exports/`) で設計してから実装します。既存のトークンとコンポーネントを再利用し、新しいものは先にデザインへ足します。`design.pen` はテキストとして読まず、Pencil のツール経由でのみ扱います。
+2. **UI の前にデザイン。** 画面は OpenDesign (`design/opendesign/`、画面ごとの HTML と `tokens.css`) で設計してから実装します。既存のトークンとコンポーネントを再利用し、新しいものは先にデザインへ足します。`design.pen` は移行元の Pencil ファイルで、保存用として残しています。編集しません。
 3. **TDD。** 失敗するテストを書き、通し、整理します。テストの無い挙動は存在しないものとして扱います。
 4. **単体テストはネットワークに接続しません。** フィクスチャ (`crates/core/tests/fixtures/`)、モック HTTP サーバー、注入したクライアントを使います。フィクスチャ用の実レスポンスは `cargo run -p infodesk-core --example fetch_fixtures` で意図して更新します。
 5. **UI は日本語で、i18n はありません。** 日本語の UI 文字列は React コンポーネントに直接書きます。無関係な変更のついでにメッセージカタログの層を足さないでください。
@@ -44,7 +44,7 @@ Rust と Node のほかに、アプリのビルドには PATH に **Go** が必�
 | Tauri シェル: コマンド、閲覧ウィンドウ、ジョブ、スケジューラー | `app/src-tauri` |
 | React UI | `app/src` |
 | チャットのエージェント (Node サイドカー) | `agent/` |
-| デザインと書き出し | `design.pen`、`design/exports/` |
+| デザインと書き出し | `design/opendesign/`、`design/exports/` |
 | 仕様と計画 | `docs/superpowers/` |
 
 ## 問題の報告

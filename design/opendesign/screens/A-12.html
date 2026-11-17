@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A-12 チャットパネルの状態</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP%3Awght%40100..900&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      *, ::before, ::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body style="background-color: #F5F5F7">
+    <div
+      data-pencil-name="A-12 チャットパネルの状態"
+      style="align-items: flex-start; background-color: #F5F5F7; box-sizing: border-box; display: flex; flex-direction: row; gap: 40px; height: fit-content; justify-content: flex-start; padding: 40px; width: fit-content"
+    >
+      <div
+        data-pencil-name="Chat Panel: 空"
+        style="align-items: flex-start; background-color: #F2F2F4; border-radius: 8px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: 720px; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; overflow: hidden; width: 400px"
+      >
+        <div
+          data-pencil-name="Panel Header"
+          style="align-items: center; border-color: #E0E0E3; border-style: solid; border-width: 0px 0px 1px 0px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: 40.5px; justify-content: flex-start; margin: 0px 0px -0.5px 0px; padding: 12px 12px 10px 16px; width: 400px"
+        >
+          <div
+            data-pencil-name="Thread Title"
+            style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 6px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="新しいスレッド"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              新しいスレッド
+            </div>
+            <svg
+              data-pencil-name="icon-chevron-down"
+              viewBox="0 0 12 12"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="chevron-down"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+            >
+              <path
+                d="M2.868 4.02q-.217 .073-.325 .263-.035 .073-.035 .217 0 .144 .041 .223 .044 .076 1.597 1.631 1.555 1.553 1.631 1.597 .079 .041 .223 .041 .144 0 .22-.041 .079-.044 1.632-1.597 1.555-1.555 1.596-1.631 .044-.079 .044-.223 0-.144-.035-.217-.085-.143-.24-.228-.05-.024-.085-.035-.035-.012-.132-.012-.097 0-.132 .012-.035 .011-.096 .035-.085 .049-1.427 1.394l-1.345 1.342-2.423-2.411q-.266-.252-.36-.325-.073-.047-.17-.047h-.024q-.12 0-.155 .012z"
+                fill="#6e6e73"
+              />
+            </svg>
+          </div>
+          <svg
+            data-pencil-name="icon-square-pen"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="square-pen"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M12.074 .659q-.194 .029-.428 .136-.231 .106-.411 .227-.135 .102-3.046 3.021-2.908 2.919-2.985 3.036-.136 .198-.213 .406-.073 .209-.325 1.051l-.228 .824q-.058 .224-.065 .315-.008 .088 .022 .209v.015q.076 .271 .256 .45 .179 .18 .45 .256h.015q.121 .03 .209 .022 .091-.007 .315-.065l.824-.228q.842-.252 1.051-.325 .208-.077 .406-.213 .117-.091 3.036-2.999 2.919-2.912 3.021-3.062 .213-.271 .315-.63 .106-.358 .063-.706-.063-.616-.436-1.062-.374-.451-.974-.63-.165-.062-.465-.062-.301 0-.407 .014zM2.791 1.289q-.542 .092-.942 .469-.395 .373-.545 .926-.03 .092-.03 .766l-.014 4.05 .014 4.05q0 .674 .03 .766 .15 .523 .501 .879 .356 .351 .879 .501 .092 .03 .766 .03l4.05 .014 4.05-.014q.674 0 .766-.03 .523-.15 .875-.501 .355-.356 .505-.879 .03-.092 .03-.451l.014-4.544-.044-.092q-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286l-.044 .092-.015 4.694-.044 .107q-.15 .296-.465 .358-.106 .03-4.486 .03-4.38 0-4.486-.03-.315-.062-.465-.358l-.044-.107v-9.03l.044-.107q.106-.223 .329-.329l.107-.044 4.694-.015 .092-.044q.073-.047 .161-.135 .092-.092 .136-.172 .047-.085 .047-.264 0-.179-.044-.271-.106-.179-.3-.286l-.092-.058h-2.384q-2.384 0-2.504 .029zM12.554 1.89q.15 .029 .285 .135 .136 .106 .202 .242 .069 .132 .069 .315 0 .179-.058 .315-.048 .073-2.93 2.97-2.878 2.893-2.966 2.937-.044 .033-.707 .227-.659 .194-.667 .187-.007-.008 .187-.667 .194-.663 .231-.721 .04-.059 2.933-2.945 2.897-2.889 2.956-2.918 .062-.033 .157-.063 .099-.029 .143-.029 .048 0 .165 .015z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-history"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="history"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M1.71 1.274q-.271 .092-.406 .33l-.044 .092v3.493l.044 .077q.106 .209 .315 .3l.091 .044 3.014 .015q.344-.015 .465-.029 .077-.015 .165-.077l.015-.015q.183-.135 .234-.337 .051-.201-.033-.403-.08-.205-.275-.307-.091-.062-.285-.077-.194-.015-.824-.015h-.795l.253-.241q.794-.781 1.695-1.169 1.037-.45 2.176-.45 1.007 0 1.889 .373 1.26 .528 2.077 1.601 .82 1.073 .985 2.406 .029 .241 .029 .608 0 .366-.029 .608-.165 1.366-1.007 2.453-.839 1.084-2.113 1.597-.872 .344-1.846 .344-.3 0-.494-.015-.194-.014-.495-.076-.945-.195-1.765-.733-.817-.542-1.373-1.344-.553-.802-.762-1.761-.091-.48-.099-.832-.007-.355-.08-.505-.092-.179-.286-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286-.074 .165-.037 .699 .037 .531 .158 1.059 .315 1.274 1.109 2.311 .795 1.032 1.934 1.67 1.142 .637 2.461 .758 .197 .014 .571 .014 .374 0 .571-.014 1.483-.136 2.729-.931 1.23-.765 1.995-1.995 .795-1.246 .931-2.729 .014-.197 .014-.571 0-.374-.014-.571-.151-1.634-1.088-2.981-.938-1.352-2.424-2.073-.63-.3-1.231-.45-.597-.151-1.304-.165-1.168-.03-2.263 .329-.765 .257-1.395 .649-.63 .388-1.23 .974l-.301 .282v-1.798l-.044-.092q-.106-.194-.3-.286-.092-.044-.242-.051-.15-.007-.194 .007zM7.35 3.765q-.136 .029-.256 .142-.118 .114-.18 .249l-.029 .103v3.42l.044 .092q.062 .103 .135 .165 .092 .073 .392 .238l.974 .494q1.289 .648 1.395 .678 .257 .073 .488-.059 .23-.135 .293-.406 .043-.194-.044-.407-.048-.102-.125-.161-.073-.062-.341-.198l-1.966-1.003-.015-2.897-.044-.106q-.047-.088-.132-.169-.08-.084-.164-.12-.081-.041-.209-.055-.125-.015-.216 0z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-x"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="x"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M3.585 3.149q-.271 .092-.406 .33-.044 .092-.044 .271 0 .179 .044 .271 .047 .088 1.739 1.783l1.696 1.696-1.696 1.696q-1.692 1.695-1.739 1.787-.044 .088-.044 .252 0 .165 .036 .257 .041 .088 .143 .194 .106 .102 .194 .143 .092 .036 .257 .036 .164 0 .252-.044 .092-.047 1.787-1.739l1.696-1.696 1.696 1.696q1.695 1.692 1.783 1.739 .092 .044 .256 .044 .165 0 .253-.036 .092-.041 .194-.143 .106-.106 .143-.194 .04-.092 .04-.257 0-.164-.047-.252-.044-.092-1.736-1.787l-1.696-1.696 1.696-1.696q1.692-1.695 1.736-1.783 .047-.092 .047-.271 0-.179-.044-.271-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.121 .044-.106 .063-1.783 1.744l-1.681 1.677-3.029-3.014q-.333-.315-.45-.407-.092-.058-.212-.058h-.03q-.15 0-.194 .014z"
+              fill="#6e6e73"
+            />
+          </svg>
+        </div>
+        <div
+          data-pencil-name="Context Bar"
+          style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; padding: 8px 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="文脈"
+            style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+          >
+            文脈
+          </div>
+          <div
+            data-pencil-name="Ctx"
+            style="align-items: center; background-color: #FFFFFF; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 3px 8px; width: fit-content"
+          >
+            <svg
+              data-pencil-name="icon-github"
+              viewBox="0 0 11 11"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="github"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+            >
+              <path
+                d="M2.221 .473q-.097 .01-.191 .078-.094 .064-.137 .153-.067 .12-.123 .494-.043 .231-.038 .561 .006 .33 .051 .572l.022 .099-.057 .1q-.241 .429-.341 .969-.021 .108-.027 .427-.005 .32 .006 .486 .099 1.056 .846 1.781 .464 .43 1.047 .661 .121 .042 .301 .099 .182 .054 .215 .054 .032 0 .032 .024 0 .021-.032 .096-.043 .156-.089 .382-.043 .223-.043 .357v.075l-.11 .035q-.263 .075-.518 .065-.143-.011-.231-.033-.086-.021-.196-.075-.11-.056-.21-.14-.099-.083-.298-.268-.405-.376-.572-.473-.295-.166-.583-.166-.088 0-.126 .005-.038 .005-.094 .027-.22 .099-.258 .33-.037 .231 .127 .409 .099 .099 .298 .131 .12 .022 .19 .067 .073 .043 .347 .296 .244 .231 .341 .314 .099 .083 .22 .158 .33 .221 .706 .298 .153 .033 .39 .033 .236 0 .413-.022l.164-.032q.011 0 .011 .636 0 .452 0 .556 0 .105 .027 .172 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .094-.132 .029-.067 .029-.22v-2.114q.011-.504 .331-.945 .064-.099 .085-.148 .025-.051 .041-.115 .016-.067 0-.148-.016-.083-.046-.137-.027-.056-.089-.115-.059-.062-.131-.094-.07-.035-.258-.046-.317-.011-.572-.078-.572-.142-.978-.505-.241-.198-.408-.478-.164-.282-.22-.588-.021-.099-.032-.352-.011-.255 0-.386 .032-.494 .33-.946 .1-.153 .116-.247 .016-.094-.027-.26-.067-.296-.067-.615 0-.21 .01-.21l.143 .078q.188 .1 .572 .363 .156 .099 .287 .11 .054-.011 .253-.043 .76-.132 1.584-.132 .824 0 1.585 .132 .198 .043 .252 .043 .132-.011 .274-.11 .387-.253 .55-.347 .167-.094 .178-.088 .01 .005 .01 .177 0 .169-.016 .309-.016 .137-.051 .309-.032 .169-.032 .212 0 .121 .121 .319 .242 .374 .319 .782 .011 .11 .017 .368 .005 .258-.017 .389-.11 .881-.88 1.397-.331 .209-.747 .319-.255 .067-.572 .078-.121 .011-.172 .022-.048 .01-.094 .032-.207 .099-.263 .341-.032 .166 .099 .352 .296 .429 .352 .816 .011 .097 .011 1.265v1.023q0 .164 .027 .231 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .088-.132 .024-.067 .035-.244l.011-1.045q0-1.198-.011-1.318-.043-.264-.121-.508-.032-.086-.032-.107 0-.025 .032-.025 .033 0 .213-.059 .182-.062 .303-.104 .451-.178 .83-.479 .381-.303 .623-.687 .131-.199 .236-.451 .105-.255 .148-.497 .078-.341 .072-.757-.005-.419-.083-.715-.11-.397-.285-.727l-.067-.111 .022-.131q.088-.529 .013-1.056-.045-.408-.118-.539-.07-.132-.223-.21-.298-.131-.991 .22-.241 .11-.518 .298l-.164 .111-.142-.022q-.728-.121-1.563-.121-.835 0-1.628 .121l-.11 .022-.11-.078q-.408-.285-.811-.443-.4-.162-.631-.129z"
+                fill="#6e6e73"
+              />
+            </svg>
+            <div
+              data-pencil-name="GitHub · 今日"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              GitHub · 今日
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Body"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 12px; justify-content: flex-start; padding: 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="Empty"
+            style="align-items: center; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 10px; justify-content: center; width: 100%"
+          >
+            <svg
+              data-pencil-name="icon-sparkles"
+              viewBox="0 0 28 28"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="sparkles"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 28px; overflow: visible; width: 28px"
+            >
+              <path
+                d="M13.692 1.176q-.56 .082-1.093 .451-.588 .417-.814 1.148-.054 .164-.683 3.514-.629 3.343-.718 3.527-.082 .178-.219 .322-.143 .164-.308 .225-.225 .082-.95 .246l-2.577 .479q-3.363 .642-3.555 .697-.478 .144-.888 .54-.404 .39-.588 .882-.178 .485-.123 1.005 .054 .513 .335 .991 .198 .335 .547 .615 .348 .281 .717 .397 .192 .055 3.528 .697l2.57 .506q.759 .137 1.012 .219 .164 .089 .307 .225 .11 .171 .199 .335 .082 .253 .218 1.012l.479 2.488q.643 3.364 .697 3.528 .308 .929 1.176 1.346 .533 .281 1.039 .281 .506 0 1.039-.281 .868-.417 1.176-1.346 .055-.164 .684-3.494 .628-3.335 .683-3.445 .055-.225 .253-.417 .198-.198 .424-.287 .137-.055 3.466-.684 3.336-.628 3.5-.683 .929-.308 1.346-1.176 .534-1.039 0-2.078-.198-.417-.56-.725-.362-.307-.786-.451-.192-.055-3.555-.697l-2.461-.479q-.759-.136-1.012-.218-.191-.062-.307-.171-.219-.226-.308-.479-.055-.137-.683-3.466-.629-3.336-.684-3.5-.28-.929-1.21-1.374-.28-.143-.629-.198-.349-.055-.684-.027zM23.153 1.203q-.246 .027-.485 .198-.239 .164-.383 .39-.082 .171-.109 .41-.027 .233-.027 .711v.588h-.732q-.526 .027-.656 .041-.123 .014-.267 .068-.533 .253-.629 .841-.095 .588 .294 1.012 .171 .164 .363 .28 .17 .055 .294 .069 .129 .013 .635 .041h.698v.697q.027 .506 .041 .636 .013 .123 .068 .293 .116 .192 .28 .363 .424 .389 1.012 .294 .588-.096 .841-.629 .054-.171 .068-.28 .014-.117 .041-.643v-.731h.588q.643 0 .909-.069 .267-.068 .506-.307 .239-.24 .308-.629 .068-.397-.096-.704-.089-.165-.246-.301-.151-.144-.308-.212-.15-.075-.28-.089-.123-.014-.656-.041h-.725v-.697q0-.479-.014-.616-.013-.143-.068-.252-.171-.424-.506-.616-.335-.198-.759-.116zM14.615 6.72q.479 2.522 .588 3.11 .116 .588 .226 .841 .253 .615 .765 1.135 .52 .512 1.135 .765 .253 .11 .827 .226 .575 .109 3.097 .588 3.138 .588 3.151 .615 .014 .027-3.206 .629-3.219 .601-3.445 .656-.786 .198-1.442 .814-.657 .615-.937 1.401-.089 .198-.198 .868l-.643 3.275q-.506 2.748-.533 2.748-.027 0-.615-3.111-.479-2.55-.595-3.124-.109-.574-.219-.827-.198-.472-.601-.93-.404-.464-.827-.717-.281-.199-.534-.281-.335-.082-1.148-.253l-2.57-.505q-3.309-.616-3.282-.643 .028-.027 3.22-.615l3.028-.588q.506-.116 .78-.226 .588-.225 1.135-.752 .546-.533 .799-1.148 .11-.253 .219-.827 .116-.574 .595-3.124 .588-3.111 .615-3.111 .027 0 .615 3.111zM3.951 19.906q-.622 .144-1.155 .479-.526 .335-.923 .841-.697 .95-.697 2.112 0 1.162 .683 2.085 .691 .923 1.839 1.258 1.285 .369 2.516-.219 .649-.308 1.121-.882 .479-.574 .704-1.306 .055-.225 .068-.362 .014-.137 .041-.56 0-.506-.041-.725-.041-.226-.211-.649-.308-.725-.937-1.272-.629-.547-1.415-.772-.308-.055-.8-.069-.485-.013-.793 .041zM5.154 22.285q.499 .226 .636 .773 .144 .547-.191 .964-.253 .307-.588 .423-.335 .11-.67 0-.506-.143-.759-.67-.082-.198-.068-.464 .013-.267 .095-.465 .199-.445 .643-.595 .451-.157 .902 .034z"
+                fill="#8e8e93"
+              />
+            </svg>
+            <div
+              data-pencil-name="収集した記事について質問できます"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              収集した記事について質問できます
+            </div>
+            <div
+              data-pencil-name="表示中のカテゴリーと期間を文脈に"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 19px; text-align: center; width: 100%'
+            >
+              表示中のカテゴリーと期間を文脈にして答えます。例:
+            </div>
+            <div
+              data-pencil-name="Suggestion"
+              style="align-items: center; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 8px 12px; width: 100%"
+            >
+              <svg
+                data-pencil-name="icon-corner-down-right"
+                viewBox="0 0 12 12"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="corner-down-right"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+              >
+                <path
+                  d="M1.884 1.512q-.12 .035-.223 .132-.102 .096-.138 .216-.023 .085-.023 1.922 0 1.834 .023 2.039 .074 .504 .32 .938 .246 .43 .665 .741 .48 .372 1.128 .469 .096 .023 .553 .023h4.606l-.864 .864q-.61 .624-.744 .762-.132 .138-.156 .199-.058 .179 .012 .367 .073 .184 .24 .269 .085 .035 .217 .035h.035q.097 .012 .17-.035 .094-.061 .346-.313 .193-.179 .852-.841l.205-.202q.815-.818 1.073-1.081 .26-.264 .284-.311 .035-.085 .035-.205 0-.12-.047-.205-.012-.047-.272-.305-.258-.258-1.061-1.066-.803-.812-1.081-1.075-.275-.264-.331-.293-.053-.033-.088-.038-.035-.006-.12-.006-.132 0-.217 .035-.167 .085-.24 .272-.07 .185-.012 .364 .024 .061 .156 .199 .134 .138 .744 .762l.864 .864h-2.411q-2.411 0-2.543-.024-.492-.061-.853-.383-.36-.326-.457-.806-.023-.094-.023-.384v-2.927q-.012-.407-.024-.553-.011-.094-.044-.159-.029-.067-.096-.126-.065-.061-.132-.09-.065-.033-.161-.044-.094-.012-.167 0z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="今日のGitHubで伸びたリポジ"
+                style='box-sizing: border-box; color: #1D1D1F; flex: 1 1 0; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 17px; text-align: left'
+              >
+                今日のGitHubで伸びたリポジトリを3つ選んで理由を説明して
+              </div>
+            </div>
+            <div
+              data-pencil-name="Suggestion"
+              style="align-items: center; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 8px 12px; width: 100%"
+            >
+              <svg
+                data-pencil-name="icon-corner-down-right"
+                viewBox="0 0 12 12"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="corner-down-right"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+              >
+                <path
+                  d="M1.884 1.512q-.12 .035-.223 .132-.102 .096-.138 .216-.023 .085-.023 1.922 0 1.834 .023 2.039 .074 .504 .32 .938 .246 .43 .665 .741 .48 .372 1.128 .469 .096 .023 .553 .023h4.606l-.864 .864q-.61 .624-.744 .762-.132 .138-.156 .199-.058 .179 .012 .367 .073 .184 .24 .269 .085 .035 .217 .035h.035q.097 .012 .17-.035 .094-.061 .346-.313 .193-.179 .852-.841l.205-.202q.815-.818 1.073-1.081 .26-.264 .284-.311 .035-.085 .035-.205 0-.12-.047-.205-.012-.047-.272-.305-.258-.258-1.061-1.066-.803-.812-1.081-1.075-.275-.264-.331-.293-.053-.033-.088-.038-.035-.006-.12-.006-.132 0-.217 .035-.167 .085-.24 .272-.07 .185-.012 .364 .024 .061 .156 .199 .134 .138 .744 .762l.864 .864h-2.411q-2.411 0-2.543-.024-.492-.061-.853-.383-.36-.326-.457-.806-.023-.094-.023-.384v-2.927q-.012-.407-.024-.553-.011-.094-.044-.159-.029-.067-.096-.126-.065-.061-.132-.09-.065-.033-.161-.044-.094-.012-.167 0z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="エージェント関連のリポジトリだけ"
+                style='box-sizing: border-box; color: #1D1D1F; flex: 1 1 0; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 17px; text-align: left'
+              >
+                エージェント関連のリポジトリだけまとめて
+              </div>
+            </div>
+            <div
+              data-pencil-name="Suggestion"
+              style="align-items: center; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 8px 12px; width: 100%"
+            >
+              <svg
+                data-pencil-name="icon-corner-down-right"
+                viewBox="0 0 12 12"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="corner-down-right"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+              >
+                <path
+                  d="M1.884 1.512q-.12 .035-.223 .132-.102 .096-.138 .216-.023 .085-.023 1.922 0 1.834 .023 2.039 .074 .504 .32 .938 .246 .43 .665 .741 .48 .372 1.128 .469 .096 .023 .553 .023h4.606l-.864 .864q-.61 .624-.744 .762-.132 .138-.156 .199-.058 .179 .012 .367 .073 .184 .24 .269 .085 .035 .217 .035h.035q.097 .012 .17-.035 .094-.061 .346-.313 .193-.179 .852-.841l.205-.202q.815-.818 1.073-1.081 .26-.264 .284-.311 .035-.085 .035-.205 0-.12-.047-.205-.012-.047-.272-.305-.258-.258-1.061-1.066-.803-.812-1.081-1.075-.275-.264-.331-.293-.053-.033-.088-.038-.035-.006-.12-.006-.132 0-.217 .035-.167 .085-.24 .272-.07 .185-.012 .364 .024 .061 .156 .199 .134 .138 .744 .762l.864 .864h-2.411q-2.411 0-2.543-.024-.492-.061-.853-.383-.36-.326-.457-.806-.023-.094-.023-.384v-2.927q-.012-.407-.024-.553-.011-.094-.044-.159-.029-.067-.096-.126-.065-.061-.132-.09-.065-.033-.161-.044-.094-.012-.167 0z"
+                  fill="#6e6e73"
+                />
+              </svg>
+              <div
+                data-pencil-name="先週と比べて新しく出てきた話題は"
+                style='box-sizing: border-box; color: #1D1D1F; flex: 1 1 0; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 17px; text-align: left'
+              >
+                先週と比べて新しく出てきた話題は?
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Composer"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; padding: 0px 12px 12px 12px; width: 100%"
+        >
+          <div
+            data-pencil-name="Input Box"
+            style="align-items: flex-start; background-color: #FFFFFF; border-radius: 10px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 10px 12px 8px 12px; width: 100%"
+          >
+            <div
+              data-pencil-name="記事や要約について質問…"
+              style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 21px; text-align: left; width: 100%'
+            >
+              記事や要約について質問…
+            </div>
+            <div
+              data-pencil-name="Composer Row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: 100%"
+            >
+              <div
+                data-pencil-name="Model Select"
+                style="align-items: center; background-color: #F5F5F7; border-radius: 5px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; padding: 3px 8px; width: fit-content"
+              >
+                <svg
+                  data-pencil-name="icon-cpu"
+                  viewBox="0 0 12 12"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="cpu"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+                >
+                  <path
+                    d="M3.407 .516q-.108 .011-.211 .09-.099 .077-.149 .185-.024 .062-.029 .117-.006 .053-.018 .281v.311h-.035q-.073 0-.217 .023-.143 .024-.217 .05-.252 .094-.468 .264-.214 .167-.346 .384-.085 .155-.153 .366-.064 .208-.064 .34v.073h-.311q-.228 .012-.284 .018-.052 .005-.12 .038-.064 .029-.132 .09-.064 .059-.102 .118-.071 .143-.041 .313 .029 .167 .132 .27 .102 .102 .216 .132 .115 .029 .39 .029h.252v1.5h-.325q-.226 0-.281 .006-.053 .006-.103 .029-.19 .097-.258 .29-.064 .19 .006 .372 .05 .082 .12 .155 .073 .071 .158 .109 .059 .011 .118 .017 .061 .006 .266 .006h.299v1.5h-.299q-.228 .012-.284 .018-.053 .006-.114 .029-.202 .097-.276 .302-.07 .202 .024 .395 .038 .059 .102 .12 .068 .059 .132 .091 .068 .03 .12 .035 .056 .006 .284 .018h.311v.073q0 .059 .035 .214 .073 .384 .314 .674 .24 .287 .6 .431 .094 .035 .243 .073 .153 .035 .235 .035h.073v.311q.012 .228 .018 .284 .005 .052 .035 .12 .032 .064 .091 .132 .061 .064 .131 .102 .132 .071 .299 .041 .17-.029 .273-.132 .102-.102 .132-.216 .029-.115 .029-.39v-.252h1.5v.299q0 .266 .023 .357 .024 .088 .109 .185 .155 .155 .36 .155 .205 0 .36-.155 .085-.097 .109-.185 .023-.091 .023-.357v-.299h1.5v.252q0 .275 .03 .39 .029 .114 .131 .216 .103 .103 .27 .132 .17 .03 .302-.041 .07-.038 .129-.102 .061-.068 .09-.132 .033-.068 .038-.12 .006-.056 .018-.284v-.311h.073q.082 0 .232-.035 .152-.038 .246-.073 .36-.144 .6-.431 .241-.29 .326-.674 .023-.155 .023-.214v-.073h.311q.228-.012 .281-.018 .056-.005 .12-.035 .067-.032 .132-.091 .067-.061 .096-.12 .033-.061 .044-.155 .036-.17-.044-.313-.076-.144-.243-.229-.061-.023-.117-.029-.053-.006-.281-.018h-.299v-1.5h.299q.266 0 .354-.023 .091-.024 .188-.109 .155-.155 .155-.36 0-.205-.143-.349-.062-.058-.129-.093-.065-.038-.12-.044-.053-.006-.279-.006h-.325v-1.5h.252q.275 0 .39-.029 .114-.03 .216-.132 .103-.103 .132-.27 .03-.17-.041-.302-.038-.07-.105-.129-.065-.061-.132-.09-.064-.033-.12-.038-.053-.006-.281-.018h-.311v-.073q0-.132-.067-.34-.065-.211-.15-.366-.132-.217-.348-.384-.214-.17-.466-.264-.073-.026-.217-.05-.144-.023-.217-.023h-.035v-.299q0-.205-.006-.264-.006-.061-.029-.108-.05-.132-.17-.228-.12-.097-.299-.097-.179 0-.319 .114-.138 .114-.161 .293-.024 .085-.024 .337v.252h-1.5v-.299q0-.266-.017-.354-.018-.091-.115-.188-.181-.19-.445-.143-.155 .023-.275 .143-.097 .097-.115 .188-.017 .088-.017 .354v.299h-1.5v-.252q0-.252-.024-.337-.035-.202-.199-.316-.161-.115-.378-.079zM9.217 2.555q.155 .073 .228 .228l.047 .073v6.288l-.047 .073q-.085 .155-.228 .24l-.073 .035h-6.288l-.073-.035q-.143-.085-.228-.24l-.047-.073v-6.288l.047-.073q.108-.202 .313-.263 .035-.012 3.155-.012h3.121zM4.392 3.504q-.191 .023-.323 .097-.205 .096-.342 .263-.138 .167-.2 .384-.011 .073-.023 .325v1.427 1.427q.012 .252 .023 .325 .074 .264 .264 .457 .193 .19 .457 .264 .073 .011 .325 .023h1.427 1.427q.266-.012 .325-.023 .264-.074 .454-.264 .193-.193 .267-.457 .011-.059 .023-.325v-1.427-1.427q-.012-.266-.023-.325-.074-.264-.273-.454-.196-.193-.448-.267-.059-.011-.337-.023h-1.342q-1.573-.012-1.681 .012zM7.5 6v1.5h-3v-3h3z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+                <div
+                  data-pencil-name="Ollama · gemma4:"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  Ollama · gemma4:26b
+                </div>
+                <svg
+                  data-pencil-name="icon-chevron-down"
+                  viewBox="0 0 11 11"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="chevron-down"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+                >
+                  <path
+                    d="M2.629 3.685q-.199 .067-.298 .241-.032 .067-.032 .199 0 .132 .037 .204 .041 .07 1.464 1.496 1.426 1.423 1.496 1.464 .072 .037 .204 .037 .132 0 .201-.037 .073-.041 1.496-1.464 1.426-1.426 1.464-1.496 .04-.072 .04-.204 0-.132-.032-.199-.078-.131-.22-.209-.046-.022-.078-.032-.032-.011-.121-.011-.089 0-.121 .011-.032 .01-.088 .032-.078 .045-1.308 1.278l-1.233 1.23-2.221-2.21q-.244-.231-.33-.298-.067-.043-.156-.043h-.022q-.11 0-.142 .011z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+              </div>
+              <div
+                data-pencil-name="Spacer"
+                style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 0px; height: 1px; justify-content: flex-start"
+              ></div>
+              <div
+                data-pencil-name="Send"
+                style="align-items: center; background-color: #0A6CFF; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+              >
+                <svg
+                  data-pencil-name="icon-arrow-up"
+                  viewBox="0 0 14 14"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="arrow-up"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+                >
+                  <path
+                    d="M6.846 2.352q-.085 .013-.157 .064-.068 .048-2.167 2.147l-1.665 1.695q-.365 .363-.464 .503-.055 .085-.055 .198v.041q0 .239 .181 .42 .113 .113 .28 .147 .168 .035 .322-.02 .085-.027 .321-.26 .239-.232 1.374-1.364 1.582-1.582 1.596-1.582 .014 0 .014 3.428v3.011q0 .448 .034 .533 .038 .083 .12 .168 .085 .082 .188 .133 .106 .048 .232 .048 .126 0 .229-.048 .106-.051 .188-.133 .085-.085 .12-.168 .037-.085 .037-.533v-3.011q0-3.428 .014-3.428 .014 0 1.596 1.582 1.135 1.132 1.371 1.364 .239 .233 .324 .26 .154 .055 .322 .02 .167-.034 .28-.147 .181-.181 .181-.42v-.041q0-.113-.055-.198-.099-.14-.464-.516l-1.679-1.682q-2.102-2.112-2.17-2.147-.068-.037-.161-.064-.092-.028-.14-.028-.048 0-.147 .028z"
+                    fill="#ffffff"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Chat Panel: LLMエラー"
+        style="align-items: flex-start; background-color: #F2F2F4; border-radius: 8px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: 720px; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; overflow: hidden; width: 400px"
+      >
+        <div
+          data-pencil-name="Panel Header"
+          style="align-items: center; border-color: #E0E0E3; border-style: solid; border-width: 0px 0px 1px 0px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: 40.5px; justify-content: flex-start; margin: 0px 0px -0.5px 0px; padding: 12px 12px 10px 16px; width: 400px"
+        >
+          <div
+            data-pencil-name="Thread Title"
+            style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 6px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="新しいスレッド"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              新しいスレッド
+            </div>
+            <svg
+              data-pencil-name="icon-chevron-down"
+              viewBox="0 0 12 12"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="chevron-down"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+            >
+              <path
+                d="M2.868 4.02q-.217 .073-.325 .263-.035 .073-.035 .217 0 .144 .041 .223 .044 .076 1.597 1.631 1.555 1.553 1.631 1.597 .079 .041 .223 .041 .144 0 .22-.041 .079-.044 1.632-1.597 1.555-1.555 1.596-1.631 .044-.079 .044-.223 0-.144-.035-.217-.085-.143-.24-.228-.05-.024-.085-.035-.035-.012-.132-.012-.097 0-.132 .012-.035 .011-.096 .035-.085 .049-1.427 1.394l-1.345 1.342-2.423-2.411q-.266-.252-.36-.325-.073-.047-.17-.047h-.024q-.12 0-.155 .012z"
+                fill="#6e6e73"
+              />
+            </svg>
+          </div>
+          <svg
+            data-pencil-name="icon-square-pen"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="square-pen"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M12.074 .659q-.194 .029-.428 .136-.231 .106-.411 .227-.135 .102-3.046 3.021-2.908 2.919-2.985 3.036-.136 .198-.213 .406-.073 .209-.325 1.051l-.228 .824q-.058 .224-.065 .315-.008 .088 .022 .209v.015q.076 .271 .256 .45 .179 .18 .45 .256h.015q.121 .03 .209 .022 .091-.007 .315-.065l.824-.228q.842-.252 1.051-.325 .208-.077 .406-.213 .117-.091 3.036-2.999 2.919-2.912 3.021-3.062 .213-.271 .315-.63 .106-.358 .063-.706-.063-.616-.436-1.062-.374-.451-.974-.63-.165-.062-.465-.062-.301 0-.407 .014zM2.791 1.289q-.542 .092-.942 .469-.395 .373-.545 .926-.03 .092-.03 .766l-.014 4.05 .014 4.05q0 .674 .03 .766 .15 .523 .501 .879 .356 .351 .879 .501 .092 .03 .766 .03l4.05 .014 4.05-.014q.674 0 .766-.03 .523-.15 .875-.501 .355-.356 .505-.879 .03-.092 .03-.451l.014-4.544-.044-.092q-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286l-.044 .092-.015 4.694-.044 .107q-.15 .296-.465 .358-.106 .03-4.486 .03-4.38 0-4.486-.03-.315-.062-.465-.358l-.044-.107v-9.03l.044-.107q.106-.223 .329-.329l.107-.044 4.694-.015 .092-.044q.073-.047 .161-.135 .092-.092 .136-.172 .047-.085 .047-.264 0-.179-.044-.271-.106-.179-.3-.286l-.092-.058h-2.384q-2.384 0-2.504 .029zM12.554 1.89q.15 .029 .285 .135 .136 .106 .202 .242 .069 .132 .069 .315 0 .179-.058 .315-.048 .073-2.93 2.97-2.878 2.893-2.966 2.937-.044 .033-.707 .227-.659 .194-.667 .187-.007-.008 .187-.667 .194-.663 .231-.721 .04-.059 2.933-2.945 2.897-2.889 2.956-2.918 .062-.033 .157-.063 .099-.029 .143-.029 .048 0 .165 .015z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-history"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="history"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M1.71 1.274q-.271 .092-.406 .33l-.044 .092v3.493l.044 .077q.106 .209 .315 .3l.091 .044 3.014 .015q.344-.015 .465-.029 .077-.015 .165-.077l.015-.015q.183-.135 .234-.337 .051-.201-.033-.403-.08-.205-.275-.307-.091-.062-.285-.077-.194-.015-.824-.015h-.795l.253-.241q.794-.781 1.695-1.169 1.037-.45 2.176-.45 1.007 0 1.889 .373 1.26 .528 2.077 1.601 .82 1.073 .985 2.406 .029 .241 .029 .608 0 .366-.029 .608-.165 1.366-1.007 2.453-.839 1.084-2.113 1.597-.872 .344-1.846 .344-.3 0-.494-.015-.194-.014-.495-.076-.945-.195-1.765-.733-.817-.542-1.373-1.344-.553-.802-.762-1.761-.091-.48-.099-.832-.007-.355-.08-.505-.092-.179-.286-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286-.074 .165-.037 .699 .037 .531 .158 1.059 .315 1.274 1.109 2.311 .795 1.032 1.934 1.67 1.142 .637 2.461 .758 .197 .014 .571 .014 .374 0 .571-.014 1.483-.136 2.729-.931 1.23-.765 1.995-1.995 .795-1.246 .931-2.729 .014-.197 .014-.571 0-.374-.014-.571-.151-1.634-1.088-2.981-.938-1.352-2.424-2.073-.63-.3-1.231-.45-.597-.151-1.304-.165-1.168-.03-2.263 .329-.765 .257-1.395 .649-.63 .388-1.23 .974l-.301 .282v-1.798l-.044-.092q-.106-.194-.3-.286-.092-.044-.242-.051-.15-.007-.194 .007zM7.35 3.765q-.136 .029-.256 .142-.118 .114-.18 .249l-.029 .103v3.42l.044 .092q.062 .103 .135 .165 .092 .073 .392 .238l.974 .494q1.289 .648 1.395 .678 .257 .073 .488-.059 .23-.135 .293-.406 .043-.194-.044-.407-.048-.102-.125-.161-.073-.062-.341-.198l-1.966-1.003-.015-2.897-.044-.106q-.047-.088-.132-.169-.08-.084-.164-.12-.081-.041-.209-.055-.125-.015-.216 0z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-x"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="x"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M3.585 3.149q-.271 .092-.406 .33-.044 .092-.044 .271 0 .179 .044 .271 .047 .088 1.739 1.783l1.696 1.696-1.696 1.696q-1.692 1.695-1.739 1.787-.044 .088-.044 .252 0 .165 .036 .257 .041 .088 .143 .194 .106 .102 .194 .143 .092 .036 .257 .036 .164 0 .252-.044 .092-.047 1.787-1.739l1.696-1.696 1.696 1.696q1.695 1.692 1.783 1.739 .092 .044 .256 .044 .165 0 .253-.036 .092-.041 .194-.143 .106-.106 .143-.194 .04-.092 .04-.257 0-.164-.047-.252-.044-.092-1.736-1.787l-1.696-1.696 1.696-1.696q1.692-1.695 1.736-1.783 .047-.092 .047-.271 0-.179-.044-.271-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.121 .044-.106 .063-1.783 1.744l-1.681 1.677-3.029-3.014q-.333-.315-.45-.407-.092-.058-.212-.058h-.03q-.15 0-.194 .014z"
+              fill="#6e6e73"
+            />
+          </svg>
+        </div>
+        <div
+          data-pencil-name="Context Bar"
+          style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; padding: 8px 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="文脈"
+            style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+          >
+            文脈
+          </div>
+          <div
+            data-pencil-name="Ctx"
+            style="align-items: center; background-color: #FFFFFF; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 3px 8px; width: fit-content"
+          >
+            <svg
+              data-pencil-name="icon-github"
+              viewBox="0 0 11 11"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="github"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+            >
+              <path
+                d="M2.221 .473q-.097 .01-.191 .078-.094 .064-.137 .153-.067 .12-.123 .494-.043 .231-.038 .561 .006 .33 .051 .572l.022 .099-.057 .1q-.241 .429-.341 .969-.021 .108-.027 .427-.005 .32 .006 .486 .099 1.056 .846 1.781 .464 .43 1.047 .661 .121 .042 .301 .099 .182 .054 .215 .054 .032 0 .032 .024 0 .021-.032 .096-.043 .156-.089 .382-.043 .223-.043 .357v.075l-.11 .035q-.263 .075-.518 .065-.143-.011-.231-.033-.086-.021-.196-.075-.11-.056-.21-.14-.099-.083-.298-.268-.405-.376-.572-.473-.295-.166-.583-.166-.088 0-.126 .005-.038 .005-.094 .027-.22 .099-.258 .33-.037 .231 .127 .409 .099 .099 .298 .131 .12 .022 .19 .067 .073 .043 .347 .296 .244 .231 .341 .314 .099 .083 .22 .158 .33 .221 .706 .298 .153 .033 .39 .033 .236 0 .413-.022l.164-.032q.011 0 .011 .636 0 .452 0 .556 0 .105 .027 .172 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .094-.132 .029-.067 .029-.22v-2.114q.011-.504 .331-.945 .064-.099 .085-.148 .025-.051 .041-.115 .016-.067 0-.148-.016-.083-.046-.137-.027-.056-.089-.115-.059-.062-.131-.094-.07-.035-.258-.046-.317-.011-.572-.078-.572-.142-.978-.505-.241-.198-.408-.478-.164-.282-.22-.588-.021-.099-.032-.352-.011-.255 0-.386 .032-.494 .33-.946 .1-.153 .116-.247 .016-.094-.027-.26-.067-.296-.067-.615 0-.21 .01-.21l.143 .078q.188 .1 .572 .363 .156 .099 .287 .11 .054-.011 .253-.043 .76-.132 1.584-.132 .824 0 1.585 .132 .198 .043 .252 .043 .132-.011 .274-.11 .387-.253 .55-.347 .167-.094 .178-.088 .01 .005 .01 .177 0 .169-.016 .309-.016 .137-.051 .309-.032 .169-.032 .212 0 .121 .121 .319 .242 .374 .319 .782 .011 .11 .017 .368 .005 .258-.017 .389-.11 .881-.88 1.397-.331 .209-.747 .319-.255 .067-.572 .078-.121 .011-.172 .022-.048 .01-.094 .032-.207 .099-.263 .341-.032 .166 .099 .352 .296 .429 .352 .816 .011 .097 .011 1.265v1.023q0 .164 .027 .231 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .088-.132 .024-.067 .035-.244l.011-1.045q0-1.198-.011-1.318-.043-.264-.121-.508-.032-.086-.032-.107 0-.025 .032-.025 .033 0 .213-.059 .182-.062 .303-.104 .451-.178 .83-.479 .381-.303 .623-.687 .131-.199 .236-.451 .105-.255 .148-.497 .078-.341 .072-.757-.005-.419-.083-.715-.11-.397-.285-.727l-.067-.111 .022-.131q.088-.529 .013-1.056-.045-.408-.118-.539-.07-.132-.223-.21-.298-.131-.991 .22-.241 .11-.518 .298l-.164 .111-.142-.022q-.728-.121-1.563-.121-.835 0-1.628 .121l-.11 .022-.11-.078q-.408-.285-.811-.443-.4-.162-.631-.129z"
+                fill="#6e6e73"
+              />
+            </svg>
+            <div
+              data-pencil-name="GitHub · 今日"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              GitHub · 今日
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Body"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 12px; justify-content: flex-start; padding: 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="User Row"
+            style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-end; width: 100%"
+          >
+            <div
+              data-pencil-name="User Bubble"
+              style="align-items: flex-start; background-color: #0A6CFF1F; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; padding: 8px 12px; width: 300px"
+            >
+              <div
+                data-pencil-name="今日のGitHubで伸びたリポジ"
+                style='box-sizing: border-box; color: #1D1D1F; flex: 1 1 0; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 20px; text-align: left'
+              >
+                今日のGitHubで伸びたリポジトリを3つ選んで理由を説明して
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="Error Box"
+            style="align-items: flex-start; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #D93025; padding: 12px 14px; width: 100%"
+          >
+            <div
+              data-pencil-name="Head"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="icon-circle-alert"
+                viewBox="0 0 15 15"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="circle-alert"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+              >
+                <path
+                  d="M7.17 .645q-1.245 .043-2.387 .541-1.139 .495-2.04 1.359-.897 .861-1.439 1.985-.524 1.08-.645 2.311-.029 .209-.029 .659 0 .45 .029 .659 .121 1.231 .645 2.311 .707 1.501 2.032 2.505 1.33 1.003 2.948 1.289 .571 .106 1.216 .106 .809 0 1.534-.165 .729-.164 1.451-.509 1.351-.663 2.318-1.823 .967-1.161 1.344-2.619 .315-1.197 .194-2.413-.121-1.216-.645-2.326-.63-1.289-1.735-2.234-1.103-.944-2.48-1.366-1.08-.329-2.311-.27zM8.207 1.919q1.153 .15 2.135 .729 .981 .578 1.673 1.508 .887 1.183 1.081 2.729 .014 .179 .014 .615 0 .436-.014 .615-.15 1.245-.773 2.282-.623 1.032-1.644 1.739-.509 .359-1.125 .601-.615 .238-1.274 .329-.271 .044-.78 .044-.509 0-.78-.044-1.154-.164-2.098-.736-.945-.571-1.637-1.486-.887-1.183-1.081-2.729-.014-.179-.014-.615 0-.436 .014-.615 .15-1.201 .718-2.198 .571-.996 1.535-1.702 .582-.436 1.292-.718 .714-.286 1.421-.348l.271-.029q.103-.015 .509 0 .407 .014 .557 .029zM7.394 4.395q-.103 .014-.187 .054-.081 .037-.165 .136-.08 .095-.121 .179-.036 .081-.036 .275v2.64l.044 .092q.047 .073 .135 .165 .092 .088 .172 .135 .085 .044 .264 .044 .179 0 .26-.044 .084-.047 .172-.135 .092-.092 .139-.165l.044-.092v-2.504q0-.286-.022-.367-.022-.084-.084-.172l-.015-.014q-.106-.136-.263-.195-.158-.062-.337-.032zM7.335 9.404q-.223 .063-.344 .242-.121 .179-.106 .399 .014 .216 .165 .381 .091 .088 .164 .136 .227 .102 .451 .036 .223-.069 .359-.264 .135-.194 .091-.435-.014-.117-.055-.191-.036-.077-.128-.15-.088-.077-.172-.121-.081-.047-.209-.055-.124-.007-.216 .022z"
+                  fill="#d93025"
+                />
+              </svg>
+              <div
+                data-pencil-name="Ollama に接続できません"
+                style='box-sizing: border-box; color: #D93025; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                Ollama に接続できません
+              </div>
+            </div>
+            <div
+              data-pencil-name="http://localhost"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 18px; text-align: left; width: 100%'
+            >
+              http://localhost:11434 が応答しません。Ollama
+              が起動しているか確認してください。質問は入力欄に残っています。
+            </div>
+            <div
+              data-pencil-name="Buttons"
+              style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <div
+                data-pencil-name="Button 再試行"
+                style="align-items: flex-start; background-color: #0A6CFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #00000000; padding: 6px 14px; width: fit-content"
+              >
+                <div
+                  data-pencil-name="再試行"
+                  style='box-sizing: border-box; color: #FFFFFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  再試行
+                </div>
+              </div>
+              <div
+                data-pencil-name="Button Claude で送る"
+                style="align-items: flex-start; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 6px 14px; width: fit-content"
+              >
+                <div
+                  data-pencil-name="Claude で送る"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  Claude で送る
+                </div>
+              </div>
+              <div
+                data-pencil-name="Button LLM設定"
+                style="align-items: flex-start; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 6px 14px; width: fit-content"
+              >
+                <div
+                  data-pencil-name="LLM設定"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  LLM設定
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Composer"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; padding: 0px 12px 12px 12px; width: 100%"
+        >
+          <div
+            data-pencil-name="Input Box"
+            style="align-items: flex-start; background-color: #FFFFFF; border-radius: 10px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 10px 12px 8px 12px; width: 100%"
+          >
+            <div
+              data-pencil-name="記事や要約について質問…"
+              style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 21px; text-align: left; width: 100%'
+            >
+              記事や要約について質問…
+            </div>
+            <div
+              data-pencil-name="Composer Row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: 100%"
+            >
+              <div
+                data-pencil-name="Model Select"
+                style="align-items: center; background-color: #F5F5F7; border-radius: 5px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; padding: 3px 8px; width: fit-content"
+              >
+                <svg
+                  data-pencil-name="icon-cpu"
+                  viewBox="0 0 12 12"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="cpu"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+                >
+                  <path
+                    d="M3.407 .516q-.108 .011-.211 .09-.099 .077-.149 .185-.024 .062-.029 .117-.006 .053-.018 .281v.311h-.035q-.073 0-.217 .023-.143 .024-.217 .05-.252 .094-.468 .264-.214 .167-.346 .384-.085 .155-.153 .366-.064 .208-.064 .34v.073h-.311q-.228 .012-.284 .018-.052 .005-.12 .038-.064 .029-.132 .09-.064 .059-.102 .118-.071 .143-.041 .313 .029 .167 .132 .27 .102 .102 .216 .132 .115 .029 .39 .029h.252v1.5h-.325q-.226 0-.281 .006-.053 .006-.103 .029-.19 .097-.258 .29-.064 .19 .006 .372 .05 .082 .12 .155 .073 .071 .158 .109 .059 .011 .118 .017 .061 .006 .266 .006h.299v1.5h-.299q-.228 .012-.284 .018-.053 .006-.114 .029-.202 .097-.276 .302-.07 .202 .024 .395 .038 .059 .102 .12 .068 .059 .132 .091 .068 .03 .12 .035 .056 .006 .284 .018h.311v.073q0 .059 .035 .214 .073 .384 .314 .674 .24 .287 .6 .431 .094 .035 .243 .073 .153 .035 .235 .035h.073v.311q.012 .228 .018 .284 .005 .052 .035 .12 .032 .064 .091 .132 .061 .064 .131 .102 .132 .071 .299 .041 .17-.029 .273-.132 .102-.102 .132-.216 .029-.115 .029-.39v-.252h1.5v.299q0 .266 .023 .357 .024 .088 .109 .185 .155 .155 .36 .155 .205 0 .36-.155 .085-.097 .109-.185 .023-.091 .023-.357v-.299h1.5v.252q0 .275 .03 .39 .029 .114 .131 .216 .103 .103 .27 .132 .17 .03 .302-.041 .07-.038 .129-.102 .061-.068 .09-.132 .033-.068 .038-.12 .006-.056 .018-.284v-.311h.073q.082 0 .232-.035 .152-.038 .246-.073 .36-.144 .6-.431 .241-.29 .326-.674 .023-.155 .023-.214v-.073h.311q.228-.012 .281-.018 .056-.005 .12-.035 .067-.032 .132-.091 .067-.061 .096-.12 .033-.061 .044-.155 .036-.17-.044-.313-.076-.144-.243-.229-.061-.023-.117-.029-.053-.006-.281-.018h-.299v-1.5h.299q.266 0 .354-.023 .091-.024 .188-.109 .155-.155 .155-.36 0-.205-.143-.349-.062-.058-.129-.093-.065-.038-.12-.044-.053-.006-.279-.006h-.325v-1.5h.252q.275 0 .39-.029 .114-.03 .216-.132 .103-.103 .132-.27 .03-.17-.041-.302-.038-.07-.105-.129-.065-.061-.132-.09-.064-.033-.12-.038-.053-.006-.281-.018h-.311v-.073q0-.132-.067-.34-.065-.211-.15-.366-.132-.217-.348-.384-.214-.17-.466-.264-.073-.026-.217-.05-.144-.023-.217-.023h-.035v-.299q0-.205-.006-.264-.006-.061-.029-.108-.05-.132-.17-.228-.12-.097-.299-.097-.179 0-.319 .114-.138 .114-.161 .293-.024 .085-.024 .337v.252h-1.5v-.299q0-.266-.017-.354-.018-.091-.115-.188-.181-.19-.445-.143-.155 .023-.275 .143-.097 .097-.115 .188-.017 .088-.017 .354v.299h-1.5v-.252q0-.252-.024-.337-.035-.202-.199-.316-.161-.115-.378-.079zM9.217 2.555q.155 .073 .228 .228l.047 .073v6.288l-.047 .073q-.085 .155-.228 .24l-.073 .035h-6.288l-.073-.035q-.143-.085-.228-.24l-.047-.073v-6.288l.047-.073q.108-.202 .313-.263 .035-.012 3.155-.012h3.121zM4.392 3.504q-.191 .023-.323 .097-.205 .096-.342 .263-.138 .167-.2 .384-.011 .073-.023 .325v1.427 1.427q.012 .252 .023 .325 .074 .264 .264 .457 .193 .19 .457 .264 .073 .011 .325 .023h1.427 1.427q.266-.012 .325-.023 .264-.074 .454-.264 .193-.193 .267-.457 .011-.059 .023-.325v-1.427-1.427q-.012-.266-.023-.325-.074-.264-.273-.454-.196-.193-.448-.267-.059-.011-.337-.023h-1.342q-1.573-.012-1.681 .012zM7.5 6v1.5h-3v-3h3z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+                <div
+                  data-pencil-name="Ollama · gemma4:"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  Ollama · gemma4:26b
+                </div>
+                <svg
+                  data-pencil-name="icon-chevron-down"
+                  viewBox="0 0 11 11"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="chevron-down"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+                >
+                  <path
+                    d="M2.629 3.685q-.199 .067-.298 .241-.032 .067-.032 .199 0 .132 .037 .204 .041 .07 1.464 1.496 1.426 1.423 1.496 1.464 .072 .037 .204 .037 .132 0 .201-.037 .073-.041 1.496-1.464 1.426-1.426 1.464-1.496 .04-.072 .04-.204 0-.132-.032-.199-.078-.131-.22-.209-.046-.022-.078-.032-.032-.011-.121-.011-.089 0-.121 .011-.032 .01-.088 .032-.078 .045-1.308 1.278l-1.233 1.23-2.221-2.21q-.244-.231-.33-.298-.067-.043-.156-.043h-.022q-.11 0-.142 .011z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+              </div>
+              <div
+                data-pencil-name="Spacer"
+                style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 0px; height: 1px; justify-content: flex-start"
+              ></div>
+              <div
+                data-pencil-name="Send"
+                style="align-items: center; background-color: #0A6CFF; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+              >
+                <svg
+                  data-pencil-name="icon-arrow-up"
+                  viewBox="0 0 14 14"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="arrow-up"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+                >
+                  <path
+                    d="M6.846 2.352q-.085 .013-.157 .064-.068 .048-2.167 2.147l-1.665 1.695q-.365 .363-.464 .503-.055 .085-.055 .198v.041q0 .239 .181 .42 .113 .113 .28 .147 .168 .035 .322-.02 .085-.027 .321-.26 .239-.232 1.374-1.364 1.582-1.582 1.596-1.582 .014 0 .014 3.428v3.011q0 .448 .034 .533 .038 .083 .12 .168 .085 .082 .188 .133 .106 .048 .232 .048 .126 0 .229-.048 .106-.051 .188-.133 .085-.085 .12-.168 .037-.085 .037-.533v-3.011q0-3.428 .014-3.428 .014 0 1.596 1.582 1.135 1.132 1.371 1.364 .239 .233 .324 .26 .154 .055 .322 .02 .167-.034 .28-.147 .181-.181 .181-.42v-.041q0-.113-.055-.198-.099-.14-.464-.516l-1.679-1.682q-2.102-2.112-2.17-2.147-.068-.037-.161-.064-.092-.028-.14-.028-.048 0-.147 .028z"
+                    fill="#ffffff"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Chat Panel: サイドカー停止"
+        style="align-items: flex-start; background-color: #F2F2F4; border-radius: 8px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: 720px; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; overflow: hidden; width: 400px"
+      >
+        <div
+          data-pencil-name="Panel Header"
+          style="align-items: center; border-color: #E0E0E3; border-style: solid; border-width: 0px 0px 1px 0px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: 40.5px; justify-content: flex-start; margin: 0px 0px -0.5px 0px; padding: 12px 12px 10px 16px; width: 400px"
+        >
+          <div
+            data-pencil-name="Thread Title"
+            style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 6px; height: fit-content; justify-content: flex-start"
+          >
+            <div
+              data-pencil-name="新しいスレッド"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              新しいスレッド
+            </div>
+            <svg
+              data-pencil-name="icon-chevron-down"
+              viewBox="0 0 12 12"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="chevron-down"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+            >
+              <path
+                d="M2.868 4.02q-.217 .073-.325 .263-.035 .073-.035 .217 0 .144 .041 .223 .044 .076 1.597 1.631 1.555 1.553 1.631 1.597 .079 .041 .223 .041 .144 0 .22-.041 .079-.044 1.632-1.597 1.555-1.555 1.596-1.631 .044-.079 .044-.223 0-.144-.035-.217-.085-.143-.24-.228-.05-.024-.085-.035-.035-.012-.132-.012-.097 0-.132 .012-.035 .011-.096 .035-.085 .049-1.427 1.394l-1.345 1.342-2.423-2.411q-.266-.252-.36-.325-.073-.047-.17-.047h-.024q-.12 0-.155 .012z"
+                fill="#6e6e73"
+              />
+            </svg>
+          </div>
+          <svg
+            data-pencil-name="icon-square-pen"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="square-pen"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M12.074 .659q-.194 .029-.428 .136-.231 .106-.411 .227-.135 .102-3.046 3.021-2.908 2.919-2.985 3.036-.136 .198-.213 .406-.073 .209-.325 1.051l-.228 .824q-.058 .224-.065 .315-.008 .088 .022 .209v.015q.076 .271 .256 .45 .179 .18 .45 .256h.015q.121 .03 .209 .022 .091-.007 .315-.065l.824-.228q.842-.252 1.051-.325 .208-.077 .406-.213 .117-.091 3.036-2.999 2.919-2.912 3.021-3.062 .213-.271 .315-.63 .106-.358 .063-.706-.063-.616-.436-1.062-.374-.451-.974-.63-.165-.062-.465-.062-.301 0-.407 .014zM2.791 1.289q-.542 .092-.942 .469-.395 .373-.545 .926-.03 .092-.03 .766l-.014 4.05 .014 4.05q0 .674 .03 .766 .15 .523 .501 .879 .356 .351 .879 .501 .092 .03 .766 .03l4.05 .014 4.05-.014q.674 0 .766-.03 .523-.15 .875-.501 .355-.356 .505-.879 .03-.092 .03-.451l.014-4.544-.044-.092q-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286l-.044 .092-.015 4.694-.044 .107q-.15 .296-.465 .358-.106 .03-4.486 .03-4.38 0-4.486-.03-.315-.062-.465-.358l-.044-.107v-9.03l.044-.107q.106-.223 .329-.329l.107-.044 4.694-.015 .092-.044q.073-.047 .161-.135 .092-.092 .136-.172 .047-.085 .047-.264 0-.179-.044-.271-.106-.179-.3-.286l-.092-.058h-2.384q-2.384 0-2.504 .029zM12.554 1.89q.15 .029 .285 .135 .136 .106 .202 .242 .069 .132 .069 .315 0 .179-.058 .315-.048 .073-2.93 2.97-2.878 2.893-2.966 2.937-.044 .033-.707 .227-.659 .194-.667 .187-.007-.008 .187-.667 .194-.663 .231-.721 .04-.059 2.933-2.945 2.897-2.889 2.956-2.918 .062-.033 .157-.063 .099-.029 .143-.029 .048 0 .165 .015z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-history"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="history"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M1.71 1.274q-.271 .092-.406 .33l-.044 .092v3.493l.044 .077q.106 .209 .315 .3l.091 .044 3.014 .015q.344-.015 .465-.029 .077-.015 .165-.077l.015-.015q.183-.135 .234-.337 .051-.201-.033-.403-.08-.205-.275-.307-.091-.062-.285-.077-.194-.015-.824-.015h-.795l.253-.241q.794-.781 1.695-1.169 1.037-.45 2.176-.45 1.007 0 1.889 .373 1.26 .528 2.077 1.601 .82 1.073 .985 2.406 .029 .241 .029 .608 0 .366-.029 .608-.165 1.366-1.007 2.453-.839 1.084-2.113 1.597-.872 .344-1.846 .344-.3 0-.494-.015-.194-.014-.495-.076-.945-.195-1.765-.733-.817-.542-1.373-1.344-.553-.802-.762-1.761-.091-.48-.099-.832-.007-.355-.08-.505-.092-.179-.286-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.106 .044-.194 .107-.3 .286-.074 .165-.037 .699 .037 .531 .158 1.059 .315 1.274 1.109 2.311 .795 1.032 1.934 1.67 1.142 .637 2.461 .758 .197 .014 .571 .014 .374 0 .571-.014 1.483-.136 2.729-.931 1.23-.765 1.995-1.995 .795-1.246 .931-2.729 .014-.197 .014-.571 0-.374-.014-.571-.151-1.634-1.088-2.981-.938-1.352-2.424-2.073-.63-.3-1.231-.45-.597-.151-1.304-.165-1.168-.03-2.263 .329-.765 .257-1.395 .649-.63 .388-1.23 .974l-.301 .282v-1.798l-.044-.092q-.106-.194-.3-.286-.092-.044-.242-.051-.15-.007-.194 .007zM7.35 3.765q-.136 .029-.256 .142-.118 .114-.18 .249l-.029 .103v3.42l.044 .092q.062 .103 .135 .165 .092 .073 .392 .238l.974 .494q1.289 .648 1.395 .678 .257 .073 .488-.059 .23-.135 .293-.406 .043-.194-.044-.407-.048-.102-.125-.161-.073-.062-.341-.198l-1.966-1.003-.015-2.897-.044-.106q-.047-.088-.132-.169-.08-.084-.164-.12-.081-.041-.209-.055-.125-.015-.216 0z"
+              fill="#6e6e73"
+            />
+          </svg>
+          <svg
+            data-pencil-name="icon-x"
+            viewBox="0 0 15 15"
+            preserveAspectRatio="xMidYMid meet"
+            data-icon-name="x"
+            data-icon-set="lucide"
+            xmlns="http://www.w3.org/2000/svg"
+            style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+          >
+            <path
+              d="M3.585 3.149q-.271 .092-.406 .33-.044 .092-.044 .271 0 .179 .044 .271 .047 .088 1.739 1.783l1.696 1.696-1.696 1.696q-1.692 1.695-1.739 1.787-.044 .088-.044 .252 0 .165 .036 .257 .041 .088 .143 .194 .106 .102 .194 .143 .092 .036 .257 .036 .164 0 .252-.044 .092-.047 1.787-1.739l1.696-1.696 1.696 1.696q1.695 1.692 1.783 1.739 .092 .044 .256 .044 .165 0 .253-.036 .092-.041 .194-.143 .106-.106 .143-.194 .04-.092 .04-.257 0-.164-.047-.252-.044-.092-1.736-1.787l-1.696-1.696 1.696-1.696q1.692-1.695 1.736-1.783 .047-.092 .047-.271 0-.179-.044-.271-.106-.179-.3-.286-.062-.029-.106-.044-.044-.014-.165-.014-.121 0-.165 .014-.044 .015-.121 .044-.106 .063-1.783 1.744l-1.681 1.677-3.029-3.014q-.333-.315-.45-.407-.092-.058-.212-.058h-.03q-.15 0-.194 .014z"
+              fill="#6e6e73"
+            />
+          </svg>
+        </div>
+        <div
+          data-pencil-name="Context Bar"
+          style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; padding: 8px 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="文脈"
+            style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+          >
+            文脈
+          </div>
+          <div
+            data-pencil-name="Ctx"
+            style="align-items: center; background-color: #FFFFFF; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 3px 8px; width: fit-content"
+          >
+            <svg
+              data-pencil-name="icon-github"
+              viewBox="0 0 11 11"
+              preserveAspectRatio="xMidYMid meet"
+              data-icon-name="github"
+              data-icon-set="lucide"
+              xmlns="http://www.w3.org/2000/svg"
+              style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+            >
+              <path
+                d="M2.221 .473q-.097 .01-.191 .078-.094 .064-.137 .153-.067 .12-.123 .494-.043 .231-.038 .561 .006 .33 .051 .572l.022 .099-.057 .1q-.241 .429-.341 .969-.021 .108-.027 .427-.005 .32 .006 .486 .099 1.056 .846 1.781 .464 .43 1.047 .661 .121 .042 .301 .099 .182 .054 .215 .054 .032 0 .032 .024 0 .021-.032 .096-.043 .156-.089 .382-.043 .223-.043 .357v.075l-.11 .035q-.263 .075-.518 .065-.143-.011-.231-.033-.086-.021-.196-.075-.11-.056-.21-.14-.099-.083-.298-.268-.405-.376-.572-.473-.295-.166-.583-.166-.088 0-.126 .005-.038 .005-.094 .027-.22 .099-.258 .33-.037 .231 .127 .409 .099 .099 .298 .131 .12 .022 .19 .067 .073 .043 .347 .296 .244 .231 .341 .314 .099 .083 .22 .158 .33 .221 .706 .298 .153 .033 .39 .033 .236 0 .413-.022l.164-.032q.011 0 .011 .636 0 .452 0 .556 0 .105 .027 .172 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .094-.132 .029-.067 .029-.22v-2.114q.011-.504 .331-.945 .064-.099 .085-.148 .025-.051 .041-.115 .016-.067 0-.148-.016-.083-.046-.137-.027-.056-.089-.115-.059-.062-.131-.094-.07-.035-.258-.046-.317-.011-.572-.078-.572-.142-.978-.505-.241-.198-.408-.478-.164-.282-.22-.588-.021-.099-.032-.352-.011-.255 0-.386 .032-.494 .33-.946 .1-.153 .116-.247 .016-.094-.027-.26-.067-.296-.067-.615 0-.21 .01-.21l.143 .078q.188 .1 .572 .363 .156 .099 .287 .11 .054-.011 .253-.043 .76-.132 1.584-.132 .824 0 1.585 .132 .198 .043 .252 .043 .132-.011 .274-.11 .387-.253 .55-.347 .167-.094 .178-.088 .01 .005 .01 .177 0 .169-.016 .309-.016 .137-.051 .309-.032 .169-.032 .212 0 .121 .121 .319 .242 .374 .319 .782 .011 .11 .017 .368 .005 .258-.017 .389-.11 .881-.88 1.397-.331 .209-.747 .319-.255 .067-.572 .078-.121 .011-.172 .022-.048 .01-.094 .032-.207 .099-.263 .341-.032 .166 .099 .352 .296 .429 .352 .816 .011 .097 .011 1.265v1.023q0 .164 .027 .231 .029 .065 .094 .132 .067 .064 .147 .105 .084 .037 .183 .037 .099 0 .18-.037 .083-.041 .148-.105 .067-.067 .088-.132 .024-.067 .035-.244l.011-1.045q0-1.198-.011-1.318-.043-.264-.121-.508-.032-.086-.032-.107 0-.025 .032-.025 .033 0 .213-.059 .182-.062 .303-.104 .451-.178 .83-.479 .381-.303 .623-.687 .131-.199 .236-.451 .105-.255 .148-.497 .078-.341 .072-.757-.005-.419-.083-.715-.11-.397-.285-.727l-.067-.111 .022-.131q.088-.529 .013-1.056-.045-.408-.118-.539-.07-.132-.223-.21-.298-.131-.991 .22-.241 .11-.518 .298l-.164 .111-.142-.022q-.728-.121-1.563-.121-.835 0-1.628 .121l-.11 .022-.11-.078q-.408-.285-.811-.443-.4-.162-.631-.129z"
+                fill="#6e6e73"
+              />
+            </svg>
+            <div
+              data-pencil-name="GitHub · 今日"
+              style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+            >
+              GitHub · 今日
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Body"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex: 1 1 0; gap: 12px; justify-content: flex-start; padding: 16px; width: 100%"
+        >
+          <div
+            data-pencil-name="Sidecar Box"
+            style="align-items: flex-start; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 12px 14px; width: 100%"
+          >
+            <div
+              data-pencil-name="Head"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <svg
+                data-pencil-name="icon-plug-zap"
+                viewBox="0 0 15 15"
+                preserveAspectRatio="xMidYMid meet"
+                data-icon-name="plug-zap"
+                data-icon-set="lucide"
+                xmlns="http://www.w3.org/2000/svg"
+                style="box-sizing: border-box; flex-shrink: 0; height: 15px; overflow: visible; width: 15px"
+              >
+                <path
+                  d="M11.085 1.274q-.121 .044-.348 .249-.223 .202-1.183 1.161-1.318 1.322-1.347 1.396-.136 .241-.048 .498 .092 .252 .344 .373l.107 .044 2.369 .015-.751 .75q-.479 .48-.622 .63-.139 .151-.172 .224-.118 .256-.015 .498 .106 .238 .344 .344 .242 .103 .498-.015 .074-.033 .312-.256 .241-.223 1.117-1.11 .878-.886 1.102-1.124 .227-.242 .274-.3 .103-.256 .011-.495-.087-.241-.344-.362-.058-.029-.223-.029l-2.234-.015 .751-.751q.732-.765 .783-.853 .055-.092 .055-.256 0-.165-.04-.253-.037-.092-.139-.198-.165-.165-.407-.179-.15 0-.194 .014zM6.134 6.27q-.102 .014-.187 .062-.08 .044-.666 .63l-.586 .582-.286-.267q-.271-.271-.377-.33-.103-.062-.282-.062h-.015q-.15 0-.234 .04-.081 .037-.275 .216-.135 .117-.6 .601l-.063 .058q-.794 .795-.893 .93-.095 .136-.201 .345-.103 .208-.151 .373-.102 .377-.058 .769 .044 .388 .209 .733 .15 .285 .498 .644l.267 .271-.747 .766q-.751 .75-.78 .824-.15 .285-.019 .571 .136 .286 .451 .344 .212 .029 .406-.077 .074-.029 .824-.78l.766-.747 .271 .267q.359 .348 .644 .499 .33 .164 .725 .201 .4 .037 .777-.051 .165-.048 .373-.15 .209-.107 .345-.202 .135-.099 .937-.908 .802-.813 .853-.901 .055-.092 .055-.271 0-.179-.062-.282-.059-.106-.311-.363l-.286-.3 .601-.586q.582-.6 .63-.674 .102-.227 .025-.479-.073-.257-.296-.359-.136-.077-.308-.077-.172 0-.293 .077-.073 .044-.659 .63l-.601 .582-.974-.974 .582-.601q.601-.6 .63-.674 .106-.194 .077-.406-.058-.253-.264-.396-.201-.142-.472-.098zM5.189 9.825l1.425 1.425-.568 .557q-.45 .465-.578 .556-.129 .088-.301 .125-.172 .036-.344 0-.172-.037-.308-.128-.077-.059-.974-.96-.63-.63-.78-.787-.15-.158-.179-.249-.106-.238-.077-.495 .029-.15 .066-.23 .04-.085 .176-.235 .102-.102 .432-.45 .556-.553 .571-.553 .015 0 1.439 1.424z"
+                  fill="#d93025"
+                />
+              </svg>
+              <div
+                data-pencil-name="エージェントを起動できません"
+                style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+              >
+                エージェントを起動できません
+              </div>
+            </div>
+            <div
+              data-pencil-name="Node が見つかりません (/"
+              style='box-sizing: border-box; color: #6E6E73; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 18px; text-align: left; width: 100%'
+            >
+              Node が見つかりません (/opt/homebrew/bin/node)。チャットには Node 22
+              以上が必要です。ダイジェストとフィードはこのまま使えます。
+            </div>
+            <div
+              data-pencil-name="Buttons"
+              style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: fit-content"
+            >
+              <div
+                data-pencil-name="Button Node のパスを設定"
+                style="align-items: flex-start; background-color: #0A6CFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #00000000; padding: 6px 14px; width: fit-content"
+              >
+                <div
+                  data-pencil-name="Node のパスを設定"
+                  style='box-sizing: border-box; color: #FFFFFF; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  Node のパスを設定
+                </div>
+              </div>
+              <div
+                data-pencil-name="Button 再試行"
+                style="align-items: flex-start; background-color: #FFFFFF; border-radius: 7px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 6px 14px; width: fit-content"
+              >
+                <div
+                  data-pencil-name="再試行"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  再試行
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Composer"
+          style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 0px; height: fit-content; justify-content: flex-start; padding: 0px 12px 12px 12px; width: 100%"
+        >
+          <div
+            data-pencil-name="Input Box"
+            style="align-items: flex-start; background-color: #FFFFFF; border-radius: 10px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; gap: 10px; height: fit-content; justify-content: flex-start; outline-offset: -0.5px; outline: 1px solid #E0E0E3; padding: 10px 12px 8px 12px; width: 100%"
+          >
+            <div
+              data-pencil-name="記事や要約について質問…"
+              style='box-sizing: border-box; color: #8E8E93; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: 21px; text-align: left; width: 100%'
+            >
+              記事や要約について質問…
+            </div>
+            <div
+              data-pencil-name="Composer Row"
+              style="align-items: center; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 8px; height: fit-content; justify-content: flex-start; width: 100%"
+            >
+              <div
+                data-pencil-name="Model Select"
+                style="align-items: center; background-color: #F5F5F7; border-radius: 5px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 5px; height: fit-content; justify-content: flex-start; padding: 3px 8px; width: fit-content"
+              >
+                <svg
+                  data-pencil-name="icon-cpu"
+                  viewBox="0 0 12 12"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="cpu"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 12px; overflow: visible; width: 12px"
+                >
+                  <path
+                    d="M3.407 .516q-.108 .011-.211 .09-.099 .077-.149 .185-.024 .062-.029 .117-.006 .053-.018 .281v.311h-.035q-.073 0-.217 .023-.143 .024-.217 .05-.252 .094-.468 .264-.214 .167-.346 .384-.085 .155-.153 .366-.064 .208-.064 .34v.073h-.311q-.228 .012-.284 .018-.052 .005-.12 .038-.064 .029-.132 .09-.064 .059-.102 .118-.071 .143-.041 .313 .029 .167 .132 .27 .102 .102 .216 .132 .115 .029 .39 .029h.252v1.5h-.325q-.226 0-.281 .006-.053 .006-.103 .029-.19 .097-.258 .29-.064 .19 .006 .372 .05 .082 .12 .155 .073 .071 .158 .109 .059 .011 .118 .017 .061 .006 .266 .006h.299v1.5h-.299q-.228 .012-.284 .018-.053 .006-.114 .029-.202 .097-.276 .302-.07 .202 .024 .395 .038 .059 .102 .12 .068 .059 .132 .091 .068 .03 .12 .035 .056 .006 .284 .018h.311v.073q0 .059 .035 .214 .073 .384 .314 .674 .24 .287 .6 .431 .094 .035 .243 .073 .153 .035 .235 .035h.073v.311q.012 .228 .018 .284 .005 .052 .035 .12 .032 .064 .091 .132 .061 .064 .131 .102 .132 .071 .299 .041 .17-.029 .273-.132 .102-.102 .132-.216 .029-.115 .029-.39v-.252h1.5v.299q0 .266 .023 .357 .024 .088 .109 .185 .155 .155 .36 .155 .205 0 .36-.155 .085-.097 .109-.185 .023-.091 .023-.357v-.299h1.5v.252q0 .275 .03 .39 .029 .114 .131 .216 .103 .103 .27 .132 .17 .03 .302-.041 .07-.038 .129-.102 .061-.068 .09-.132 .033-.068 .038-.12 .006-.056 .018-.284v-.311h.073q.082 0 .232-.035 .152-.038 .246-.073 .36-.144 .6-.431 .241-.29 .326-.674 .023-.155 .023-.214v-.073h.311q.228-.012 .281-.018 .056-.005 .12-.035 .067-.032 .132-.091 .067-.061 .096-.12 .033-.061 .044-.155 .036-.17-.044-.313-.076-.144-.243-.229-.061-.023-.117-.029-.053-.006-.281-.018h-.299v-1.5h.299q.266 0 .354-.023 .091-.024 .188-.109 .155-.155 .155-.36 0-.205-.143-.349-.062-.058-.129-.093-.065-.038-.12-.044-.053-.006-.279-.006h-.325v-1.5h.252q.275 0 .39-.029 .114-.03 .216-.132 .103-.103 .132-.27 .03-.17-.041-.302-.038-.07-.105-.129-.065-.061-.132-.09-.064-.033-.12-.038-.053-.006-.281-.018h-.311v-.073q0-.132-.067-.34-.065-.211-.15-.366-.132-.217-.348-.384-.214-.17-.466-.264-.073-.026-.217-.05-.144-.023-.217-.023h-.035v-.299q0-.205-.006-.264-.006-.061-.029-.108-.05-.132-.17-.228-.12-.097-.299-.097-.179 0-.319 .114-.138 .114-.161 .293-.024 .085-.024 .337v.252h-1.5v-.299q0-.266-.017-.354-.018-.091-.115-.188-.181-.19-.445-.143-.155 .023-.275 .143-.097 .097-.115 .188-.017 .088-.017 .354v.299h-1.5v-.252q0-.252-.024-.337-.035-.202-.199-.316-.161-.115-.378-.079zM9.217 2.555q.155 .073 .228 .228l.047 .073v6.288l-.047 .073q-.085 .155-.228 .24l-.073 .035h-6.288l-.073-.035q-.143-.085-.228-.24l-.047-.073v-6.288l.047-.073q.108-.202 .313-.263 .035-.012 3.155-.012h3.121zM4.392 3.504q-.191 .023-.323 .097-.205 .096-.342 .263-.138 .167-.2 .384-.011 .073-.023 .325v1.427 1.427q.012 .252 .023 .325 .074 .264 .264 .457 .193 .19 .457 .264 .073 .011 .325 .023h1.427 1.427q.266-.012 .325-.023 .264-.074 .454-.264 .193-.193 .267-.457 .011-.059 .023-.325v-1.427-1.427q-.012-.266-.023-.325-.074-.264-.273-.454-.196-.193-.448-.267-.059-.011-.337-.023h-1.342q-1.573-.012-1.681 .012zM7.5 6v1.5h-3v-3h3z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+                <div
+                  data-pencil-name="Ollama · gemma4:"
+                  style='box-sizing: border-box; color: #1D1D1F; font-family: "Noto Sans JP", system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 400; letter-spacing: 0px; line-height: normal; text-align: left; white-space: nowrap'
+                >
+                  Ollama · gemma4:26b
+                </div>
+                <svg
+                  data-pencil-name="icon-chevron-down"
+                  viewBox="0 0 11 11"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="chevron-down"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 11px; overflow: visible; width: 11px"
+                >
+                  <path
+                    d="M2.629 3.685q-.199 .067-.298 .241-.032 .067-.032 .199 0 .132 .037 .204 .041 .07 1.464 1.496 1.426 1.423 1.496 1.464 .072 .037 .204 .037 .132 0 .201-.037 .073-.041 1.496-1.464 1.426-1.426 1.464-1.496 .04-.072 .04-.204 0-.132-.032-.199-.078-.131-.22-.209-.046-.022-.078-.032-.032-.011-.121-.011-.089 0-.121 .011-.032 .01-.088 .032-.078 .045-1.308 1.278l-1.233 1.23-2.221-2.21q-.244-.231-.33-.298-.067-.043-.156-.043h-.022q-.11 0-.142 .011z"
+                    fill="#6e6e73"
+                  />
+                </svg>
+              </div>
+              <div
+                data-pencil-name="Spacer"
+                style="align-items: flex-start; box-sizing: border-box; display: flex; flex-direction: row; flex: 1 1 0; gap: 0px; height: 1px; justify-content: flex-start"
+              ></div>
+              <div
+                data-pencil-name="Send"
+                style="align-items: center; background-color: #0A6CFF; border-radius: 14px; box-sizing: border-box; display: flex; flex-direction: row; flex-shrink: 0; gap: 0px; height: 28px; justify-content: center; width: 28px"
+              >
+                <svg
+                  data-pencil-name="icon-arrow-up"
+                  viewBox="0 0 14 14"
+                  preserveAspectRatio="xMidYMid meet"
+                  data-icon-name="arrow-up"
+                  data-icon-set="lucide"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="box-sizing: border-box; flex-shrink: 0; height: 14px; overflow: visible; width: 14px"
+                >
+                  <path
+                    d="M6.846 2.352q-.085 .013-.157 .064-.068 .048-2.167 2.147l-1.665 1.695q-.365 .363-.464 .503-.055 .085-.055 .198v.041q0 .239 .181 .42 .113 .113 .28 .147 .168 .035 .322-.02 .085-.027 .321-.26 .239-.232 1.374-1.364 1.582-1.582 1.596-1.582 .014 0 .014 3.428v3.011q0 .448 .034 .533 .038 .083 .12 .168 .085 .082 .188 .133 .106 .048 .232 .048 .126 0 .229-.048 .106-.051 .188-.133 .085-.085 .12-.168 .037-.085 .037-.533v-3.011q0-3.428 .014-3.428 .014 0 1.596 1.582 1.135 1.132 1.371 1.364 .239 .233 .324 .26 .154 .055 .322 .02 .167-.034 .28-.147 .181-.181 .181-.42v-.041q0-.113-.055-.198-.099-.14-.464-.516l-1.679-1.682q-2.102-2.112-2.17-2.147-.068-.037-.161-.064-.092-.028-.14-.028-.048 0-.147 .028z"
+                    fill="#ffffff"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
